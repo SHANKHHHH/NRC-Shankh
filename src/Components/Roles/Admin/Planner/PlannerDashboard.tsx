@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useDeferredValue } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ChartBarIcon,
   CheckCircleIcon,
@@ -9,6 +10,7 @@ import {
   FunnelIcon,
   XMarkIcon,
   Cog6ToothIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import JobAssigned from "../../Planner/job_assigned";
@@ -108,9 +110,15 @@ interface PlannerDashboardProps {
 }
 
 const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
+  const navigate = useNavigate();
   const [showJobAssigned, setShowJobAssigned] = useState(false);
   const [assignedJobsCount, setAssignedJobsCount] = useState<number>(0);
   const [isLoadingAssignedJobs, setIsLoadingAssignedJobs] =
+    useState<boolean>(true);
+
+  // Major hold jobs state
+  const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
+  const [isLoadingMajorHoldJobs, setIsLoadingMajorHoldJobs] =
     useState<boolean>(true);
 
   // PO-related state
@@ -335,6 +343,187 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
 
     return "more_info_pending";
   };
+
+  // Helper function to check if a job has major hold
+  const isMajorHold = (po: PurchaseOrder): boolean => {
+    if (!po.steps || !Array.isArray(po.steps)) {
+      return false;
+    }
+
+    for (const step of po.steps) {
+      // Check stepDetails.data.status for "major_hold"
+      if (step?.stepDetails?.data?.status === "major_hold") {
+        return true;
+      }
+      // Also check stepDetails.status
+      if (step?.stepDetails?.status === "major_hold") {
+        return true;
+      }
+      // Check for major hold remark
+      if (
+        step?.stepDetails?.data?.majorHoldRemark ||
+        (step?.stepDetails?.data?.holdRemark &&
+          /major/i.test(step.stepDetails.data.holdRemark))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Fetch major hold jobs count
+  useEffect(() => {
+    const fetchMajorHoldJobsCount = async () => {
+      try {
+        setIsLoadingMajorHoldJobs(true);
+        const accessToken = localStorage.getItem("accessToken");
+
+        if (!accessToken) {
+          console.error("Authentication token not found");
+          setMajorHoldJobsCount(0);
+          return;
+        }
+
+        const response = await fetch(
+          "https://nrprod.nrcontainers.com/api/job-planning/",
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch job plans: ${response.status} ${response.statusText}`
+          );
+        }
+
+        const jobPlanningData = await response.json();
+        if (jobPlanningData.success && Array.isArray(jobPlanningData.data)) {
+          // Fetch step details for each job plan to check for major hold
+          let majorHoldCount = 0;
+
+          for (const jobPlan of jobPlanningData.data) {
+            // Fetch step details for steps that are started or stopped
+            const stepsWithDetails = await Promise.all(
+              (jobPlan.steps || []).map(async (step: any) => {
+                if (step.status !== "start" && step.status !== "stop") {
+                  return step;
+                }
+
+                try {
+                  let endpoint = "";
+                  switch (step.stepName) {
+                    case "PaperStore":
+                      endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "PrintingDetails":
+                      endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "Corrugation":
+                      endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "FluteLaminateBoardConversion":
+                      endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "Punching":
+                      endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "SideFlapPasting":
+                      endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "QualityDept":
+                      endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    case "DispatchProcess":
+                      endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodeURIComponent(
+                        jobPlan.nrcJobNo
+                      )}`;
+                      break;
+                    default:
+                      return step;
+                  }
+
+                  if (endpoint) {
+                    const stepResponse = await fetch(endpoint, {
+                      headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+
+                    if (stepResponse.ok) {
+                      const stepResult = await stepResponse.json();
+                      if (
+                        stepResult.success &&
+                        stepResult.data &&
+                        stepResult.data.length > 0
+                      ) {
+                        return {
+                          ...step,
+                          stepDetails: { data: stepResult.data[0] },
+                        };
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`Error fetching ${step.stepName} details:`, err);
+                }
+                return step;
+              })
+            );
+
+            // Check if this job has major hold
+            const jobWithMajorHold = stepsWithDetails.some((step: any) => {
+              if (step?.stepDetails?.data?.status === "major_hold") {
+                return true;
+              }
+              if (step?.stepDetails?.status === "major_hold") {
+                return true;
+              }
+              if (
+                step?.stepDetails?.data?.majorHoldRemark ||
+                (step?.stepDetails?.data?.holdRemark &&
+                  /major/i.test(step.stepDetails.data.holdRemark))
+              ) {
+                return true;
+              }
+              return false;
+            });
+
+            if (jobWithMajorHold) {
+              majorHoldCount++;
+            }
+          }
+
+          setMajorHoldJobsCount(majorHoldCount);
+        } else {
+          setMajorHoldJobsCount(0);
+        }
+      } catch (error) {
+        console.error("Error fetching major hold jobs count:", error);
+        setMajorHoldJobsCount(0);
+      } finally {
+        setIsLoadingMajorHoldJobs(false);
+      }
+    };
+
+    fetchMajorHoldJobsCount();
+  }, []);
 
   // Apply filters - EXCLUDE COMPLETED POs
   const filteredPOs = useMemo(() => {
@@ -681,10 +870,30 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
           <div className="bg-blue-500 p-3 rounded-xl">
             <ClipboardDocumentListIcon className="h-8 w-8 text-white" />
           </div>
-          <div>
-            <p className="text-gray-600 text-2xl">
-              Job planning overview and progress tracking
-            </p>
+          <div className="flex-1">
+            <div className="flex items-center space-x-2">
+              <p className="text-gray-600 text-2xl">
+                Job planning overview and progress tracking
+              </p>
+              {majorHoldJobsCount >0 && (
+                <button
+                  onClick={() => navigate("/dashboard/major-hold-jobs")}
+                  className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  title="View major hold jobs"
+                >
+                  <ExclamationTriangleIcon
+                    className={`text-red-500 ${
+                      majorHoldJobsCount > 0 ? "animate-pulse" : ""
+                    }`}
+                    width={24}
+                    height={24}
+                  />
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-none text-white bg-red-600 rounded-full">
+                    {majorHoldJobsCount}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <p className="text-sm text-gray-500">

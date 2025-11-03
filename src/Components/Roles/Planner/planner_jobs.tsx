@@ -5,10 +5,10 @@ import {
   Plus,
   Search,
   Upload,
-  Filter,
   X,
   Settings,
   Download,
+  ChevronDown,
 } from "lucide-react";
 import POdetailCard from "./jobCard/POdetailCard";
 import PODetailModal from "./jobCard/PODetailModal";
@@ -124,6 +124,17 @@ interface Job {
   jobSteps: any[] | null;
 }
 
+interface ColumnFilters {
+  style: string[];
+  customer: string[];
+  poNumber: string[];
+  deliveryDate: string[];
+  boardSize: string[];
+  noOfColor: string[];
+  dieCode: string[];
+  status: string[];
+}
+
 interface FilterState {
   noOfColors: string[];
   boardSizes: string[];
@@ -152,7 +163,6 @@ const PlannerJobs: React.FC = () => {
   > | null>(null);
 
   // Filter states
-  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     noOfColors: [],
     boardSizes: [],
@@ -160,12 +170,36 @@ const PlannerJobs: React.FC = () => {
     deliveryDateTo: "",
   });
 
-  // Available filter options (extracted from data)
+  // Column filters state for Excel-like filtering
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+    style: [],
+    customer: [],
+    poNumber: [],
+    deliveryDate: [],
+    boardSize: [],
+    noOfColor: [],
+    dieCode: [],
+    status: [],
+  });
+
+  // Dropdown visibility state for column filters
+  const [activeColumnFilter, setActiveColumnFilter] = useState<string | null>(
+    null
+  );
+
+  // Search state for filter dropdowns
+  const [filterSearch, setFilterSearch] = useState<string>("");
+
+  // Dropdown position state for fixed positioning
+  const [filterDropdownPosition, setFilterDropdownPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  // Available filter options (extracted from data) - keeping for legacy compatibility but not used
   const [availableNoOfColors, setAvailableNoOfColors] = useState<string[]>([]);
   const [availableBoardSizes, setAvailableBoardSizes] = useState<string[]>([]);
   const [showBulkPlanningModal, setShowBulkPlanningModal] = useState(false);
-  const [noOfColorsSearch, setNoOfColorsSearch] = useState("");
-  const [dimensionsSearch, setDimensionsSearch] = useState("");
   const [selectedPOs, setSelectedPOs] = useState<number[]>([]);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -345,14 +379,74 @@ const PlannerJobs: React.FC = () => {
   // Apply filters to purchase orders
   const applyFilters = (pos: PurchaseOrder[]) => {
     return pos.filter((po) => {
-      // Check if any filters are active
+      // Apply column filters (Excel-like filtering)
+      if (
+        columnFilters.style.length > 0 &&
+        !columnFilters.style.includes(po.style || "")
+      ) {
+        return false;
+      }
+      if (
+        columnFilters.customer.length > 0 &&
+        !columnFilters.customer.includes(po.customer || "")
+      ) {
+        return false;
+      }
+      if (
+        columnFilters.poNumber.length > 0 &&
+        !columnFilters.poNumber.includes(po.poNumber || "")
+      ) {
+        return false;
+      }
+      if (columnFilters.deliveryDate.length > 0) {
+        const poDate = po.deliveryDate
+          ? new Date(po.deliveryDate).toLocaleDateString()
+          : "";
+        if (!columnFilters.deliveryDate.includes(poDate)) {
+          return false;
+        }
+      }
+      if (
+        columnFilters.boardSize.length > 0 &&
+        !columnFilters.boardSize.includes(po.boardSize || "")
+      ) {
+        return false;
+      }
+      if (columnFilters.noOfColor.length > 0) {
+        const poNoOfColor = po.noOfColor ? String(po.noOfColor) : "";
+        if (!columnFilters.noOfColor.includes(poNoOfColor)) {
+          return false;
+        }
+      }
+      if (columnFilters.dieCode.length > 0) {
+        const poDieCode = po.dieCode ? String(po.dieCode) : "";
+        if (!columnFilters.dieCode.includes(poDieCode)) {
+          return false;
+        }
+      }
+      if (columnFilters.status.length > 0) {
+        const status = checkPOCompletionStatus(po);
+        let statusLabel = "";
+        if (status === "artwork_pending") statusLabel = "Artwork Pending";
+        else if (status === "po_pending") statusLabel = "PO Pending";
+        else if (status === "more_info_pending")
+          statusLabel = "More Info Pending";
+        else if (status === "completed") statusLabel = "Completed";
+        else statusLabel = "Unknown";
+
+        if (!columnFilters.status.includes(statusLabel)) {
+          return false;
+        }
+      }
+
+      // Check if any old filters are active
       const hasActiveFilters =
         filters.noOfColors.length > 0 ||
         filters.boardSizes.length > 0 ||
         filters.deliveryDateFrom ||
         filters.deliveryDateTo;
 
-      // ADDED: If any filters are applied, only show POs that need more information (job planning)
+      // ADDED: If any old filters are applied, only show POs that need more information (job planning)
       if (hasActiveFilters) {
         const completionStatus = checkPOCompletionStatus(po);
         if (completionStatus !== "more_info_pending") {
@@ -408,7 +502,7 @@ const PlannerJobs: React.FC = () => {
     });
   };
 
-  // Handle filter changes
+  // Handle filter changes - keeping for legacy compatibility but not used
   const handleFilterChange = (filterType: keyof FilterState, value: any) => {
     setFilters((prev) => ({
       ...prev,
@@ -416,7 +510,7 @@ const PlannerJobs: React.FC = () => {
     }));
   };
 
-  // Handle color filter toggle
+  // Handle color filter toggle - keeping for legacy compatibility but not used
   const toggleNoOfColorFilter = (color: string) => {
     setFilters((prev) => ({
       ...prev,
@@ -426,7 +520,7 @@ const PlannerJobs: React.FC = () => {
     }));
   };
 
-  // Handle board size filter toggle
+  // Handle board size filter toggle - keeping for legacy compatibility but not used
   const toggleBoardSizeFilter = (boardSize: string) => {
     setFilters((prev) => ({
       ...prev,
@@ -436,7 +530,7 @@ const PlannerJobs: React.FC = () => {
     }));
   };
 
-  // Clear all filters
+  // Clear all filters - keeping for legacy compatibility but not used
   const clearAllFilters = () => {
     setFilters({
       noOfColors: [],
@@ -446,12 +540,143 @@ const PlannerJobs: React.FC = () => {
     });
   };
 
-  // Count active filters
+  // Count active filters (old filters + column filters)
   const activeFilterCount =
     filters.noOfColors.length +
     filters.boardSizes.length +
     (filters.deliveryDateFrom ? 1 : 0) +
     (filters.deliveryDateTo ? 1 : 0);
+
+  // Check if any column filters are active
+  const hasColumnFilters = Object.values(columnFilters).some(
+    (value) => Array.isArray(value) && value.length > 0
+  );
+
+  // Get unique values for a specific column
+  const getUniqueColumnValues = (columnName: keyof ColumnFilters): string[] => {
+    const values = new Set<string>();
+    purchaseOrders.forEach((po) => {
+      let value: string = "";
+      switch (columnName) {
+        case "style":
+          value = po.style || "";
+          break;
+        case "customer":
+          value = po.customer || "";
+          break;
+        case "poNumber":
+          value = po.poNumber || "";
+          break;
+        case "deliveryDate":
+          value = po.deliveryDate
+            ? new Date(po.deliveryDate).toLocaleDateString()
+            : "";
+          break;
+        case "boardSize":
+          value = po.boardSize || "";
+          break;
+        case "noOfColor":
+          value = po.noOfColor ? String(po.noOfColor) : "";
+          break;
+        case "dieCode":
+          value = po.dieCode ? String(po.dieCode) : "";
+          break;
+        case "status":
+          const status = checkPOCompletionStatus(po);
+          if (status === "artwork_pending") value = "Artwork Pending";
+          else if (status === "po_pending") value = "PO Pending";
+          else if (status === "more_info_pending") value = "More Info Pending";
+          else if (status === "completed") value = "Completed";
+          else value = "Unknown";
+          break;
+      }
+      if (value) values.add(value);
+    });
+    return Array.from(values).sort();
+  };
+
+  // Handle column filter toggle
+  const toggleColumnFilter = (
+    columnName: keyof ColumnFilters,
+    value: string
+  ) => {
+    setColumnFilters((prev) => {
+      const currentValues = prev[columnName];
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter((v) => v !== value)
+        : [...currentValues, value];
+      return { ...prev, [columnName]: newValues };
+    });
+  };
+
+  // Clear all filters for a specific column
+  const clearColumnFilter = (columnName: keyof ColumnFilters) => {
+    setColumnFilters((prev) => ({ ...prev, [columnName]: [] }));
+  };
+
+  // Handle select all for a specific column with search filter
+  const handleSelectAllFilter = (columnName: keyof ColumnFilters) => {
+    const filteredValues = getUniqueColumnValues(columnName).filter(
+      (value) =>
+        filterSearch === "" ||
+        value.toLowerCase().includes(filterSearch.toLowerCase())
+    );
+    const currentValues = columnFilters[columnName];
+
+    if (filteredValues.every((value) => currentValues.includes(value))) {
+      // All visible selected, deselect all visible
+      setColumnFilters({
+        ...columnFilters,
+        [columnName]: currentValues.filter((v) => !filteredValues.includes(v)),
+      });
+    } else {
+      // Not all visible selected, select all visible
+      setColumnFilters({
+        ...columnFilters,
+        [columnName]: [...new Set([...currentValues, ...filteredValues])],
+      });
+    }
+  };
+
+  // Check if all visible values are selected
+  const areAllVisibleValuesSelected = (
+    columnName: keyof ColumnFilters
+  ): boolean => {
+    const filteredValues = getUniqueColumnValues(columnName).filter(
+      (value) =>
+        filterSearch === "" ||
+        value.toLowerCase().includes(filterSearch.toLowerCase())
+    );
+    return (
+      filteredValues.length > 0 &&
+      filteredValues.every((value) => columnFilters[columnName].includes(value))
+    );
+  };
+
+  // Handle opening filter dropdown with positioning
+  const handleToggleFilterDropdown = (
+    columnName: string,
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    event.stopPropagation();
+    if (activeColumnFilter !== columnName) {
+      setFilterSearch("");
+    }
+
+    const newState = activeColumnFilter === columnName ? null : columnName;
+    setActiveColumnFilter(newState);
+
+    if (newState) {
+      // Calculate position for fixed dropdown
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      const dropdownTop = buttonRect.bottom + 4; // 4px gap
+      const dropdownLeft = buttonRect.left;
+
+      setFilterDropdownPosition({ top: dropdownTop, left: dropdownLeft });
+    } else {
+      setFilterDropdownPosition(null);
+    }
+  };
 
   // Function to check if a PO has a job creation notification
   const hasJobCreationNotification = (po: PurchaseOrder): boolean => {
@@ -523,7 +748,22 @@ const PlannerJobs: React.FC = () => {
     // Apply additional filters
     const filtered = applyFilters(basePOs);
     setFilteredPOs(filtered);
-  }, [filters, purchaseOrders, searchedJob]);
+  }, [filters, columnFilters, purchaseOrders, searchedJob]);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".filter-dropdown-container")) {
+        setActiveColumnFilter(null);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
 
   const handleBulkJobPlanning = async (jobPlanningData: any) => {
     try {
@@ -1851,24 +2091,6 @@ const PlannerJobs: React.FC = () => {
             )}
           </div>
 
-          {/* Filter Toggle Button */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center space-x-2 px-4 py-2 sm:py-3 border rounded-lg font-medium transition-colors text-sm sm:text-base ${
-              showFilters
-                ? "bg-blue-50 border-blue-200 text-blue-700"
-                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            <Filter size={18} />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
           {/* View Toggle Buttons */}
           <div className="flex border border-gray-300 rounded-lg overflow-hidden">
             <button
@@ -1896,240 +2118,7 @@ const PlannerJobs: React.FC = () => {
           </div>
         </div>
 
-        {/* Filter Panel - Keep your existing filter panel code unchanged */}
-        {showFilters && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 space-y-6">
-            {/* ... Keep all your existing filter panel code ... */}
-            {/* Filter Header */}
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-800">Filters</h3>
-              <div className="flex space-x-2">
-                {activeFilterCount > 0 && (
-                  <button
-                    onClick={clearAllFilters}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Clear All
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Filters will only show Purchase Orders
-                that need job planning (More Info Pending status)
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Color Filter */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  Number of Colors
-                </h4>
-                {/* Search bar for colors */}
-                <div className="mb-2">
-                  <input
-                    type="text"
-                    placeholder="Search colors..."
-                    value={noOfColorsSearch}
-                    onChange={(e) => setNoOfColorsSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {availableNoOfColors
-                    .filter((color) =>
-                      color
-                        .toLowerCase()
-                        .includes(noOfColorsSearch.toLowerCase())
-                    )
-                    .map((color) => (
-                      <label
-                        key={color}
-                        className="flex items-center space-x-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={filters.noOfColors.includes(color)}
-                          onChange={() => toggleNoOfColorFilter(color)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-600 truncate">
-                          {color}
-                        </span>
-                      </label>
-                    ))}
-                  {availableNoOfColors.filter((color) =>
-                    color.toLowerCase().includes(noOfColorsSearch.toLowerCase())
-                  ).length === 0 && (
-                    <p className="text-sm text-gray-400">
-                      {noOfColorsSearch
-                        ? "No matching colors"
-                        : "No colors available"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Board Size Filter */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  Dimensions
-                </h4>
-                {/* Search bar for dimensions */}
-                <div className="mb-2">
-                  <input
-                    type="text"
-                    placeholder="Search dimensions..."
-                    value={dimensionsSearch}
-                    onChange={(e) => setDimensionsSearch(e.target.value)}
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {availableBoardSizes
-                    .filter((boardSize) =>
-                      boardSize
-                        .toLowerCase()
-                        .includes(dimensionsSearch.toLowerCase())
-                    )
-                    .map((boardSize) => (
-                      <label
-                        key={boardSize}
-                        className="flex items-center space-x-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={filters.boardSizes.includes(boardSize)}
-                          onChange={() => toggleBoardSizeFilter(boardSize)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-600 truncate">
-                          {boardSize}
-                        </span>
-                      </label>
-                    ))}
-                  {availableBoardSizes.filter((boardSize) =>
-                    boardSize
-                      .toLowerCase()
-                      .includes(dimensionsSearch.toLowerCase())
-                  ).length === 0 && (
-                    <p className="text-sm text-gray-400">
-                      {dimensionsSearch
-                        ? "No matching dimensions"
-                        : "No board sizes available"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Delivery Date Filter */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  Delivery Date Range
-                </h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      From
-                    </label>
-                    <input
-                      type="date"
-                      value={filters.deliveryDateFrom}
-                      onChange={(e) =>
-                        handleFilterChange("deliveryDateFrom", e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      To
-                    </label>
-                    <input
-                      type="date"
-                      value={filters.deliveryDateTo}
-                      onChange={(e) =>
-                        handleFilterChange("deliveryDateTo", e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Filters Display */}
-            {activeFilterCount > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Active Filters:
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {filters.noOfColors.map((color) => (
-                    <span
-                      key={`color-${color}`}
-                      className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                    >
-                      No. of Colors: {color}
-                      <button
-                        onClick={() => toggleNoOfColorFilter(color)}
-                        className="ml-1 hover:text-blue-600"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                  {filters.boardSizes.map((boardSize) => (
-                    <span
-                      key={`boardSize-${boardSize}`}
-                      className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-                    >
-                      Dimensions: {boardSize}
-                      <button
-                        onClick={() => toggleBoardSizeFilter(boardSize)}
-                        className="ml-1 hover:text-green-600"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                  {filters.deliveryDateFrom && (
-                    <span className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                      From: {filters.deliveryDateFrom}
-                      <button
-                        onClick={() =>
-                          handleFilterChange("deliveryDateFrom", "")
-                        }
-                        className="ml-1 hover:text-purple-600"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )}
-                  {filters.deliveryDateTo && (
-                    <span className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                      To: {filters.deliveryDateTo}
-                      <button
-                        onClick={() => handleFilterChange("deliveryDateTo", "")}
-                        className="ml-1 hover:text-purple-600"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Old filter panel removed - using column filters instead */}
       </div>
 
       {/* Results count */}
@@ -2178,7 +2167,9 @@ const PlannerJobs: React.FC = () => {
             );
             const shouldShowBulkButton =
               filteredPOs.length > 0 &&
-              (activeFilterCount > 0 || (searchedJob && pendingPOs.length > 1));
+              (hasColumnFilters ||
+                activeFilterCount > 0 ||
+                (searchedJob && pendingPOs.length > 1));
 
             return (
               <>
@@ -2192,7 +2183,8 @@ const PlannerJobs: React.FC = () => {
                   </button>
                 )}
                 {/* Bulk Job Planning Button for Selected POs */}
-                {(searchTerm ||
+                {(hasColumnFilters ||
+                  searchTerm ||
                   filters.noOfColors.length > 0 ||
                   filters.boardSizes.length > 0 ||
                   filters.deliveryDateFrom ||
@@ -2215,7 +2207,8 @@ const PlannerJobs: React.FC = () => {
       {showBulkPlanningModal && (
         <BulkJobPlanningModal
           filteredPOs={
-            (searchTerm ||
+            (hasColumnFilters ||
+              searchTerm ||
               filters.noOfColors.length > 0 ||
               filters.boardSizes.length > 0 ||
               filters.deliveryDateFrom ||
@@ -2309,16 +2302,16 @@ const PlannerJobs: React.FC = () => {
 
               {/* List View */}
               {viewMode === "list" && (
-                <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  className={`bg-white shadow-sm border border-gray-200 rounded-lg ${
+                    activeColumnFilter ? "overflow-visible" : "overflow-hidden"
+                  }`}
+                >
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          {(searchTerm ||
-                            filters.noOfColors.length > 0 ||
-                            filters.boardSizes.length > 0 ||
-                            filters.deliveryDateFrom ||
-                            filters.deliveryDateTo) && (
+                          {filteredPOs.length > 0 && (
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               <input
                                 type="checkbox"
@@ -2331,32 +2324,823 @@ const PlannerJobs: React.FC = () => {
                               />
                             </th>
                           )}
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Style
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Style</span>
+                                {columnFilters.style.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.style.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("style", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "style"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "style" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "style"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("style");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("style")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.style.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "style",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("style");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Customer
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Customer</span>
+                                {columnFilters.customer.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.customer.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("customer", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "customer"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "customer" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "customer"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("customer");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("customer")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.customer.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "customer",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("customer");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            PO Number
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>PO Number</span>
+                                {columnFilters.poNumber.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.poNumber.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("poNumber", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "poNumber"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "poNumber" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "poNumber"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("poNumber");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("poNumber")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.poNumber.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "poNumber",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("poNumber");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             PO Date
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                            Delivery Date
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Delivery Date</span>
+                                {columnFilters.deliveryDate.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.deliveryDate.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("deliveryDate", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "deliveryDate"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "deliveryDate" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "deliveryDate"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("deliveryDate");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("deliveryDate")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.deliveryDate.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "deliveryDate",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("deliveryDate");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                             Quantity
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Board Size
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Board Size</span>
+                                {columnFilters.boardSize.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.boardSize.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("boardSize", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "boardSize"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "boardSize" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "boardSize"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("boardSize");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("boardSize")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.boardSize.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "boardSize",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("boardSize");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Die Code
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Die Code</span>
+                                {columnFilters.dieCode.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.dieCode.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("dieCode", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "dieCode"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "dieCode" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "dieCode"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("dieCode");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("dieCode")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.dieCode.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "dieCode",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("dieCode");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Status</span>
+                                {columnFilters.status.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.status.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("status", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "status"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "status" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "status"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("status");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("status")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.status.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "status",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700 truncate">
+                                            {value || "(Blank)"}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("status");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
@@ -2393,23 +3177,17 @@ const PlannerJobs: React.FC = () => {
                               className="hover:bg-gray-50 cursor-pointer transition-colors"
                               onClick={() => handlePOClick(po)}
                             >
-                              {(searchTerm ||
-                                filters.noOfColors.length > 0 ||
-                                filters.boardSizes.length > 0 ||
-                                filters.deliveryDateFrom ||
-                                filters.deliveryDateTo) && (
-                                <td
-                                  className="px-6 py-4 whitespace-nowrap"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedPOs.includes(po.id)}
-                                    onChange={() => handlePOSelection(po.id)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                  />
-                                </td>
-                              )}
+                              <td
+                                className="px-6 py-4 whitespace-nowrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPOs.includes(po.id)}
+                                  onChange={() => handlePOSelection(po.id)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center space-x-2">
                                   <div

@@ -192,6 +192,7 @@ interface AdminDashboardData {
   completedJobsData: CompletedJob[];
   heldJobs: number;
   heldJobsData: HeldJob[];
+  majorHoldJobs: number;
 }
 
 interface MachineDetails {
@@ -904,6 +905,29 @@ const AdminDashboard: React.FC = () => {
     return "planned";
   };
 
+  // Helper function to check if a job has major hold
+  const isMajorHold = (job: JobPlan): boolean => {
+    for (const step of job.steps || []) {
+      // Check stepDetails.data.status for "major_hold"
+      if (step.stepDetails?.data?.status === "major_hold") {
+        return true;
+      }
+      // Also check stepDetails.status
+      if (step.stepDetails?.status === "major_hold") {
+        return true;
+      }
+      // Check for major hold remark
+      if (
+        step.stepDetails?.data?.majorHoldRemark ||
+        (step.stepDetails?.data?.holdRemark &&
+          /major/i.test(step.stepDetails.data.holdRemark))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Updated processJobPlanData - fetch machines once, not in loop
   const processJobPlanData = async (
     jobPlans: JobPlan[],
@@ -922,6 +946,7 @@ const AdminDashboard: React.FC = () => {
     let plannedJobs = 0;
     // Get held jobs count from the new API
     let heldJobs = heldJobsData.length;
+    let majorHoldJobs = 0;
 
     console.log("Processing held jobs data:", heldJobsData);
     console.log("Total held jobs from API:", heldJobs);
@@ -1003,6 +1028,11 @@ const AdminDashboard: React.FC = () => {
       let jobOnHold = false;
       const totalStepsInJob = jobPlan.steps.length;
       let completedStepsInJob = 0;
+
+      // Check if this job has major hold
+      if (isMajorHold(jobPlan)) {
+        majorHoldJobs++;
+      }
 
       totalSteps += totalStepsInJob;
 
@@ -1183,6 +1213,7 @@ const AdminDashboard: React.FC = () => {
       completedJobsData: completedJobsData,
       heldJobs,
       heldJobsData,
+      majorHoldJobs,
     };
   };
 
@@ -1359,6 +1390,7 @@ const AdminDashboard: React.FC = () => {
     let totalSteps = 0;
     // Use held jobs count from the API data, not recalculated
     const heldJobs = data.heldJobs;
+    let majorHoldJobs = 0;
     let completedSteps = 0;
     const uniqueUsers = new Set<string>();
 
@@ -1369,6 +1401,11 @@ const AdminDashboard: React.FC = () => {
       let jobOnHold = false;
       const totalStepsInJob = jobPlan.steps.length;
       let completedStepsInJob = 0;
+
+      // Check if this job has major hold
+      if (isMajorHold(jobPlan)) {
+        majorHoldJobs++;
+      }
 
       totalSteps += totalStepsInJob;
 
@@ -1564,6 +1601,7 @@ const AdminDashboard: React.FC = () => {
       completedJobsData: filteredCompletedJobsData,
       heldJobs,
       heldJobsData: data.heldJobsData, // Keep the original held jobs data as it's not date-filtered
+      majorHoldJobs,
     };
   }, [data, dateFilter, customDateRange]);
 
@@ -1608,18 +1646,26 @@ const AdminDashboard: React.FC = () => {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
           <div className="flex items-center space-x-4">
-            {/* Held Jobs Quick Access */}
+            {/* Major Hold Jobs Quick Access */}
             <button
               type="button"
               onClick={handleMajorHoldJobsClick}
               title="View major hold jobs"
               className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00AEEF]"
             >
-              <AlertTriangle className="text-red-500" size={20} />
-              {typeof filteredData?.heldJobs === "number" &&
-                filteredData.heldJobs > 0 && (
-                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full">
-                    {filteredData.heldJobs}
+              <AlertTriangle
+                className={`text-red-500 ${
+                  typeof filteredData?.majorHoldJobs === "number" &&
+                  filteredData.majorHoldJobs > 0
+                    ? "animate-pulse"
+                    : ""
+                }`}
+                size={20}
+              />
+              {typeof filteredData?.majorHoldJobs === "number" &&
+                filteredData.majorHoldJobs > 0 && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
+                    {filteredData.majorHoldJobs}
                   </span>
                 )}
             </button>
