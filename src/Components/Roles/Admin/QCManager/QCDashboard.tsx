@@ -144,8 +144,15 @@ const QCDashboard: React.FC = () => {
       item.operatorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.checkedBy.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || item.status === statusFilter;
+    let matchesStatus = false;
+    if (statusFilter === "all") {
+      matchesStatus = true;
+    } else if (statusFilter === "in_progress") {
+      // Match both "in_progress" and "start" status for in-progress filter
+      matchesStatus = item.status === "in_progress" || item.status === "start";
+    } else {
+      matchesStatus = item.status === statusFilter;
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -236,6 +243,7 @@ const QCDashboard: React.FC = () => {
           icon: CalendarIcon,
         };
       case "start":
+      case "in_progress":
         return {
           color: "bg-blue-100 text-blue-800 border-blue-200",
           label: "In Progress",
@@ -466,110 +474,125 @@ const QCDashboard: React.FC = () => {
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6 mb-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-8">
+        {/* Total QC Checks Card */}
+        <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-2">
                 Total QC Checks
               </p>
-              <p className="text-xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-blue-700">
                 {combinedStats.totalQCChecks}
               </p>
             </div>
-            <div className="bg-blue-100 p-3 rounded-xl">
-              <ClipboardDocumentCheckIcon className="h-4 w-4 text-blue-600" />
+            <div className="bg-blue-100 p-3 rounded-lg">
+              <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Quantity Checked Card */}
+        <div className="bg-purple-50 rounded-xl shadow-sm border border-purple-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-purple-600 uppercase tracking-wide mb-2">
                 Quantity Checked
               </p>
-              <p className="text-xl font-bold text-indigo-600">
+              <p className="text-2xl font-bold text-purple-700">
                 {combinedStats.totalQuantityChecked.toLocaleString()}
               </p>
             </div>
-            <div className="bg-indigo-100 p-3 rounded-xl">
-              <ClipboardDocumentCheckIcon className="h-4 w-4 text-indigo-600" />
+            <div className="bg-purple-100 p-3 rounded-lg">
+              <ClipboardDocumentCheckIcon className="h-5 w-5 text-purple-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Accepted Qty Card */}
+        <div className="bg-green-50 rounded-xl shadow-sm border border-green-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Accepted Qty</p>
-              <p className="text-xl font-bold text-green-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-green-600 uppercase tracking-wide mb-2">
+                Accepted Qty
+              </p>
+              <p className="text-2xl font-bold text-green-700">
                 {combinedStats.totalAcceptedQuantity.toLocaleString()}
               </p>
             </div>
-            <div className="bg-green-100 p-3 rounded-xl">
-              <CheckCircleIcon className="h-4 w-4 text-green-600" />
+            <div className="bg-green-100 p-3 rounded-lg">
+              <CheckCircleIcon className="h-5 w-5 text-green-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Rejected Qty Card */}
+        <div className="bg-red-50 rounded-xl shadow-sm border border-red-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Rejected Qty</p>
-              <p className="text-xl font-bold text-red-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-2">
+                Rejected Qty
+              </p>
+              <p className="text-2xl font-bold text-red-700">
                 {combinedStats.totalRejectedQuantity.toLocaleString()}
               </p>
             </div>
-            <div className="bg-red-100 p-3 rounded-xl">
-              <XCircleIcon className="h-4 w-4 text-red-600" />
+            <div className="bg-red-100 p-3 rounded-lg">
+              <XCircleIcon className="h-5 w-5 text-red-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Rejection % Card */}
+        <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Rejection %</p>
-              <p className="text-xl font-bold text-orange-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-orange-600 uppercase tracking-wide mb-2">
+                Rejection %
+              </p>
+              <p className="text-2xl font-bold text-orange-700">
                 {combinedStats.rejectionPercentage}%
               </p>
             </div>
-            <div className="bg-orange-100 p-3 rounded-xl">
-              <ExclamationTriangleIcon className="h-4 w-4 text-orange-600" />
+            <div className="bg-orange-100 p-3 rounded-lg">
+              <ExclamationTriangleIcon className="h-5 w-5 text-orange-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Top Reason Card */}
+        <div className="bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Top Reason</p>
-              <p className="text-lg font-bold text-gray-900 truncate">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
+                Top Reason
+              </p>
+              <p className="text-lg font-bold text-gray-900 truncate mb-1">
                 {combinedStats.topRejectionReason}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-600">
                 {combinedStats.topRejectionCount.toLocaleString()} qty
               </p>
             </div>
-            <div className="bg-gray-100 p-3 rounded-xl">
-              <ExclamationTriangleIcon className="h-8 w-8 text-gray-600" />
+            <div className="bg-gray-100 p-3 rounded-lg flex-shrink-0 ml-2">
+              <ExclamationTriangleIcon className="h-5 w-5 text-gray-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        {/* Pending Checks Card */}
+        <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-100 p-5 hover:shadow-md transition-shadow duration-200">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-orange-600 uppercase tracking-wide mb-2">
                 Pending Checks
               </p>
-              <p className="text-xl font-bold text-yellow-600">
+              <p className="text-2xl font-bold text-orange-700">
                 {qcData.filter((item) => item.status === "pending").length}
               </p>
             </div>
-            <div className="bg-yellow-100 p-3 rounded-xl">
-              <ClockIcon className="h-4 w-4 text-yellow-600" />
+            <div className="bg-yellow-100 p-3 rounded-lg">
+              <ClockIcon className="h-5 w-5 text-orange-600" />
             </div>
           </div>
         </div>
@@ -598,6 +621,7 @@ const QCDashboard: React.FC = () => {
               >
                 <option value="all">All Status</option>
                 <option value="accept">Accepted</option>
+                <option value="in_progress">In Progress</option>
                 <option value="pending">Pending</option>
                 <option value="rejected">Rejected</option>
               </select>

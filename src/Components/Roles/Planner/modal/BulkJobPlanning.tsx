@@ -79,6 +79,10 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
   const [allMachines, setAllMachines] = useState<Machine[]>([]); // 🔥 NEW: Store all fetched machines
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const [showDemandModal, setShowDemandModal] = useState(false);
   const [showStepsModal, setShowStepsModal] = useState(false);
@@ -170,25 +174,26 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
     }
 
     try {
-      // 🔥 FIXED: Create job plans one by one, using the SAME structure as single job planning
+      // 🔥 OPTIMIZED: Process in batches to keep UI responsive
       console.log(`📤 Creating ${filteredPOs.length} job plans...`);
+      setProgress({ current: 0, total: filteredPOs.length });
 
-      // Loop through each PO and create individual job planning (same as single job planning)
-      for (const po of filteredPOs) {
-        const jobPlanningData = {
+      const BATCH_SIZE = 3; // Process 3 items at a time
+      const errors: string[] = [];
+      let completed = 0;
+
+      // Helper function to create job planning data for a PO
+      const createJobPlanningData = (po: PurchaseOrder) => {
+        return {
           nrcJobNo: po.jobNrcJobNo || po.job?.nrcJobNo,
           jobDemand: jobDemand,
-          purchaseOrderId: po.id, // Include PO ID (same as single job planning)
-
-          // 🔥 CRITICAL: This is the steps array the API expects at root level
+          purchaseOrderId: po.id,
           steps: selectedSteps.map((step, stepIndex) => {
-            // Get ALL machines assigned to this step
             const assignedMachineIds = stepMachines[step.stepName] || [];
             const assignedMachines = assignedMachineIds
               .map((machineId) => allMachines.find((m) => m.id === machineId))
               .filter(Boolean) as Machine[];
 
-            // Create machineDetails array for multiple machines
             let machineDetails;
             if (assignedMachines.length > 0) {
               machineDetails = assignedMachines.map((machine) => ({
@@ -198,7 +203,6 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
                 machineType: machine.machineType,
               }));
             } else {
-              // No machines assigned - use same format as single job planning
               machineDetails = [
                 {
                   unit: po.unit || "Mk",
@@ -212,7 +216,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
               jobStepId: stepIndex + 1,
               stepNo: step.stepNo || stepIndex + 1,
               stepName: step.stepName,
-              machineDetails: machineDetails, // 🔥 This gets stored as JSON in DB
+              machineDetails: machineDetails,
               status: "planned" as const,
               startDate: null,
               endDate: null,
@@ -222,29 +226,80 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
             };
           }),
         };
+      };
 
-        console.log(
-          `📤 Creating job plan for PO ${po.id} (${
-            po.jobNrcJobNo || po.job?.nrcJobNo
-          }):`,
-          JSON.stringify(jobPlanningData, null, 2)
+      // Process in batches to keep UI responsive
+      const processBatch = async (batch: PurchaseOrder[]): Promise<void> => {
+        // Process batch in parallel
+        const results = await Promise.allSettled(
+          batch.map(async (po) => {
+            const jobPlanningData = createJobPlanningData(po);
+            await onSave(jobPlanningData);
+            return po.id;
+          })
         );
 
-        // Save each job plan individually (same as single job planning)
-        await onSave(jobPlanningData);
+        // Update progress and track errors after batch completes
+        results.forEach((result, index) => {
+          completed++;
+
+          if (result.status === "rejected") {
+            const po = batch[index];
+            errors.push(
+              `PO ${po.poNumber || po.id}: ${
+                result.reason?.message || "Unknown error"
+              }`
+            );
+            console.error(
+              `❌ Failed to create job plan for PO ${po.id}:`,
+              result.reason
+            );
+          }
+        });
+
+        // Update progress once per batch to reduce re-renders
+        setProgress({ current: completed, total: filteredPOs.length });
+
+        // Yield control back to browser to keep UI responsive
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+
+      // Process all POs in batches
+      for (let i = 0; i < filteredPOs.length; i += BATCH_SIZE) {
+        const batch = filteredPOs.slice(i, i + BATCH_SIZE);
+        await processBatch(batch);
       }
 
-      console.log(`✅ Successfully created ${filteredPOs.length} job plans`);
+      console.log(`✅ Processed ${completed} job plans`);
 
-      // Show success message
+      // Handle errors
+      if (errors.length > 0) {
+        const successCount = completed - errors.length;
+        setError(
+          `${successCount} of ${
+            filteredPOs.length
+          } job plans created successfully. Errors: ${errors
+            .slice(0, 3)
+            .join("; ")}${
+            errors.length > 3 ? ` (+${errors.length - 3} more)` : ""
+          }`
+        );
+
+        if (successCount > 0 && onRefresh) {
+          onRefresh();
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      // All successful
+      setProgress(null);
       alert(`Successfully created job plans for ${filteredPOs.length} POs!`);
 
-      // Refresh data if callback provided
       if (onRefresh) {
         onRefresh();
       }
 
-      // Close modal on success
       onClose();
     } catch (err) {
       console.error("❌ Error creating bulk job plans:", err);
@@ -253,6 +308,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
           err instanceof Error ? err.message : "Unknown error"
         }`
       );
+      setProgress(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -407,6 +463,21 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
               )}
             </div>
 
+            {/* Progress Bar */}
+            {progress && (
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                <div
+                  className="bg-[#00AEEF] h-2.5 rounded-full transition-all duration-300 ease-out"
+                  style={{
+                    width: `${(progress.current / progress.total) * 100}%`,
+                  }}
+                ></div>
+                <p className="text-xs text-gray-600 text-center mt-1">
+                  Processing {progress.current} of {progress.total} job plans...
+                </p>
+              </div>
+            )}
+
             <button
               type="submit"
               className="w-full bg-[#00AEEF] text-white py-3 rounded-lg font-semibold text-base hover:bg-[#0099cc] transition hover:cursor-pointer shadow-md flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -435,7 +506,9 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
                 </svg>
               )}
               {isSubmitting
-                ? `Creating ${filteredPOs.length} Job Plans...`
+                ? progress
+                  ? `Creating Job Plans... (${progress.current}/${progress.total})`
+                  : `Creating ${filteredPOs.length} Job Plans...`
                 : `Create Job Plans for ${filteredPOs.length} POs`}
             </button>
           </form>

@@ -128,7 +128,9 @@ interface ColumnFilters {
   style: string[];
   customer: string[];
   poNumber: string[];
+  poDate: string[];
   deliveryDate: string[];
+  totalPOQuantity: string[];
   boardSize: string[];
   noOfColor: string[];
   dieCode: string[];
@@ -175,7 +177,9 @@ const PlannerJobs: React.FC = () => {
     style: [],
     customer: [],
     poNumber: [],
+    poDate: [],
     deliveryDate: [],
+    totalPOQuantity: [],
     boardSize: [],
     noOfColor: [],
     dieCode: [],
@@ -398,11 +402,21 @@ const PlannerJobs: React.FC = () => {
       ) {
         return false;
       }
+      if (columnFilters.poDate.length > 0) {
+        const poDateFormatted = formatDateDisplay(po.poDate);
+        if (!columnFilters.poDate.includes(poDateFormatted)) {
+          return false;
+        }
+      }
       if (columnFilters.deliveryDate.length > 0) {
-        const poDate = po.deliveryDate
-          ? new Date(po.deliveryDate).toLocaleDateString()
-          : "";
-        if (!columnFilters.deliveryDate.includes(poDate)) {
+        const poDateFormatted = formatDateDisplay(po.deliveryDate);
+        if (!columnFilters.deliveryDate.includes(poDateFormatted)) {
+          return false;
+        }
+      }
+      if (columnFilters.totalPOQuantity.length > 0) {
+        const poQuantity = po.totalPOQuantity ? String(po.totalPOQuantity) : "";
+        if (!columnFilters.totalPOQuantity.includes(poQuantity)) {
           return false;
         }
       }
@@ -552,6 +566,21 @@ const PlannerJobs: React.FC = () => {
     (value) => Array.isArray(value) && value.length > 0
   );
 
+  // Format date for display as dd/mm/yyyy
+  const formatDateDisplay = (dateString: string | null | undefined): string => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "N/A";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      return "N/A";
+    }
+  };
+
   // Get unique values for a specific column
   const getUniqueColumnValues = (columnName: keyof ColumnFilters): string[] => {
     const values = new Set<string>();
@@ -567,10 +596,14 @@ const PlannerJobs: React.FC = () => {
         case "poNumber":
           value = po.poNumber || "";
           break;
+        case "poDate":
+          value = formatDateDisplay(po.poDate);
+          break;
         case "deliveryDate":
-          value = po.deliveryDate
-            ? new Date(po.deliveryDate).toLocaleDateString()
-            : "";
+          value = formatDateDisplay(po.deliveryDate);
+          break;
+        case "totalPOQuantity":
+          value = po.totalPOQuantity ? String(po.totalPOQuantity) : "";
           break;
         case "boardSize":
           value = po.boardSize || "";
@@ -1036,24 +1069,16 @@ const PlannerJobs: React.FC = () => {
         Style: po.style || "",
         Unit: po.unit || "",
         "Flute Type": po.fluteType || "",
-        "Shade Card Approval Date": po.shadeCardApprovalDate
-          ? new Date(po.shadeCardApprovalDate).toLocaleDateString("en-GB")
-          : "",
+        "Shade Card Approval Date": formatDateDisplay(po.shadeCardApprovalDate),
         "Pending Validity": po.pendingValidity || 0,
         "PO.NUMBER": po.poNumber || "",
         Plant: po.plant || "",
-        "PO Date": po.poDate
-          ? new Date(po.poDate).toLocaleDateString("en-GB")
-          : "",
+        "PO Date": formatDateDisplay(po.poDate),
         "Jockey Month": po.jockeyMonth || "",
-        "Delivery Date": po.deliveryDate
-          ? new Date(po.deliveryDate).toLocaleDateString("en-GB")
-          : "",
+        "Delivery Date": formatDateDisplay(po.deliveryDate),
         "Total PO Quantity": po.totalPOQuantity || 0,
         "Dispatch Quantity": po.dispatchQuantity || 0,
-        "Dispatch Date": po.dispatchDate
-          ? new Date(po.dispatchDate).toLocaleDateString("en-GB")
-          : "",
+        "Dispatch Date": formatDateDisplay(po.dispatchDate),
         "Pending Quantity": po.pendingQuantity || 0,
         Customer: po.customer || "",
         "NO.of ups": po.noOfUps || 0,
@@ -1363,15 +1388,54 @@ const PlannerJobs: React.FC = () => {
         }
 
         if (file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) {
+          setBulkUploadProgress(
+            `Reading Excel file (${(file.size / 1024 / 1024).toFixed(2)} MB)...`
+          );
+
+          // Read file asynchronously
           const data = await file.arrayBuffer();
-          const workbook = XLSX.read(data, { type: "array" });
+
+          // Yield control to allow UI update
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          setBulkUploadProgress("Parsing Excel file...");
+
+          // Aggressively optimize XLSX reading options for maximum performance
+          const workbook = XLSX.read(data, {
+            type: "array",
+            cellDates: false, // Disable date parsing (we parse manually in parseDate)
+            cellNF: false, // Disable number format parsing
+            cellStyles: false, // Disable style parsing
+            cellFormula: false, // Disable formula parsing (huge performance gain)
+            cellHTML: false, // Disable HTML cell parsing
+            bookSheets: false, // Don't load all sheet data upfront
+            sheetStubs: false, // Don't create stub cells
+            sheetRows: 0, // Read all rows
+            dense: false, // Use sparse mode (faster for large files)
+          });
+
+          setBulkUploadProgress("Converting to JSON...");
+
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          parsedData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+
+          // Optimize sheet_to_json conversion - use raw:true for better performance
+          // We'll handle date parsing in parseDate() function anyway
+          parsedData = XLSX.utils.sheet_to_json(worksheet, {
+            raw: true, // Use raw values (faster) - dates will be numbers/dates
+            defval: null, // Default value for empty cells
+            blankrows: false, // Skip blank rows (significant performance gain)
+            range: undefined, // Process entire sheet
+          });
+
+          setBulkUploadProgress(`Loaded ${parsedData.length} rows from Excel`);
         }
 
         // Normalize headers by trimming spaces and standardizing column names
-        parsedData = parsedData.map((row: any) => {
+        // Process in batches to keep UI responsive
+        const BATCH_SIZE = 50; // Process 50 rows at a time
+        const normalizedData: any[] = [];
+
+        const normalizeRow = (row: any) => {
           const normalizedRow: any = {};
           Object.keys(row).forEach((key) => {
             const trimmedKey = key.trim();
@@ -1412,7 +1476,24 @@ const PlannerJobs: React.FC = () => {
             normalizedRow[normalizedKey] = row[key];
           });
           return normalizedRow;
-        });
+        };
+
+        // Process normalization in batches
+        for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
+          const batch = parsedData.slice(i, i + BATCH_SIZE);
+          normalizedData.push(...batch.map(normalizeRow));
+
+          // Update progress and yield control to browser
+          setBulkUploadProgress(
+            `Normalizing data... ${Math.min(
+              i + BATCH_SIZE,
+              parsedData.length
+            )}/${parsedData.length} rows`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        parsedData = normalizedData;
 
         // Debug: Log available headers to see what we're working with
         if (parsedData.length > 0) {
@@ -1526,7 +1607,7 @@ const PlannerJobs: React.FC = () => {
         //   Array.from(jobMap.keys())
         // );
 
-        // First pass: check if ALL styles can be matched
+        // First pass: check if ALL styles can be matched (batched for performance)
         const unmatchedStyles: string[] = [];
         const styleMatchResults: {
           row: number;
@@ -1535,56 +1616,56 @@ const PlannerJobs: React.FC = () => {
           jobNo: string | null;
         }[] = [];
 
-        parsedData.forEach((row: any, idx: number) => {
-          if (!row["Customer"]) return;
+        // Process style matching in batches
+        for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
+          const batch = parsedData.slice(i, i + BATCH_SIZE);
 
-          const styleValue = row["Style"];
-          if (!styleValue) {
-            unmatchedStyles.push(`Row ${idx + 1}: [EMPTY STYLE]`);
-            styleMatchResults.push({
-              row: idx + 1,
-              style: "[EMPTY]",
-              matched: false,
-              jobNo: null,
-            });
-            return;
-          }
+          batch.forEach((row: any, batchIdx: number) => {
+            const idx = i + batchIdx;
+            if (!row["Customer"]) return;
 
-          const normalizedStyle = styleValue.trim().toUpperCase();
-          const matchedJobNo = jobMap.get(normalizedStyle);
+            const styleValue = row["Style"];
+            if (!styleValue) {
+              unmatchedStyles.push(`Row ${idx + 1}: [EMPTY STYLE]`);
+              styleMatchResults.push({
+                row: idx + 1,
+                style: "[EMPTY]",
+                matched: false,
+                jobNo: null,
+              });
+              return;
+            }
 
-          // Debug: Log detailed matching info for this specific style
-          // if (styleValue === "PKBB-1302-0105-N4") {
-          //   console.log("🔍 DEBUG for PKBB-1302-0105-N4:");
-          //   console.log("  Original style:", styleValue);
-          //   console.log("  Normalized style:", normalizedStyle);
-          //   console.log("  Found in jobMap:", jobMap.has(normalizedStyle));
-          //   console.log("  Matched jobNo:", matchedJobNo);
-          //   console.log(
-          //     "  All similar styles in jobMap:",
-          //     Array.from(jobMap.keys()).filter((key) =>
-          //       key.includes("PKBB-1302-0105")
-          //     )
-          //   );
-          // }
+            const normalizedStyle = styleValue.trim().toUpperCase();
+            const matchedJobNo = jobMap.get(normalizedStyle);
 
-          if (!matchedJobNo) {
-            unmatchedStyles.push(`Row ${idx + 1}: "${styleValue}"`);
-            styleMatchResults.push({
-              row: idx + 1,
-              style: styleValue,
-              matched: false,
-              jobNo: null,
-            });
-          } else {
-            styleMatchResults.push({
-              row: idx + 1,
-              style: styleValue,
-              matched: true,
-              jobNo: matchedJobNo,
-            });
-          }
-        });
+            if (!matchedJobNo) {
+              unmatchedStyles.push(`Row ${idx + 1}: "${styleValue}"`);
+              styleMatchResults.push({
+                row: idx + 1,
+                style: styleValue,
+                matched: false,
+                jobNo: null,
+              });
+            } else {
+              styleMatchResults.push({
+                row: idx + 1,
+                style: styleValue,
+                matched: true,
+                jobNo: matchedJobNo,
+              });
+            }
+          });
+
+          // Update progress and yield control
+          setBulkUploadProgress(
+            `Matching styles... ${Math.min(
+              i + BATCH_SIZE,
+              parsedData.length
+            )}/${parsedData.length} rows`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
 
         // Log all matching results for debugging
         // console.log("Style matching results:", styleMatchResults);
@@ -1593,177 +1674,199 @@ const PlannerJobs: React.FC = () => {
         const unmatchedItems: Array<{ style: string; customer: string }> = [];
 
         // Proceed with formatting - include ALL rows (matched and unmatched)
-        const formattedData = parsedData
-          .map((row: any, idx: number) => {
-            // Check for minimum required fields: Style or PO Number
-            const styleValue = row["Style"];
-            const poNumber = row["PO.NUMBER"];
+        // Process in batches to keep UI responsive
+        const formattedData: any[] = [];
 
-            // Must have either Style or PO Number to be valid
-            if (!styleValue && !poNumber) {
-              console.warn(
-                `Row ${idx + 1}: Skipping - no Style or PO Number provided`
-              );
-              return null;
-            }
+        const formatRow = (row: any, idx: number) => {
+          // Check for minimum required fields: Style or PO Number
+          const styleValue = row["Style"];
+          const poNumber = row["PO.NUMBER"];
 
-            if (!styleValue) {
-              console.warn(`Row ${idx + 1}: Skipping - Style is required`);
-              return null;
-            }
+          // Must have either Style or PO Number to be valid
+          if (!styleValue && !poNumber) {
+            console.warn(
+              `Row ${idx + 1}: Skipping - no Style or PO Number provided`
+            );
+            return null;
+          }
 
-            const normalizedStyle = styleValue.trim().toUpperCase();
-            const matchedJobNo = jobMap.get(normalizedStyle);
-            const matchedJobDetails = jobDetailsMap.get(normalizedStyle);
+          if (!styleValue) {
+            console.warn(`Row ${idx + 1}: Skipping - Style is required`);
+            return null;
+          }
 
-            // Track unmatched styles for notification - use Customer if available, else "N/A"
-            if (!matchedJobNo) {
-              unmatchedItems.push({
-                style: styleValue,
-                customer: row["Customer"] || "N/A",
-              });
-              console.warn(
-                `Row ${
-                  idx + 1
-                }: style "${styleValue}" has no matching job - will be added to database and notification created`
-              );
-            } else {
-              console.log(
-                `Row ${
-                  idx + 1
-                }: style="${styleValue}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`
-              );
-            }
+          const normalizedStyle = styleValue.trim().toUpperCase();
+          const matchedJobNo = jobMap.get(normalizedStyle);
+          const matchedJobDetails = jobDetailsMap.get(normalizedStyle);
 
-            // Create base PO object from Excel data
-            const basePOData = {
-              // DON'T assign id here - we'll assign it after filtering duplicates
-              // Map Excel columns to database fields according to the specified order
-              srNo: row["Sr #"] ? parseInt(row["Sr #"]) : null,
-              style: row["Style"] || null,
-              unit: row["Unit"] || null,
-              fluteType: row["Flute Type"] || null,
-              shadeCardApprovalDate: row["Shade Card Approval Date"]
-                ? parseDate(row["Shade Card Approval Date"])
-                : null,
-              pendingValidity: row["Pending Validity"]
-                ? parseInt(row["Pending Validity"])
-                : null,
-              poNumber: row["PO.NUMBER"] || null,
-              plant: row["Plant"] || null,
-              poDate: row["PO Date"] ? parseDate(row["PO Date"]) : null,
-              jockeyMonth: row["Jockey Month"] || null,
-              deliveryDate: row["Delivery Date"]
-                ? parseDate(row["Delivery Date"])
-                : null,
-              totalPOQuantity: row["Total PO Quantity"]
-                ? parseInt(row["Total PO Quantity"])
-                : null,
-              dispatchQuantity: row["Dispatch Quantity"]
-                ? parseInt(row["Dispatch Quantity"])
-                : null,
-              dispatchDate: row["Dispatch Date"]
-                ? parseDate(row["Dispatch Date"])
-                : null,
-              pendingQuantity: row["Pending Quantity"]
-                ? parseInt(row["Pending Quantity"])
-                : null,
-              customer: row["Customer"] || null,
-              noOfUps: row["NO.of ups"] ? parseInt(row["NO.of ups"]) : null,
-              noOfSheets: row["No. Of Sheets"]
-                ? parseInt(row["No. Of Sheets"])
-                : null,
-              boardSize: row["Board Size"] || null,
-              dieCode: row["Die Code"] ? parseInt(row["Die Code"]) : null,
-              // Additional fields with defaults
-              nrcDeliveryDate: null,
-              sharedCardDiffDate: null,
-              status: "created",
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              jobNrcJobNo: matchedJobNo || null, // Allow null for unmatched styles
-              userId: null,
+          // Track unmatched styles for notification - use Customer if available, else "N/A"
+          if (!matchedJobNo) {
+            unmatchedItems.push({
+              style: styleValue,
+              customer: row["Customer"] || "N/A",
+            });
+            console.warn(
+              `Row ${
+                idx + 1
+              }: style "${styleValue}" has no matching job - will be added to database and notification created`
+            );
+          } else {
+            console.log(
+              `Row ${
+                idx + 1
+              }: style="${styleValue}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`
+            );
+          }
+
+          // Create base PO object from Excel data
+          const basePOData = {
+            // DON'T assign id here - we'll assign it after filtering duplicates
+            // Map Excel columns to database fields according to the specified order
+            srNo: row["Sr #"] ? parseInt(row["Sr #"]) : null,
+            style: row["Style"] || null,
+            unit: row["Unit"] || null,
+            fluteType: row["Flute Type"] || null,
+            shadeCardApprovalDate: row["Shade Card Approval Date"]
+              ? parseDate(row["Shade Card Approval Date"])
+              : null,
+            pendingValidity: row["Pending Validity"]
+              ? parseInt(row["Pending Validity"])
+              : null,
+            poNumber: row["PO.NUMBER"] || null,
+            plant: row["Plant"] || null,
+            poDate: row["PO Date"] ? parseDate(row["PO Date"]) : null,
+            jockeyMonth: row["Jockey Month"] || null,
+            deliveryDate: row["Delivery Date"]
+              ? parseDate(row["Delivery Date"])
+              : null,
+            totalPOQuantity: row["Total PO Quantity"]
+              ? parseInt(row["Total PO Quantity"])
+              : null,
+            dispatchQuantity: row["Dispatch Quantity"]
+              ? parseInt(row["Dispatch Quantity"])
+              : null,
+            dispatchDate: row["Dispatch Date"]
+              ? parseDate(row["Dispatch Date"])
+              : null,
+            pendingQuantity: row["Pending Quantity"]
+              ? parseInt(row["Pending Quantity"])
+              : null,
+            customer: row["Customer"] || null,
+            noOfUps: row["NO.of ups"] ? parseInt(row["NO.of ups"]) : null,
+            noOfSheets: row["No. Of Sheets"]
+              ? parseInt(row["No. Of Sheets"])
+              : null,
+            boardSize: row["Board Size"] || null,
+            dieCode: row["Die Code"] ? parseInt(row["Die Code"]) : null,
+            // Additional fields with defaults
+            nrcDeliveryDate: null,
+            sharedCardDiffDate: null,
+            status: "created",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            jobNrcJobNo: matchedJobNo || null, // Allow null for unmatched styles
+            userId: null,
+          };
+
+          // NEW: Auto-fill missing fields from job details if matched
+          if (matchedJobDetails && matchedJobNo) {
+            // Fill in ALL fields from job if Excel value is null/undefined/empty string
+            const enrichedPOData = {
+              ...basePOData,
+              // Basic fields
+              boardSize:
+                basePOData.boardSize ||
+                matchedJobDetails.boardSize ||
+                matchedJobDetails.boardCategory ||
+                null,
+              dieCode:
+                basePOData.dieCode || matchedJobDetails.diePunchCode || null,
+              fluteType:
+                basePOData.fluteType || matchedJobDetails.fluteType || null,
+              unit: basePOData.unit || matchedJobDetails.unit || null,
+              customer:
+                basePOData.customer || matchedJobDetails.customerName || null,
+              plant: basePOData.plant || matchedJobDetails.unit || null,
+              // Shade card fields
+              shadeCardApprovalDate:
+                basePOData.shadeCardApprovalDate ||
+                (matchedJobDetails.shadeCardApprovalDate
+                  ? parseDate(matchedJobDetails.shadeCardApprovalDate)
+                  : null) ||
+                null,
+              sharedCardDiffDate:
+                basePOData.sharedCardDiffDate ||
+                matchedJobDetails.sharedCardDiffDate ||
+                null,
+              // No of Ups and Sheets from job
+              noOfUps: basePOData.noOfUps || matchedJobDetails.noUps || null,
+              noOfSheets:
+                basePOData.noOfSheets || matchedJobDetails.noOfSheets || null,
             };
 
-            // NEW: Auto-fill missing fields from job details if matched
-            if (matchedJobDetails && matchedJobNo) {
-              // Fill in ALL fields from job if Excel value is null/undefined/empty string
-              const enrichedPOData = {
-                ...basePOData,
-                // Basic fields
-                boardSize:
-                  basePOData.boardSize ||
-                  matchedJobDetails.boardSize ||
-                  matchedJobDetails.boardCategory ||
-                  null,
-                dieCode:
-                  basePOData.dieCode || matchedJobDetails.diePunchCode || null,
-                fluteType:
-                  basePOData.fluteType || matchedJobDetails.fluteType || null,
-                unit: basePOData.unit || matchedJobDetails.unit || null,
-                customer:
-                  basePOData.customer || matchedJobDetails.customerName || null,
-                plant: basePOData.plant || matchedJobDetails.unit || null,
-                // Shade card fields
-                shadeCardApprovalDate:
-                  basePOData.shadeCardApprovalDate ||
-                  (matchedJobDetails.shadeCardApprovalDate
-                    ? parseDate(matchedJobDetails.shadeCardApprovalDate)
-                    : null) ||
-                  null,
-                sharedCardDiffDate:
-                  basePOData.sharedCardDiffDate ||
-                  matchedJobDetails.sharedCardDiffDate ||
-                  null,
-                // No of Ups and Sheets from job
-                noOfUps: basePOData.noOfUps || matchedJobDetails.noUps || null,
-                noOfSheets:
-                  basePOData.noOfSheets || matchedJobDetails.noOfSheets || null,
-              };
+            console.log(`Row ${idx + 1}: Auto-filled PO data from job:`, {
+              style: styleValue,
+              baseData: {
+                boardSize: basePOData.boardSize,
+                dieCode: basePOData.dieCode,
+                fluteType: basePOData.fluteType,
+                shadeCardApprovalDate: basePOData.shadeCardApprovalDate,
+                sharedCardDiffDate: basePOData.sharedCardDiffDate,
+                noOfUps: basePOData.noOfUps,
+                noOfSheets: basePOData.noOfSheets,
+                plant: basePOData.plant,
+                unit: basePOData.unit,
+              },
+              jobData: {
+                boardSize: matchedJobDetails.boardSize,
+                dieCode: matchedJobDetails.diePunchCode,
+                fluteType: matchedJobDetails.fluteType,
+                shadeCardApprovalDate: matchedJobDetails.shadeCardApprovalDate,
+                sharedCardDiffDate: matchedJobDetails.sharedCardDiffDate,
+                noUps: matchedJobDetails.noUps,
+                noOfSheets: matchedJobDetails.noOfSheets,
+                unit: matchedJobDetails.unit,
+              },
+              enrichedData: {
+                boardSize: enrichedPOData.boardSize,
+                dieCode: enrichedPOData.dieCode,
+                fluteType: enrichedPOData.fluteType,
+                shadeCardApprovalDate: enrichedPOData.shadeCardApprovalDate,
+                sharedCardDiffDate: enrichedPOData.sharedCardDiffDate,
+                noOfUps: enrichedPOData.noOfUps,
+                noOfSheets: enrichedPOData.noOfSheets,
+                plant: enrichedPOData.plant,
+                unit: enrichedPOData.unit,
+              },
+            });
 
-              console.log(`Row ${idx + 1}: Auto-filled PO data from job:`, {
-                style: styleValue,
-                baseData: {
-                  boardSize: basePOData.boardSize,
-                  dieCode: basePOData.dieCode,
-                  fluteType: basePOData.fluteType,
-                  shadeCardApprovalDate: basePOData.shadeCardApprovalDate,
-                  sharedCardDiffDate: basePOData.sharedCardDiffDate,
-                  noOfUps: basePOData.noOfUps,
-                  noOfSheets: basePOData.noOfSheets,
-                  plant: basePOData.plant,
-                  unit: basePOData.unit,
-                },
-                jobData: {
-                  boardSize: matchedJobDetails.boardSize,
-                  dieCode: matchedJobDetails.diePunchCode,
-                  fluteType: matchedJobDetails.fluteType,
-                  shadeCardApprovalDate:
-                    matchedJobDetails.shadeCardApprovalDate,
-                  sharedCardDiffDate: matchedJobDetails.sharedCardDiffDate,
-                  noUps: matchedJobDetails.noUps,
-                  noOfSheets: matchedJobDetails.noOfSheets,
-                  unit: matchedJobDetails.unit,
-                },
-                enrichedData: {
-                  boardSize: enrichedPOData.boardSize,
-                  dieCode: enrichedPOData.dieCode,
-                  fluteType: enrichedPOData.fluteType,
-                  shadeCardApprovalDate: enrichedPOData.shadeCardApprovalDate,
-                  sharedCardDiffDate: enrichedPOData.sharedCardDiffDate,
-                  noOfUps: enrichedPOData.noOfUps,
-                  noOfSheets: enrichedPOData.noOfSheets,
-                  plant: enrichedPOData.plant,
-                  unit: enrichedPOData.unit,
-                },
-              });
+            return enrichedPOData;
+          }
 
-              return enrichedPOData;
+          return basePOData;
+        };
+
+        // Process formatting in batches
+        for (let i = 0; i < parsedData.length; i += BATCH_SIZE) {
+          const batch = parsedData.slice(i, i + BATCH_SIZE);
+
+          batch.forEach((row: any, batchIdx: number) => {
+            const idx = i + batchIdx;
+            const formattedRow = formatRow(row, idx);
+            if (formattedRow !== null) {
+              formattedData.push(formattedRow);
             }
+          });
 
-            return basePOData;
-          })
-          .filter((row) => row !== null);
+          // Update progress and yield control
+          setBulkUploadProgress(
+            `Formatting data... ${Math.min(
+              i + BATCH_SIZE,
+              parsedData.length
+            )}/${parsedData.length} rows`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
 
         if (formattedData.length === 0) {
           setIsBulkUploading(false);
@@ -1790,34 +1893,53 @@ const PlannerJobs: React.FC = () => {
           existingPO?: any;
         }
 
-        // Check for duplicates before uploading - EXACT ORIGINAL LOGIC
-        const duplicateCheckPromises = formattedData.map(async (po) => {
-          const { data: existingPOs, error: checkError } = await supabase
-            .from("PurchaseOrder")
-            .select(
-              "id, poNumber, style, poDate, deliveryDate, totalPOQuantity"
-            )
-            .eq("poNumber", po.poNumber)
-            .eq("style", po.style)
-            .eq("poDate", po.poDate)
-            .eq("deliveryDate", po.deliveryDate)
-            .eq("totalPOQuantity", po.totalPOQuantity);
+        // Check for duplicates before uploading - batched for performance
+        const duplicateCheckResults: DuplicateCheckResult[] = [];
+        const DUPLICATE_CHECK_BATCH_SIZE = 20; // Smaller batch for DB queries
 
-          if (checkError) {
-            console.error("Error checking for duplicates:", checkError);
-            return { isDuplicate: false, po };
-          }
+        for (
+          let i = 0;
+          i < formattedData.length;
+          i += DUPLICATE_CHECK_BATCH_SIZE
+        ) {
+          const batch = formattedData.slice(i, i + DUPLICATE_CHECK_BATCH_SIZE);
 
-          return {
-            isDuplicate: existingPOs && existingPOs.length > 0,
-            po,
-            existingPO: existingPOs?.[0],
-          };
-        });
+          const batchPromises = batch.map(async (po) => {
+            const { data: existingPOs, error: checkError } = await supabase
+              .from("PurchaseOrder")
+              .select(
+                "id, poNumber, style, poDate, deliveryDate, totalPOQuantity"
+              )
+              .eq("poNumber", po.poNumber)
+              .eq("style", po.style)
+              .eq("poDate", po.poDate)
+              .eq("deliveryDate", po.deliveryDate)
+              .eq("totalPOQuantity", po.totalPOQuantity);
 
-        const duplicateCheckResults: DuplicateCheckResult[] = await Promise.all(
-          duplicateCheckPromises
-        );
+            if (checkError) {
+              console.error("Error checking for duplicates:", checkError);
+              return { isDuplicate: false, po };
+            }
+
+            return {
+              isDuplicate: existingPOs && existingPOs.length > 0,
+              po,
+              existingPO: existingPOs?.[0],
+            };
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          duplicateCheckResults.push(...batchResults);
+
+          // Update progress and yield control
+          setBulkUploadProgress(
+            `Checking duplicates... ${Math.min(
+              i + DUPLICATE_CHECK_BATCH_SIZE,
+              formattedData.length
+            )}/${formattedData.length} records`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
 
         // Separate duplicates from new records
         const duplicates = duplicateCheckResults.filter(
@@ -2672,8 +2794,121 @@ const PlannerJobs: React.FC = () => {
                                 </div>
                               )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            PO Date
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>PO Date</span>
+                                {columnFilters.poDate.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.poDate.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown("poDate", e)
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "poDate"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "poDate" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "poDate"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter("poDate");
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("poDate")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.poDate.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "poDate",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700">
+                                            {value}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("poDate");
+                                      }}
+                                      className="w-full px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider relative">
                             <div className="flex items-center justify-between filter-dropdown-container">
@@ -2791,8 +3026,126 @@ const PlannerJobs: React.FC = () => {
                                 </div>
                               )}
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                            Quantity
+                          <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider relative">
+                            <div className="flex items-center justify-between filter-dropdown-container">
+                              <div className="flex items-center space-x-1">
+                                <span>Quantity</span>
+                                {columnFilters.totalPOQuantity.length > 0 && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                    {columnFilters.totalPOQuantity.length}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) =>
+                                  handleToggleFilterDropdown(
+                                    "totalPOQuantity",
+                                    e
+                                  )
+                                }
+                                className="ml-2 hover:bg-gray-200 rounded p-1"
+                              >
+                                <ChevronDown
+                                  size={16}
+                                  className={
+                                    activeColumnFilter === "totalPOQuantity"
+                                      ? "rotate-180"
+                                      : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                            {activeColumnFilter === "totalPOQuantity" &&
+                              filterDropdownPosition && (
+                                <div
+                                  className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
+                                  style={{
+                                    top: `${filterDropdownPosition.top}px`,
+                                    left: `${filterDropdownPosition.left}px`,
+                                  }}
+                                >
+                                  <div className="p-2 border-b border-gray-200">
+                                    <input
+                                      type="text"
+                                      placeholder="Search..."
+                                      value={filterSearch}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setFilterSearch(e.target.value);
+                                      }}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div className="px-2 py-1 border-b border-gray-200">
+                                    <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                      <input
+                                        type="checkbox"
+                                        checked={areAllVisibleValuesSelected(
+                                          "totalPOQuantity"
+                                        )}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectAllFilter(
+                                            "totalPOQuantity"
+                                          );
+                                        }}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        Select All
+                                      </span>
+                                    </label>
+                                  </div>
+                                  <div className="overflow-y-auto max-h-64 p-2">
+                                    {getUniqueColumnValues("totalPOQuantity")
+                                      .filter(
+                                        (value) =>
+                                          filterSearch === "" ||
+                                          value
+                                            .toLowerCase()
+                                            .includes(
+                                              filterSearch.toLowerCase()
+                                            )
+                                      )
+                                      .map((value) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={columnFilters.totalPOQuantity.includes(
+                                              value
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleColumnFilter(
+                                                "totalPOQuantity",
+                                                value
+                                              );
+                                            }}
+                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          />
+                                          <span className="text-sm text-gray-700">
+                                            {value}
+                                          </span>
+                                        </label>
+                                      ))}
+                                  </div>
+                                  <div className="p-2 border-t border-gray-200">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearColumnFilter("totalPOQuantity");
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Clear Filter
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                             <div className="flex items-center justify-between filter-dropdown-container">
@@ -3228,18 +3581,12 @@ const PlannerJobs: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-900">
-                                  {po.poDate
-                                    ? new Date(po.poDate).toLocaleDateString()
-                                    : "N/A"}
+                                  {formatDateDisplay(po.poDate)}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-bold text-gray-900">
-                                  {po.deliveryDate
-                                    ? new Date(
-                                        po.deliveryDate
-                                      ).toLocaleDateString()
-                                    : "N/A"}
+                                  {formatDateDisplay(po.deliveryDate)}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
