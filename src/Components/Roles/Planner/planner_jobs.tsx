@@ -1471,6 +1471,8 @@ const PlannerJobs: React.FC = () => {
               normalizedKey = "NO.of ups";
             } else if (trimmedKey.toLowerCase().includes("flute type")) {
               normalizedKey = "Flute Type";
+            } else if (trimmedKey.toLowerCase().includes("customer")) {
+              normalizedKey = "Customer";
             }
 
             normalizedRow[normalizedKey] = row[key];
@@ -1699,11 +1701,27 @@ const PlannerJobs: React.FC = () => {
           const matchedJobNo = jobMap.get(normalizedStyle);
           const matchedJobDetails = jobDetailsMap.get(normalizedStyle);
 
+          // Get customer from Excel or job - must be available
+          const customerFromExcel = row["Customer"]?.trim() || null;
+          const customerFromJob =
+            matchedJobDetails?.customerName?.trim() || null;
+          const customer = customerFromExcel || customerFromJob;
+
+          // Customer is REQUIRED - skip row if not available
+          if (!customer) {
+            console.warn(
+              `Row ${
+                idx + 1
+              }: Skipping - Customer is required but not found in Excel or matched job for style "${styleValue}"`
+            );
+            return null;
+          }
+
           // Track unmatched styles for notification - use Customer if available, else "N/A"
           if (!matchedJobNo) {
             unmatchedItems.push({
               style: styleValue,
-              customer: row["Customer"] || "N/A",
+              customer: customer || "N/A",
             });
             console.warn(
               `Row ${
@@ -1751,7 +1769,7 @@ const PlannerJobs: React.FC = () => {
             pendingQuantity: row["Pending Quantity"]
               ? parseInt(row["Pending Quantity"])
               : null,
-            customer: row["Customer"] || null,
+            customer: customer, // Use the validated customer value (from Excel or job)
             noOfUps: row["NO.of ups"] ? parseInt(row["NO.of ups"]) : null,
             noOfSheets: row["No. Of Sheets"]
               ? parseInt(row["No. Of Sheets"])
@@ -1771,6 +1789,7 @@ const PlannerJobs: React.FC = () => {
           // NEW: Auto-fill missing fields from job details if matched
           if (matchedJobDetails && matchedJobNo) {
             // Fill in ALL fields from job if Excel value is null/undefined/empty string
+            // Note: customer is already set from the validation above, so we ensure it's not overwritten with null
             const enrichedPOData = {
               ...basePOData,
               // Basic fields
@@ -1785,7 +1804,9 @@ const PlannerJobs: React.FC = () => {
                 basePOData.fluteType || matchedJobDetails.fluteType || null,
               unit: basePOData.unit || matchedJobDetails.unit || null,
               customer:
-                basePOData.customer || matchedJobDetails.customerName || null,
+                basePOData.customer ||
+                matchedJobDetails.customerName ||
+                customer, // Ensure customer is never null
               plant: basePOData.plant || matchedJobDetails.unit || null,
               // Shade card fields
               shadeCardApprovalDate:
@@ -1854,6 +1875,18 @@ const PlannerJobs: React.FC = () => {
             const idx = i + batchIdx;
             const formattedRow = formatRow(row, idx);
             if (formattedRow !== null) {
+              // Final validation: ensure customer is not null before adding
+              if (
+                !formattedRow.customer ||
+                formattedRow.customer.trim() === ""
+              ) {
+                console.warn(
+                  `Row ${
+                    idx + 1
+                  }: Skipping - Customer is null or empty after formatting`
+                );
+                return;
+              }
               formattedData.push(formattedRow);
             }
           });
@@ -1872,7 +1905,7 @@ const PlannerJobs: React.FC = () => {
           setIsBulkUploading(false);
           setBulkUploadProgress("");
           showSnackbar(
-            "No valid rows found! Please ensure the Excel file has customer data.",
+            "No valid rows found! Please ensure the Excel file has required fields: Style, Customer (or Customer Name), and PO Number. Rows without customer information will be skipped.",
             "warning"
           );
           return;
