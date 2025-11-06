@@ -798,6 +798,21 @@ const PlannerJobs: React.FC = () => {
     };
   }, []);
 
+  // Close search dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".search-dropdown-container")) {
+        setJobOptions([]); // Clear job options to close dropdown
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+
   const handleBulkJobPlanning = async (jobPlanningData: any) => {
     try {
       const accessToken = localStorage.getItem("accessToken");
@@ -1624,7 +1639,7 @@ const PlannerJobs: React.FC = () => {
 
           batch.forEach((row: any, batchIdx: number) => {
             const idx = i + batchIdx;
-            if (!row["Customer"]) return;
+            // Don't skip rows based on missing Customer - we'll handle it later with placeholder
 
             const styleValue = row["Style"];
             if (!styleValue) {
@@ -1680,59 +1695,109 @@ const PlannerJobs: React.FC = () => {
         const formattedData: any[] = [];
 
         const formatRow = (row: any, idx: number) => {
-          // Check for minimum required fields: Style or PO Number
+          // Check for minimum required field: PO Number (the unique identifier)
           const styleValue = row["Style"];
           const poNumber = row["PO.NUMBER"];
 
-          // Must have either Style or PO Number to be valid
-          if (!styleValue && !poNumber) {
+          // PO Number is the only truly required field
+          if (!poNumber) {
             console.warn(
-              `Row ${idx + 1}: Skipping - no Style or PO Number provided`
+              `Row ${
+                idx + 1
+              }: Skipping - PO Number is required to identify the purchase order`
             );
             return null;
           }
 
-          if (!styleValue) {
-            console.warn(`Row ${idx + 1}: Skipping - Style is required`);
-            return null;
+          // If no Style provided, use placeholder for tracking
+          const isStyleMissing = !styleValue;
+          const styleForProcessing = styleValue || "STYLE NOT PROVIDED";
+
+          if (isStyleMissing) {
+            console.warn(
+              `Row ${
+                idx + 1
+              }: Style is missing - using placeholder. This PO will need manual completion.`
+            );
           }
 
-          const normalizedStyle = styleValue.trim().toUpperCase();
+          const normalizedStyle = styleForProcessing.trim().toUpperCase();
           const matchedJobNo = jobMap.get(normalizedStyle);
           const matchedJobDetails = jobDetailsMap.get(normalizedStyle);
 
-          // Get customer from Excel or job - must be available
+          // Get customer from Excel or job - use placeholder if not available
           const customerFromExcel = row["Customer"]?.trim() || null;
           const customerFromJob =
             matchedJobDetails?.customerName?.trim() || null;
-          const customer = customerFromExcel || customerFromJob;
+          const customer =
+            customerFromExcel || customerFromJob || "CUSTOMER NOT PROVIDED";
 
-          // Customer is REQUIRED - skip row if not available
-          if (!customer) {
+          // Track if customer is missing for notification
+          const isCustomerMissing = !customerFromExcel && !customerFromJob;
+
+          if (isCustomerMissing) {
             console.warn(
               `Row ${
                 idx + 1
-              }: Skipping - Customer is required but not found in Excel or matched job for style "${styleValue}"`
+              }: Customer not found in Excel or matched job for style "${styleForProcessing}" - using placeholder. Will be added to notifications.`
             );
-            return null;
           }
 
-          // Track unmatched styles for notification - use Customer if available, else "N/A"
-          if (!matchedJobNo) {
+          // Track unmatched styles OR missing customer OR missing style for notification
+          if (!matchedJobNo || isCustomerMissing || isStyleMissing) {
             unmatchedItems.push({
-              style: styleValue,
-              customer: customer || "N/A",
+              style: styleForProcessing,
+              customer: customer,
             });
-            console.warn(
-              `Row ${
-                idx + 1
-              }: style "${styleValue}" has no matching job - will be added to database and notification created`
-            );
+
+            if (!matchedJobNo && isCustomerMissing && isStyleMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: No matching job, customer missing, AND style missing - will be added to database and notification created`
+              );
+            } else if (!matchedJobNo && isCustomerMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: style "${styleForProcessing}" has no matching job AND customer is missing - will be added to database and notification created`
+              );
+            } else if (!matchedJobNo && isStyleMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: Style is missing AND no matching job - will be added to database and notification created`
+              );
+            } else if (isCustomerMissing && isStyleMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: Both customer and style are missing - will be added to database and notification created`
+              );
+            } else if (!matchedJobNo) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: style "${styleForProcessing}" has no matching job - will be added to database and notification created`
+              );
+            } else if (isCustomerMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: style "${styleForProcessing}" has matching job but customer is missing - will be added to database and notification created`
+              );
+            } else if (isStyleMissing) {
+              console.warn(
+                `Row ${
+                  idx + 1
+                }: Style is missing but other data is present - will be added to database and notification created`
+              );
+            }
           } else {
             console.log(
               `Row ${
                 idx + 1
-              }: style="${styleValue}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`
+              }: style="${styleForProcessing}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`
             );
           }
 
@@ -1741,7 +1806,7 @@ const PlannerJobs: React.FC = () => {
             // DON'T assign id here - we'll assign it after filtering duplicates
             // Map Excel columns to database fields according to the specified order
             srNo: row["Sr #"] ? parseInt(row["Sr #"]) : null,
-            style: row["Style"] || null,
+            style: styleForProcessing, // Use the style with placeholder if missing
             unit: row["Unit"] || null,
             fluteType: row["Flute Type"] || null,
             shadeCardApprovalDate: row["Shade Card Approval Date"]
@@ -1826,7 +1891,7 @@ const PlannerJobs: React.FC = () => {
             };
 
             console.log(`Row ${idx + 1}: Auto-filled PO data from job:`, {
-              style: styleValue,
+              style: styleForProcessing,
               baseData: {
                 boardSize: basePOData.boardSize,
                 dieCode: basePOData.dieCode,
@@ -1875,7 +1940,7 @@ const PlannerJobs: React.FC = () => {
             const idx = i + batchIdx;
             const formattedRow = formatRow(row, idx);
             if (formattedRow !== null) {
-              // Final validation: ensure customer is not null before adding
+              // Ensure customer has at least a placeholder value
               if (
                 !formattedRow.customer ||
                 formattedRow.customer.trim() === ""
@@ -1883,9 +1948,9 @@ const PlannerJobs: React.FC = () => {
                 console.warn(
                   `Row ${
                     idx + 1
-                  }: Skipping - Customer is null or empty after formatting`
+                  }: Customer is null or empty after formatting - applying default placeholder`
                 );
-                return;
+                formattedRow.customer = "CUSTOMER NOT PROVIDED";
               }
               formattedData.push(formattedRow);
             }
@@ -1905,7 +1970,7 @@ const PlannerJobs: React.FC = () => {
           setIsBulkUploading(false);
           setBulkUploadProgress("");
           showSnackbar(
-            "No valid rows found! Please ensure the Excel file has required fields: Style, Customer (or Customer Name), and PO Number. Rows without customer information will be skipped.",
+            "No valid rows found! Please ensure the Excel file has at least PO Number field.",
             "warning"
           );
           return;
@@ -2066,17 +2131,23 @@ const PlannerJobs: React.FC = () => {
           }
 
           if (unmatchedItems.length > 0) {
-            successMessage += `\n\n⚠️ ${unmatchedItems.length} PO(s) need new jobs to be created:\n\n`;
+            successMessage += `\n\n⚠️ ${unmatchedItems.length} PO(s) need attention:\n\n`;
             unmatchedItems.forEach((item, idx) => {
               if (idx < 5) {
                 // Show first 5
-                successMessage += `• Style: ${item.style} | Customer: ${item.customer}\n`;
+                const customerNote =
+                  item.customer === "CUSTOMER NOT PROVIDED"
+                    ? `Customer: [MISSING - NEEDS UPDATE]`
+                    : `Customer: ${item.customer}`;
+                successMessage += `• Style: ${item.style} | ${customerNote}\n`;
               }
             });
             if (unmatchedItems.length > 5) {
               successMessage += `\n... and ${unmatchedItems.length - 5} more`;
             }
-            successMessage += `\n\nNotifications have been created. Please create jobs for these styles.`;
+            successMessage += `\n\nNotifications have been created. Please:\n`;
+            successMessage += `- Create jobs for styles without matching jobs\n`;
+            successMessage += `- Update customer information for incomplete POs`;
           }
 
           // Reload POs to sync with database and trigger notification sync
@@ -2168,7 +2239,7 @@ const PlannerJobs: React.FC = () => {
         {/* Search Bar and Filter Toggle */}
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           {/* Search Bar */}
-          <div className="relative max-w-md w-full">
+          <div className="relative max-w-md w-full search-dropdown-container">
             <input
               type="text"
               value={searchTerm}
@@ -2196,7 +2267,7 @@ const PlannerJobs: React.FC = () => {
 
             {/* PO Search Dropdown */}
             {searchTerm && jobOptions.length > 0 && (
-              <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto search-dropdown-container">
                 {jobOptions.map((po) => (
                   <li
                     key={po.id}
