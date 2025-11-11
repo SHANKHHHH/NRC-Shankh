@@ -9,6 +9,7 @@ import {
   Settings,
   Download,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import POdetailCard from "./jobCard/POdetailCard";
 import PODetailModal from "./jobCard/PODetailModal";
@@ -205,6 +206,8 @@ const PlannerJobs: React.FC = () => {
   const [availableBoardSizes, setAvailableBoardSizes] = useState<string[]>([]);
   const [showBulkPlanningModal, setShowBulkPlanningModal] = useState(false);
   const [selectedPOs, setSelectedPOs] = useState<number[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [isBulkUploading, setIsBulkUploading] = useState(false);
@@ -886,6 +889,81 @@ const PlannerJobs: React.FC = () => {
     } catch (err) {
       console.error("Job planning error:", err);
       throw err; // Re-throw to let BulkJobPlanningModal handle the error
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+
+      const selectedPOObjects = getSelectedPOObjects();
+      const poIdsToDelete = selectedPOObjects.map((po) => po.id);
+
+      if (poIdsToDelete.length === 0) {
+        showSnackbar("No purchase orders selected", "warning");
+        return;
+      }
+
+      // Check if any selected PO has job planning
+      const posWithJobPlanning = selectedPOObjects.filter(
+        (po) => po.hasJobPlan === true || po.jobPlanId || po.jobPlanningId
+      );
+      if (posWithJobPlanning.length > 0) {
+        const poNumbers = posWithJobPlanning
+          .map((po) => po.poNumber || po.style)
+          .join(", ");
+        showSnackbar(
+          `Cannot delete POs with job planning: ${poNumbers}. Please delete the job planning first.`,
+          "error"
+        );
+        setIsDeleting(false);
+        setShowDeleteConfirm(false);
+        return;
+      }
+
+      // Delete each PO
+      const deletePromises = poIdsToDelete.map(async (poId) => {
+        const response = await fetch(
+          `https://nrprod.nrcontainers.com/api/purchase-orders/${poId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.message || `Failed to delete PO with ID ${poId}`
+          );
+        }
+      });
+
+      await Promise.all(deletePromises);
+
+      showSnackbar(
+        `Successfully deleted ${poIdsToDelete.length} purchase order(s)`,
+        "success"
+      );
+
+      // Clear selections and refresh
+      setSelectedPOs([]);
+      setShowDeleteConfirm(false);
+      await fetchPurchaseOrders();
+    } catch (error: any) {
+      console.error("Error deleting purchase orders:", error);
+      showSnackbar(
+        error.message || "Failed to delete purchase orders",
+        "error"
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -2356,31 +2434,21 @@ const PlannerJobs: React.FC = () => {
                 Showing {filteredPOs.length} POs needing job planning
                 {activeFilterCount > 0 &&
                   ` (${activeFilterCount} filters applied)`}
-                {(searchTerm ||
-                  filters.noOfColors.length > 0 ||
-                  filters.boardSizes.length > 0 ||
-                  filters.deliveryDateFrom ||
-                  filters.deliveryDateTo) &&
-                  selectedPOs.length > 0 && (
-                    <span className="ml-2 text-green-600 font-medium">
-                      • {selectedPOs.length} selected
-                    </span>
-                  )}
+                {selectedPOs.length > 0 && (
+                  <span className="ml-2 text-green-600 font-medium">
+                    • {selectedPOs.length} selected
+                  </span>
+                )}
               </>
             ) : (
               <>
                 Showing {filteredPOs.length} of {purchaseOrders.length} purchase
                 orders (all statuses)
-                {(searchTerm ||
-                  filters.noOfColors.length > 0 ||
-                  filters.boardSizes.length > 0 ||
-                  filters.deliveryDateFrom ||
-                  filters.deliveryDateTo) &&
-                  selectedPOs.length > 0 && (
-                    <span className="ml-2 text-green-600 font-medium">
-                      • {selectedPOs.length} selected
-                    </span>
-                  )}
+                {selectedPOs.length > 0 && (
+                  <span className="ml-2 text-green-600 font-medium">
+                    • {selectedPOs.length} selected
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -2408,14 +2476,9 @@ const PlannerJobs: React.FC = () => {
                     <span>Bulk Job Planning ({pendingPOs.length})</span>
                   </button>
                 )}
-                {/* Bulk Job Planning Button for Selected POs */}
-                {(hasColumnFilters ||
-                  searchTerm ||
-                  filters.noOfColors.length > 0 ||
-                  filters.boardSizes.length > 0 ||
-                  filters.deliveryDateFrom ||
-                  filters.deliveryDateTo) &&
-                  selectedPOs.length > 0 && (
+                {/* Bulk Job Planning and Delete Buttons for Selected POs */}
+                {selectedPOs.length > 0 && (
+                  <>
                     <button
                       onClick={() => setShowBulkPlanningModal(true)}
                       className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 text-sm"
@@ -2423,7 +2486,15 @@ const PlannerJobs: React.FC = () => {
                       <Settings size={16} />
                       <span>Bulk Planning ({selectedPOs.length} selected)</span>
                     </button>
-                  )}
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 text-sm"
+                    >
+                      <Trash2 size={16} />
+                      <span>Delete ({selectedPOs.length} selected)</span>
+                    </button>
+                  </>
+                )}
               </>
             );
           })()}
@@ -2433,12 +2504,6 @@ const PlannerJobs: React.FC = () => {
       {showBulkPlanningModal && (
         <BulkJobPlanningModal
           filteredPOs={
-            (hasColumnFilters ||
-              searchTerm ||
-              filters.noOfColors.length > 0 ||
-              filters.boardSizes.length > 0 ||
-              filters.deliveryDateFrom ||
-              filters.deliveryDateTo) &&
             selectedPOs.length > 0
               ? getSelectedPOObjects().filter(
                   (po) => checkPOCompletionStatus(po) !== "completed"
@@ -2454,6 +2519,61 @@ const PlannerJobs: React.FC = () => {
           }}
           onRefresh={fetchPurchaseOrders}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Confirm Deletion
+              </h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete {selectedPOs.length} selected
+              purchase order(s)? This action cannot be undone.
+              {getSelectedPOObjects().some(
+                (po) =>
+                  po.hasJobPlan === true || po.jobPlanId || po.jobPlanningId
+              ) && (
+                <span className="block mt-2 text-red-600 font-medium">
+                  Warning: Some selected POs have job planning and cannot be
+                  deleted.
+                </span>
+              )}
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {loading && (
