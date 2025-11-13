@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, Clock, AlertCircle, XCircle } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, XCircle, Trash2 } from "lucide-react";
 
 interface PurchaseOrder {
   id: number;
@@ -51,6 +51,7 @@ interface POdetailCardProps {
     | "more_info_pending"
     | "completed";
   hasJobCreationNotification?: boolean;
+  onDelete?: (po: PurchaseOrder) => void;
 }
 
 const POdetailCard: React.FC<POdetailCardProps> = ({
@@ -58,6 +59,7 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
   onClick,
   jobCompletionStatus,
   hasJobCreationNotification = false,
+  onDelete,
 }) => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -151,6 +153,18 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                 </div>
               </div>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(po);
+                }}
+                className="text-red-600 hover:text-red-900 transition-colors p-1 hover:bg-red-50 rounded ml-auto"
+                title="Delete PO"
+              >
+                <Trash2 size={14} />
+              </button>
             )}
           </div>
           <p className="text-xs text-gray-500 truncate">

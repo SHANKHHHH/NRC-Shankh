@@ -484,27 +484,60 @@ const MajorHoldJobs: React.FC = () => {
         return;
       }
 
-      // Get total number of machines to resume
+      // Count total machines across all held steps
       const totalMachines = stepsOnHold.reduce((count, step) => {
         return count + (step.machineDetails?.length || 0);
       }, 0);
 
-      console.log("🔧 Total machines to resume:", totalMachines);
+      console.log("🔧 Total machines on hold:", totalMachines);
 
-      if (totalMachines === 0) {
-        alert("No machines found for the steps on hold.");
+      // Find the first step that has a machine (since major hold is job-wide, we only need one)
+      let targetStep = null;
+      let targetMachine = null;
+
+      for (const step of stepsOnHold) {
+        const machineDetails = step.machineDetails || [];
+        if (machineDetails.length > 0) {
+          const machineId = machineDetails[0].machineId || machineDetails[0].id;
+          if (machineId) {
+            targetStep = step;
+            targetMachine = {
+              id: machineId,
+              code: machineDetails[0].machineCode || "Unknown",
+            };
+            break;
+          }
+        }
+      }
+
+      if (!targetStep || !targetMachine) {
+        alert(
+          "Cannot resume this job: No machines found with valid IDs on any held steps.\n\n" +
+            "This may happen if:\n" +
+            "- Steps were major held but no machines were assigned\n" +
+            "- Machine assignments were removed after the hold\n\n" +
+            "Please contact an administrator to manually resolve this issue."
+        );
         setIsResumingJob(false);
         return;
       }
 
+      console.log("🎯 Target machine for resume:", {
+        stepNo: targetStep.stepNo,
+        stepName: targetStep.stepName,
+        machineId: targetMachine.id,
+        machineCode: targetMachine.code,
+      });
+
       // Prompt for resume remark
       const resumeRemark = window.prompt(
-        `Enter a remark for resuming ${stepsOnHold.length} step(s) (${totalMachines} machine(s)):\n\nThis remark will be recorded with the resume action.`,
+        `Resume job ${jobNo} from major hold?\n\n` +
+          `This will resume ALL ${stepsOnHold.length} held step(s) and ${totalMachines} machine(s).\n\n` +
+          `Enter a remark for the resume action:`,
         "Issue resolved, resuming work"
       );
 
       if (resumeRemark === null) {
-        // User cancelled
         console.log("❌ User cancelled resume remark prompt");
         setIsResumingJob(false);
         return;
@@ -516,9 +549,13 @@ const MajorHoldJobs: React.FC = () => {
         return;
       }
 
-      // Confirm before resuming all steps
+      // Confirm before resuming
       const confirmed = window.confirm(
-        `Resume ${stepsOnHold.length} step(s) with ${totalMachines} machine(s) that are on hold for job ${jobNo}?`
+        `Resume entire job ${jobNo}?\n\n` +
+          `• ${stepsOnHold.length} step(s) will be resumed\n` +
+          `• ${totalMachines} machine(s) will be resumed\n` +
+          `• Resume from: Step ${targetStep.stepNo} (${targetStep.stepName}) - ${targetMachine.code}\n\n` +
+          `Note: Major hold is job-wide. This single action will resume the entire job.`
       );
 
       if (!confirmed) {
@@ -527,91 +564,41 @@ const MajorHoldJobs: React.FC = () => {
         return;
       }
 
-      console.log("✅ User confirmed, starting API calls...");
+      console.log("✅ User confirmed, making API call...");
 
-      // Resume each machine in each step on hold
-      const resumePromises: Promise<void>[] = [];
+      // Major hold is job-wide - we only need to resume from ONE machine to resume the ENTIRE job
+      const stepNo = targetStep.stepNo || targetStep.id;
+      const apiUrl = `https://nrprod.nrcontainers.com/api/job-step-machines/${encodeURIComponent(
+        jobNo
+      )}/steps/${stepNo}/machines/${targetMachine.id}/admin-resume-major-hold`;
 
-      for (const step of stepsOnHold) {
-        const stepNo = step.stepNo || step.id;
-        if (!stepNo) {
-          console.warn("⚠️ Step without stepNo or id:", step);
-          continue;
-        }
+      console.log(`🚀 Making API call to resume entire job:`, {
+        jobNo,
+        stepNo,
+        machineId: targetMachine.id,
+        url: apiUrl,
+      });
 
-        // Get machine details for this step
-        const machineDetails = step.machineDetails || [];
-        console.log(
-          `📦 Step ${stepNo} has ${machineDetails.length} machine(s)`
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          resumeRemark: resumeRemark.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(
+          `Failed to resume job: ${response.status} ${errorText}`
         );
-
-        for (const machine of machineDetails) {
-          // Machine ID can be in either 'machineId' or 'id' property
-          const machineId = machine.machineId || machine.id;
-
-          if (!machineId) {
-            console.warn("⚠️ Machine without machineId or id:", machine);
-            continue;
-          }
-
-          const apiUrl = `https://nrprod.nrcontainers.com/api/job-step-machines/${encodeURIComponent(
-            jobNo
-          )}/steps/${stepNo}/machines/${machineId}/admin-resume-major-hold`;
-
-          console.log(`🚀 Making API call:`, {
-            jobNo,
-            stepNo,
-            machineId: machineId,
-            url: apiUrl,
-          });
-
-          const promise = fetch(apiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              resumeRemark: resumeRemark.trim(),
-            }),
-          })
-            .then(async (response) => {
-              console.log(
-                `✅ Response for step ${stepNo}, machine ${machineId}:`,
-                response.status,
-                response.statusText
-              );
-              if (!response.ok) {
-                const errorText = await response.text().catch(() => "");
-                throw new Error(
-                  `Failed to resume step ${stepNo}, machine ${machineId}: ${response.status} ${errorText}`
-                );
-              }
-            })
-            .catch((error) => {
-              console.error(
-                `❌ Error for step ${stepNo}, machine ${machineId}:`,
-                error
-              );
-              throw error;
-            });
-
-          resumePromises.push(promise);
-        }
       }
 
-      console.log(`📡 Total API calls to make: ${resumePromises.length}`);
-
-      if (resumePromises.length === 0) {
-        console.warn("⚠️ No API calls to make - resumePromises is empty");
-        alert("No valid machines found to resume.");
-        setIsResumingJob(false);
-        return;
-      }
-
-      await Promise.all(resumePromises);
-
-      console.log("✅ All API calls completed successfully");
+      const result = await response.json();
+      console.log("✅ Resume successful:", result);
 
       // Refresh the job data
       await fetchMajorHoldJobsWithDetails();
@@ -619,13 +606,17 @@ const MajorHoldJobs: React.FC = () => {
       // Close modal and show success message
       setIsModalOpen(false);
       alert(
-        `Successfully resumed ${stepsOnHold.length} step(s) with ${totalMachines} machine(s)!`
+        `✅ Successfully resumed job ${jobNo}!\n\n` +
+          `• ${
+            result.data?.totalMachinesAffected || totalMachines
+          } machine(s) resumed\n` +
+          `• All ${stepsOnHold.length} held step(s) are now in progress`
       );
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Failed to resume job steps";
-      alert(errorMessage);
-      console.error("❌ Error resuming job steps:", err);
+        err instanceof Error ? err.message : "Failed to resume job";
+      alert(`❌ Error: ${errorMessage}`);
+      console.error("❌ Error resuming job:", err);
     } finally {
       setIsResumingJob(false);
     }
