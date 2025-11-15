@@ -25,7 +25,7 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop";
+  status: "planned" | "start" | "stop" | "accept";
   startDate: string | null;
   endDate: string | null;
   user: string | null;
@@ -38,6 +38,16 @@ interface JobPlanStep {
     };
     [key: string]: any;
   };
+  // Step-specific detail fields (optional)
+  paperStore?: { status?: string; [key: string]: any };
+  printingDetails?: { status?: string; [key: string]: any };
+  corrugation?: { status?: string; [key: string]: any };
+  flutelam?: { status?: string; [key: string]: any };
+  fluteLaminateBoardConversion?: { status?: string; [key: string]: any };
+  punching?: { status?: string; [key: string]: any };
+  sideFlapPasting?: { status?: string; [key: string]: any };
+  qualityDept?: { status?: string; [key: string]: any };
+  dispatchProcess?: { status?: string; [key: string]: any };
 }
 
 interface JobPlan {
@@ -209,7 +219,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     }
 
     // Check if step has an endDate (indicates completion)
-    if ((step as any).endDate !== null && (step as any).endDate !== undefined) {
+    if (step.endDate !== null && step.endDate !== undefined) {
       // If it has endDate, check if status indicates completion
       if (step.status === "accept" || step.status === "stop") {
         return "completed";
@@ -222,16 +232,17 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     }
 
     // Check step-specific detail fields (e.g., paperStore, printingDetails, etc.)
-    const stepSpecificDetails = (step as any).paperStore || 
-                                (step as any).printingDetails || 
-                                (step as any).corrugation || 
-                                (step as any).flutelam || 
-                                (step as any).fluteLaminateBoardConversion || 
-                                (step as any).punching || 
-                                (step as any).sideFlapPasting || 
-                                (step as any).qualityDept || 
-                                (step as any).dispatchProcess;
-    if (stepSpecificDetails?.status === "accept") {
+    const stepSpecificDetails =
+      step.paperStore ||
+      step.printingDetails ||
+      step.corrugation ||
+      step.flutelam ||
+      step.fluteLaminateBoardConversion ||
+      step.punching ||
+      step.sideFlapPasting ||
+      step.qualityDept ||
+      step.dispatchProcess;
+    if (stepSpecificDetails && stepSpecificDetails.status === "accept") {
       return "completed";
     }
 

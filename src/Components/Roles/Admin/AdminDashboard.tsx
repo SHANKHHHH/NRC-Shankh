@@ -33,7 +33,7 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop";
+  status: "planned" | "start" | "stop" | "accept";
   startDate: string | null;
   endDate: string | null;
   user: string | null;
