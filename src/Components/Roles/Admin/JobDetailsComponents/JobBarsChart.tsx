@@ -114,6 +114,42 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
     }
   };
 
+  // Helper function to check if a step is completed
+  const isStepCompleted = (step: any): boolean => {
+    // Check if status is "stop" or "accept" (both indicate completion)
+    if (step.status === "stop" || step.status === "accept") {
+      return true;
+    }
+
+    // Check if step has an endDate (indicates completion)
+    if (step.endDate !== null && step.endDate !== undefined) {
+      return true;
+    }
+
+    // Check stepDetails status
+    if (step.stepDetails?.data?.status === "accept") {
+      return true;
+    }
+    if (step.stepDetails?.status === "accept") {
+      return true;
+    }
+
+    // Check step-specific detail fields (e.g., paperStore, printingDetails, etc.)
+    if (step.paperStore?.status === "accept" ||
+        step.printingDetails?.status === "accept" ||
+        step.corrugation?.status === "accept" ||
+        step.flutelam?.status === "accept" ||
+        step.fluteLaminateBoardConversion?.status === "accept" ||
+        step.punching?.status === "accept" ||
+        step.sideFlapPasting?.status === "accept" ||
+        step.qualityDept?.status === "accept" ||
+        step.dispatchProcess?.status === "accept") {
+      return true;
+    }
+
+    return false;
+  };
+
   // Filter jobs based on search term
   console.log(
     `🔍 JobBarsChart: Received ${jobs.length} jobs for category ${category}`
@@ -267,11 +303,8 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                   <span>
                     {(() => {
                       const completedSteps =
-                        getSteps(job)?.filter(
-                          (step: any) =>
-                            step.status === "stop" ||
-                            step.stepDetails?.data?.status === "accept" ||
-                            step.stepDetails?.status === "accept"
+                        getSteps(job)?.filter((step: any) =>
+                          isStepCompleted(step)
                         ).length || 0;
                       const totalSteps = getSteps(job)?.length || 0;
 
@@ -296,19 +329,19 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                     style={{
                       width: `${(() => {
                         const completedSteps =
-                          getSteps(job)?.filter(
-                            (step: any) =>
-                              step.status === "stop" ||
-                              step.stepDetails?.data?.status === "accept" ||
-                              step.stepDetails?.status === "accept"
+                          getSteps(job)?.filter((step: any) =>
+                            isStepCompleted(step)
                           ).length || 0;
                         const totalSteps = getSteps(job)?.length || 1;
                         const percentage = (completedSteps / totalSteps) * 100;
                         console.log(
                           `Progress bar width for ${job.nrcJobNo}: ${percentage}%`
                         );
-                        // Force minimum width to ensure visibility
-                        const finalPercentage = Math.max(percentage, 5); // Increased to 5% for better visibility
+                        // Only apply minimum width if there are completed steps
+                        const finalPercentage =
+                          completedSteps > 0
+                            ? Math.max(percentage, 5)
+                            : percentage;
                         console.log(
                           `Final progress bar percentage: ${finalPercentage}%`
                         );
@@ -329,11 +362,8 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                   <span>
                     {(() => {
                       const completedSteps =
-                        getSteps(job)?.filter(
-                          (step: any) =>
-                            step.status === "stop" ||
-                            step.stepDetails?.data?.status === "accept" ||
-                            step.stepDetails?.status === "accept"
+                        getSteps(job)?.filter((step: any) =>
+                          isStepCompleted(step)
                         ).length || 0;
                       const totalSteps = getSteps(job)?.length || 0;
 
@@ -358,19 +388,19 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                     style={{
                       width: `${(() => {
                         const completedSteps =
-                          getSteps(job)?.filter(
-                            (step: any) =>
-                              step.status === "stop" ||
-                              step.stepDetails?.data?.status === "accept" ||
-                              step.stepDetails?.status === "accept"
+                          getSteps(job)?.filter((step: any) =>
+                            isStepCompleted(step)
                           ).length || 0;
                         const totalSteps = getSteps(job)?.length || 1;
                         const percentage = (completedSteps / totalSteps) * 100;
                         console.log(
                           `Held progress bar width for ${job.nrcJobNo}: ${percentage}%`
                         );
-                        // Force minimum width to ensure visibility
-                        const finalPercentage = Math.max(percentage, 5); // Increased to 5% for better visibility
+                        // Only apply minimum width if there are completed steps
+                        const finalPercentage =
+                          completedSteps > 0
+                            ? Math.max(percentage, 5)
+                            : percentage;
                         console.log(
                           `Final held progress bar percentage: ${finalPercentage}%`
                         );

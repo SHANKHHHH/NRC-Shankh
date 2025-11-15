@@ -80,33 +80,32 @@ const JobStepsView: React.FC<JobStepsViewProps> = () => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Properly encode the jobNrcJobNo for URL construction
-      const encodedJobNrcJobNo = jobNrcJobNo;
+      // Use stepId instead of jobNrcJobNo to get the correct data for this specific step
       let endpoint = "";
       switch (stepName) {
         case "PaperStore":
-          endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-step-id/${stepId}`;
           break;
         case "Corrugation":
-          endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-step-id/${stepId}`;
           break;
         case "PrintingDetails":
-          endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-step-id/${stepId}`;
           break;
         case "FluteLaminateBoardConversion":
-          endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-step-id/${stepId}`;
           break;
         case "Punching":
-          endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/punching/by-step-id/${stepId}`;
           break;
         case "FlapPasting":
-          endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-step-id/${stepId}`;
           break;
         case "QualityDept":
-          endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-step-id/${stepId}`;
           break;
         case "DispatchProcess":
-          endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodedJobNrcJobNo}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-step-id/${stepId}`;
           break;
         default:
           return null;
@@ -114,9 +113,6 @@ const JobStepsView: React.FC<JobStepsViewProps> = () => {
 
       console.log(
         `🔍 [fetchStepDetails] ${stepName} - Step ID: ${stepId}, Job NRC: ${jobNrcJobNo}`
-      );
-      console.log(
-        `🔍 [fetchStepDetails] ${stepName} - Encoded Job NRC: ${encodedJobNrcJobNo}`
       );
       console.log(
         `🔍 [fetchStepDetails] ${stepName} - Full Endpoint: ${endpoint}`
@@ -136,7 +132,29 @@ const JobStepsView: React.FC<JobStepsViewProps> = () => {
       }
       const data = await response.json();
       if (data.success && data.data) {
-        return data.data;
+        // Extract only the actual step details, not the wrapper
+        // Backend returns: { jobStepId, stepName, status, printingDetails: {...} }
+        // We only want the nested details object
+        switch (stepName) {
+          case "PaperStore":
+            return data.data.paperStore;
+          case "Corrugation":
+            return data.data.corrugation;
+          case "PrintingDetails":
+            return data.data.printingDetails;
+          case "FluteLaminateBoardConversion":
+            return data.data.flutelam;
+          case "Punching":
+            return data.data.punching;
+          case "FlapPasting":
+            return data.data.sideFlapPasting;
+          case "QualityDept":
+            return data.data.qualityDept;
+          case "DispatchProcess":
+            return data.data.dispatchProcess;
+          default:
+            return data.data;
+        }
       }
       return null;
     } catch (err) {

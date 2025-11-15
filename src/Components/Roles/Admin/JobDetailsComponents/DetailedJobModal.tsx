@@ -340,11 +340,19 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           }
         }
 
+        // Check if stepDetails is directly available on the step object
         if (step.stepDetails) {
+          // If stepDetails is nested in .data property
           if (step.stepDetails.data) {
             return [step.stepDetails.data];
-          } else if (Array.isArray(step.stepDetails)) {
+          } 
+          // If stepDetails is an array
+          else if (Array.isArray(step.stepDetails)) {
             return step.stepDetails;
+          }
+          // If stepDetails is directly an object (most common case now)
+          else if (typeof step.stepDetails === 'object') {
+            return [step.stepDetails];
           }
         }
 
@@ -1068,14 +1076,19 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                 return [];
                             }
                           }
+                          // Check if stepDetails is directly available on the step object
                           if (step.stepDetails) {
-                            // If stepDetails has a data property (object structure)
+                            // If stepDetails is nested in .data property
                             if (step.stepDetails.data) {
                               return [step.stepDetails.data]; // Wrap single object in array
                             }
                             // If stepDetails is already an array
                             else if (Array.isArray(step.stepDetails)) {
                               return step.stepDetails;
+                            }
+                            // If stepDetails is directly an object (most common case now)
+                            else if (typeof step.stepDetails === 'object') {
+                              return [step.stepDetails];
                             }
                           }
 
@@ -1087,7 +1100,8 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         // Check if step is on major hold
                         const isMajorHold =
                           step.stepDetails?.data?.status === "major_hold" ||
-                          step.stepDetails?.status === "major_hold";
+                          step.stepDetails?.status === "major_hold" ||
+                          (stepDetails && stepDetails.length > 0 && stepDetails[0]?.status === "major_hold");
 
                         return (
                           <div

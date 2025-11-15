@@ -114,7 +114,7 @@ const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
       }
 
       // Extract dispatch quantity
-      const dispatchQuantity = dispatchStep?.dispatchProcess?.quantity || 0;
+      const dispatchQuantity = dispatchStep?.dispatchProcess?.totalDispatchedQty || 0;
 
       // Calculate total value
       const totalValue = dispatchQuantity * (job.jobDetails?.latestRate || 0);

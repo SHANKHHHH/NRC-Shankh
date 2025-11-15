@@ -418,51 +418,35 @@ const AdminDashboard: React.FC = () => {
   // Fetch step-specific details for a job
   const fetchStepDetails = async (
     stepName: string,
-    jobNrcJobNo: string,
+    stepId: number,
     accessToken: string
   ) => {
     try {
       let endpoint = "";
       switch (stepName) {
         case "PaperStore":
-          endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-step-id/${stepId}`;
           break;
         case "PrintingDetails":
-          endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-step-id/${stepId}`;
           break;
         case "Corrugation":
-          endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-step-id/${stepId}`;
           break;
         case "FluteLaminateBoardConversion":
-          endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-step-id/${stepId}`;
           break;
         case "Punching":
-          endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/punching/by-step-id/${stepId}`;
           break;
         case "SideFlapPasting":
-          endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-step-id/${stepId}`;
           break;
         case "QualityDept":
-          endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-step-id/${stepId}`;
           break;
         case "DispatchProcess":
-          endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodeURIComponent(
-            jobNrcJobNo
-          )}`;
+          endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-step-id/${stepId}`;
           break;
         default:
           return null;
@@ -475,19 +459,41 @@ const AdminDashboard: React.FC = () => {
       if (!response.ok) {
         if (response.status === 404) return null;
         console.warn(
-          `Failed to fetch ${stepName} details for job ${jobNrcJobNo}: ${response.status}`
+          `Failed to fetch ${stepName} details for step ${stepId}: ${response.status}`
         );
         return null;
       }
 
       const result = await response.json();
-      if (result.success && result.data && result.data.length > 0) {
-        return result.data[0]; // Return the first (and usually only) record
+      if (result.success && result.data) {
+        // Extract only the actual step details, not the wrapper
+        // Backend returns: { jobStepId, stepName, status, printingDetails: {...} }
+        // We only want the nested details object
+        switch (stepName) {
+          case "PaperStore":
+            return result.data.paperStore;
+          case "Corrugation":
+            return result.data.corrugation;
+          case "PrintingDetails":
+            return result.data.printingDetails;
+          case "FluteLaminateBoardConversion":
+            return result.data.flutelam;
+          case "Punching":
+            return result.data.punching;
+          case "SideFlapPasting":
+            return result.data.sideFlapPasting;
+          case "QualityDept":
+            return result.data.qualityDept;
+          case "DispatchProcess":
+            return result.data.dispatchProcess;
+          default:
+            return result.data;
+        }
       }
       return null;
     } catch (err) {
       console.warn(
-        `Error fetching ${stepName} details for job ${jobNrcJobNo}:`,
+        `Error fetching ${stepName} details for step ${stepId}:`,
         err
       );
       return null;
@@ -773,7 +779,7 @@ const AdminDashboard: React.FC = () => {
                 if (step.status === "start" || step.status === "stop") {
                   stepDetails = await fetchStepDetails(
                     step.stepName,
-                    jobPlan.nrcJobNo,
+                    step.id,
                     accessToken
                   );
                 }

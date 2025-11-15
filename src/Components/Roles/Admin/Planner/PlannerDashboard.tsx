@@ -146,7 +146,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
   const [showBulkPlanningModal, setShowBulkPlanningModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPOs, setSelectedPOs] = useState<number[]>([]);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [poToDelete, setPOToDelete] = useState<PurchaseOrder | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter state
@@ -1086,8 +1086,10 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     alert(message); // Simple alert for now, can be upgraded to a snackbar component
   };
 
-  // Handle bulk delete
-  const handleBulkDelete = async () => {
+  // Handle single PO delete
+  const handleSinglePODelete = async () => {
+    if (!poToDelete) return;
+
     setIsDeleting(true);
     try {
       const accessToken = localStorage.getItem("accessToken");
@@ -1095,68 +1097,54 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      const selectedPOObjects = getSelectedPOObjects();
-      const poIdsToDelete = selectedPOObjects.map((po) => po.id);
-
-      if (poIdsToDelete.length === 0) {
-        showSnackbar("No purchase orders selected", "warning");
-        return;
-      }
-
-      // Check if any selected PO has job planning
-      const posWithJobPlanning = selectedPOObjects.filter(
-        (po) => po.hasJobPlan === true || po.jobPlanId || po.jobPlanningId
-      );
-      if (posWithJobPlanning.length > 0) {
-        const poNumbers = posWithJobPlanning
-          .map((po) => po.poNumber || po.style)
-          .join(", ");
+      // Check if PO has job planning
+      if (
+        poToDelete.hasJobPlan === true ||
+        poToDelete.jobPlanId ||
+        poToDelete.jobPlanningId
+      ) {
         showSnackbar(
-          `Cannot delete POs with job planning: ${poNumbers}. Please delete the job planning first.`,
+          `Cannot delete PO ${
+            poToDelete.poNumber || poToDelete.style
+          } with job planning. Please delete the job planning first.`,
           "error"
         );
         setIsDeleting(false);
-        setShowDeleteConfirm(false);
+        setPOToDelete(null);
         return;
       }
 
-      // Delete each PO
-      const deletePromises = poIdsToDelete.map(async (poId) => {
-        const response = await fetch(
-          `https://nrprod.nrcontainers.com/api/purchase-orders/${poId}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message || `Failed to delete PO with ID ${poId}`
-          );
+      // Delete the PO
+      const response = await fetch(
+        `https://nrprod.nrcontainers.com/api/purchase-orders/${poToDelete.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
-      });
+      );
 
-      await Promise.all(deletePromises);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || `Failed to delete PO with ID ${poToDelete.id}`
+        );
+      }
 
       showSnackbar(
-        `Successfully deleted ${poIdsToDelete.length} purchase order(s)`,
+        `Successfully deleted purchase order ${
+          poToDelete.poNumber || poToDelete.style
+        }`,
         "success"
       );
 
-      // Clear selections and refresh
-      setSelectedPOs([]);
-      setShowDeleteConfirm(false);
+      // Clear and refresh
+      setPOToDelete(null);
       await fetchPurchaseOrders();
     } catch (error: any) {
-      console.error("Error deleting purchase orders:", error);
-      showSnackbar(
-        error.message || "Failed to delete purchase orders",
-        "error"
-      );
+      console.error("Error deleting purchase order:", error);
+      showSnackbar(error.message || "Failed to delete purchase order", "error");
     } finally {
       setIsDeleting(false);
     }
@@ -1420,24 +1408,15 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
               </p>
             </div>
             <div className="flex items-center space-x-2">
-              {/* Bulk Job Planning and Delete Buttons for Selected POs */}
+              {/* Bulk Job Planning Button for Selected POs */}
               {selectedPOs.length > 0 && (
-                <>
-                  <button
-                    onClick={() => setShowBulkPlanningModal(true)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                  >
-                    <Cog6ToothIcon className="h-4 w-4" />
-                    <span>Bulk Planning ({selectedPOs.length} selected)</span>
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                  >
-                    <Trash2 size={16} />
-                    <span>Delete ({selectedPOs.length} selected)</span>
-                  </button>
-                </>
+                <button
+                  onClick={() => setShowBulkPlanningModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                >
+                  <Cog6ToothIcon className="h-4 w-4" />
+                  <span>Bulk Planning ({selectedPOs.length} selected)</span>
+                </button>
               )}
             </div>
           </div>
@@ -2461,15 +2440,27 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         </span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap font-medium">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePOClick(po);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 text-sm"
-                        >
-                          View
-                        </button>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePOClick(po);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 text-sm"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPOToDelete(po);
+                            }}
+                            className="text-red-600 hover:text-red-900 transition-colors p-1 hover:bg-red-50 rounded"
+                            title="Delete PO"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2681,7 +2672,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       )}
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
+      {poToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
             <div className="flex items-center space-x-3 mb-4">
@@ -2693,27 +2684,27 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
               </h3>
             </div>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete {selectedPOs.length} selected
-              purchase order(s)? This action cannot be undone.
-              {getSelectedPOObjects().some(
-                (po) => po.hasJobPlan === true || po.jobPlanId || po.jobPlanningId
-              ) && (
+              Are you sure you want to delete PO{" "}
+              <strong>{poToDelete.poNumber || poToDelete.style}</strong>? This
+              action cannot be undone.
+              {(poToDelete.hasJobPlan === true ||
+                poToDelete.jobPlanId ||
+                poToDelete.jobPlanningId) && (
                 <span className="block mt-2 text-red-600 font-medium">
-                  Warning: Some selected POs have job planning and cannot be
-                  deleted.
+                  Warning: This PO has job planning and cannot be deleted.
                 </span>
               )}
             </p>
             <div className="flex justify-end space-x-3">
               <button
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => setPOToDelete(null)}
                 disabled={isDeleting}
                 className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleBulkDelete}
+                onClick={handleSinglePODelete}
                 disabled={isDeleting}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
               >

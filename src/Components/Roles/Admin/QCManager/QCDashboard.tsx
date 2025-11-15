@@ -137,6 +137,42 @@ const QCDashboard: React.FC = () => {
   console.log("Completed jobs data:", completedJobs);
   console.log("Combined QC data:", allQCData);
 
+  // Show message when no data is available (check combined data, not just qcData)
+  if (!loading && allQCData.length === 0) {
+    return (
+      <div className="min-h-screen  p-6">
+        <div className="mb-8">
+          <div className="flex items-center space-x-4 mb-2">
+            <div className="bg-blue-500 p-3 rounded-xl">
+              <ClipboardDocumentCheckIcon className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="text-gray-600 text-lg">
+                Monitor and manage quality control operations
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
+          <ClipboardDocumentCheckIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            No QC Data Available
+          </h3>
+          <p className="text-gray-600 mb-4">
+            No quality control checks found in the system.
+          </p>
+          <button
+            onClick={handleRefresh}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Refresh Data
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Filter data based on search and status
   const filteredData = allQCData.filter((item) => {
     const matchesSearch =
@@ -372,42 +408,6 @@ const QCDashboard: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="xl" text="Loading QC Dashboard..." />
-      </div>
-    );
-  }
-
-  // Show message when no data is available
-  if (qcData.length === 0) {
-    return (
-      <div className="min-h-screen  p-6">
-        <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-2">
-            <div className="bg-blue-500 p-3 rounded-xl">
-              <ClipboardDocumentCheckIcon className="h-8 w-8 text-white" />
-            </div>
-            <div>
-              <p className="text-gray-600 text-lg">
-                Monitor and manage quality control operations
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-          <ClipboardDocumentCheckIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No QC Data Available
-          </h3>
-          <p className="text-gray-600 mb-4">
-            No quality control checks found in the system.
-          </p>
-          <button
-            onClick={handleRefresh}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            Refresh Data
-          </button>
-        </div>
       </div>
     );
   }

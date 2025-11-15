@@ -212,15 +212,9 @@ const EditWorkingDetails: React.FC = () => {
       }
 
       const accessToken = localStorage.getItem("accessToken");
-      const apiUrl = `https://nrprod.nrcontainers.com/api/${stepType}/by-job/${encodeURIComponent(
-        selectedJob!.nrcJobNo
-      )}`;
+      const apiUrl = `https://nrprod.nrcontainers.com/api/${stepType}/by-step-id/${step.id}`;
       console.log("🔍 Fetching from URL:", apiUrl);
-      console.log("🔍 Job NRC:", selectedJob!.nrcJobNo);
-      console.log(
-        "🔍 Encoded Job NRC:",
-        encodeURIComponent(selectedJob!.nrcJobNo)
-      );
+      console.log("🔍 Step ID:", step.id);
 
       const response = await fetch(apiUrl, {
         headers: {
@@ -231,9 +225,28 @@ const EditWorkingDetails: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data && result.data.length > 0) {
-          setSelectedStepData(result.data[0]);
-          setShowViewDetailsModal(true);
+        if (result.success && result.data) {
+          // Extract the nested step details based on step name
+          const stepDataMap: { [key: string]: string } = {
+            PaperStore: "paperStore",
+            PrintingDetails: "printingDetails",
+            Corrugation: "corrugation",
+            FluteLaminateBoardConversion: "flutelam",
+            Punching: "punching",
+            SideFlapPasting: "sideFlapPasting",
+            QualityDept: "qualityDept",
+            DispatchProcess: "dispatchProcess",
+          };
+          const dataKey = stepDataMap[step.stepName];
+          const stepData = dataKey ? result.data[dataKey] : result.data;
+
+          if (stepData) {
+            setSelectedStepData(stepData);
+            setShowViewDetailsModal(true);
+          } else {
+            console.error("No data found for step:", step.stepName);
+            alert(`No data found for ${step.stepName} step`);
+          }
         } else {
           console.error("No data found for step:", step.stepName);
           alert(`No data found for ${step.stepName} step`);

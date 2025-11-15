@@ -208,18 +208,38 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
       return "hold";
     }
 
+    // Check if step has an endDate (indicates completion)
+    if ((step as any).endDate !== null && (step as any).endDate !== undefined) {
+      // If it has endDate, check if status indicates completion
+      if (step.status === "accept" || step.status === "stop") {
+        return "completed";
+      }
+    }
+
+    // Check if step.status is "accept" (indicates completion)
+    if (step.status === "accept") {
+      return "completed";
+    }
+
+    // Check step-specific detail fields (e.g., paperStore, printingDetails, etc.)
+    const stepSpecificDetails = (step as any).paperStore || 
+                                (step as any).printingDetails || 
+                                (step as any).corrugation || 
+                                (step as any).flutelam || 
+                                (step as any).fluteLaminateBoardConversion || 
+                                (step as any).punching || 
+                                (step as any).sideFlapPasting || 
+                                (step as any).qualityDept || 
+                                (step as any).dispatchProcess;
+    if (stepSpecificDetails?.status === "accept") {
+      return "completed";
+    }
+
     // Priority 1: Check stepDetails.data.status first (where the actual status is often stored)
-    // A step is only "completed" when status is "stop" AND stepDetails.status is "accept"
     if (step.stepDetails?.data?.status) {
       if (step.stepDetails.data.status === "accept") {
-        // Only mark as completed if step.status is also "stop"
-        if (step.status === "stop") {
-          return "completed";
-        }
-        // If stepDetails says "accept" but step.status is "start", treat as in progress
-        if (step.status === "start") {
-          return "in_progress";
-        }
+        // If stepDetails says "accept", it's completed (even if step.status is "start")
+        return "completed";
       }
       if (step.stepDetails.data.status === "in_progress") {
         return "in_progress";
@@ -230,17 +250,10 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     }
 
     // Priority 2: Check stepDetails.status if data.status is not available
-    // A step is only "completed" when status is "stop" AND stepDetails.status is "accept"
     if (step.stepDetails?.status) {
       if (step.stepDetails.status === "accept") {
-        // Only mark as completed if step.status is also "stop"
-        if (step.status === "stop") {
-          return "completed";
-        }
-        // If stepDetails says "accept" but step.status is "start", treat as in progress
-        if (step.status === "start") {
-          return "in_progress";
-        }
+        // If stepDetails says "accept", it's completed (even if step.status is "start")
+        return "completed";
       }
       if (step.stepDetails.status === "in_progress") {
         return "in_progress";
@@ -251,7 +264,6 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     }
 
     // Priority 3: Use step.status ONLY if stepDetails doesn't exist at all
-    // If stepDetails exists but doesn't have status, we can't determine completion
     if (!step.stepDetails) {
       if (step.status === "stop") {
         return "completed";
@@ -479,8 +491,9 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       {
-                        jobPlan.steps.filter((step) => step.status === "stop")
-                          .length
+                        jobPlan.steps.filter(
+                          (step) => getStepActualStatus(step) === "completed"
+                        ).length
                       }
                       /{jobPlan.steps.length} steps
                     </div>
@@ -647,7 +660,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {step.machineDetails?.[0]?.machineType || "-"}
+                        {step.machineDetails?.[0]?.machineCode || "-"}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
                         {step.machineDetails?.[0]?.machine?.capacity || "-"}
