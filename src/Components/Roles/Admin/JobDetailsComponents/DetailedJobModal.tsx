@@ -991,9 +991,39 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                       ({job.allSteps?.length || job.steps?.length || 0})
                     </h3>
                     {(() => {
-                      // Check if any step is on hold
+                      // Check if any step is on hold (including major hold)
                       const availableSteps = job.allSteps || job.steps || [];
                       const hasHoldSteps = availableSteps.some((step: any) => {
+                        // Check direct step status
+                        if (step.status === "major_hold" || step.status === "hold") {
+                          return true;
+                        }
+                        
+                        // Check step-specific properties (paperStore, printingDetails, etc.)
+                        if (
+                          step.paperStore?.status === "major_hold" ||
+                          step.printingDetails?.status === "major_hold" ||
+                          step.corrugation?.status === "major_hold" ||
+                          step.flutelam?.status === "major_hold" ||
+                          step.fluteLaminateBoardConversion?.status === "major_hold" ||
+                          step.punching?.status === "major_hold" ||
+                          step.sideFlapPasting?.status === "major_hold" ||
+                          step.qualityDept?.status === "major_hold" ||
+                          step.dispatchProcess?.status === "major_hold" ||
+                          step.paperStore?.status === "hold" ||
+                          step.printingDetails?.status === "hold" ||
+                          step.corrugation?.status === "hold" ||
+                          step.flutelam?.status === "hold" ||
+                          step.fluteLaminateBoardConversion?.status === "hold" ||
+                          step.punching?.status === "hold" ||
+                          step.sideFlapPasting?.status === "hold" ||
+                          step.qualityDept?.status === "hold" ||
+                          step.dispatchProcess?.status === "hold"
+                        ) {
+                          return true;
+                        }
+                        
+                        // Check stepDetails
                         return (
                           step.stepDetails?.data?.status === "major_hold" ||
                           step.stepDetails?.data?.status === "hold" ||

@@ -25,7 +25,7 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop" | "accept";
+  status: "planned" | "start" | "stop" | "accept" | "major_hold";
   startDate: string | null;
   endDate: string | null;
   user: string | null;

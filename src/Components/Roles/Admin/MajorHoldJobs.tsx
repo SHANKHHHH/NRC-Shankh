@@ -16,7 +16,7 @@ interface JobPlanStep {
     machineCode: string | null;
     machineType: string;
   }>;
-  status: "planned" | "start" | "stop";
+  status: "planned" | "start" | "stop" | "accept" | "major_hold";
   startDate: string | null;
   endDate: string | null;
   user: string | null;
@@ -32,6 +32,16 @@ interface JobPlanStep {
     status?: string;
     [key: string]: any;
   };
+  // Step-specific properties that may contain status
+  paperStore?: { id?: number; status?: string; [key: string]: any };
+  printingDetails?: { id?: number; status?: string; [key: string]: any };
+  corrugation?: { id?: number; status?: string; [key: string]: any };
+  flutelam?: { id?: number; status?: string; [key: string]: any };
+  fluteLaminateBoardConversion?: { id?: number; status?: string; [key: string]: any };
+  punching?: { id?: number; status?: string; [key: string]: any };
+  sideFlapPasting?: { id?: number; status?: string; [key: string]: any };
+  qualityDept?: { id?: number; status?: string; [key: string]: any };
+  dispatchProcess?: { id?: number; status?: string; [key: string]: any };
 }
 
 interface JobPlan {
@@ -49,6 +59,26 @@ interface JobPlan {
 // Helper function to check if a job has major hold
 function isMajorHold(job: JobPlan): boolean {
   for (const step of job.steps || []) {
+    // Check direct step status
+    if (step.status === "major_hold") {
+      return true;
+    }
+    
+    // Check step-specific properties (paperStore, printingDetails, etc.)
+    if (
+      step.paperStore?.status === "major_hold" ||
+      step.printingDetails?.status === "major_hold" ||
+      step.corrugation?.status === "major_hold" ||
+      step.flutelam?.status === "major_hold" ||
+      step.fluteLaminateBoardConversion?.status === "major_hold" ||
+      step.punching?.status === "major_hold" ||
+      step.sideFlapPasting?.status === "major_hold" ||
+      step.qualityDept?.status === "major_hold" ||
+      step.dispatchProcess?.status === "major_hold"
+    ) {
+      return true;
+    }
+    
     // Check stepDetails.data.status for "major_hold"
     if (step.stepDetails?.data?.status === "major_hold") {
       return true;
@@ -134,17 +164,10 @@ const MajorHoldJobs: React.FC = () => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Build query parameters for date filtering if available
-      const queryParams = new URLSearchParams();
-      if (dateFilter && dateFilter !== "custom") {
-        queryParams.append("filter", dateFilter);
-      } else if (customDateRange) {
-        queryParams.append("startDate", customDateRange.start);
-        queryParams.append("endDate", customDateRange.end);
-      }
-
-      // Fetch job planning data with date filter
-      const jobPlanningUrl = `https://nrprod.nrcontainers.com/api/job-planning/?${queryParams.toString()}`;
+      // 🔥 IMPORTANT: Major hold jobs should always be fetched regardless of date filters
+      // Don't apply date filtering when fetching major hold jobs
+      // Fetch job planning data WITHOUT date filter to get ALL major hold jobs
+      const jobPlanningUrl = `https://nrprod.nrcontainers.com/api/job-planning/`;
       const jobPlanningResponse = await fetch(jobPlanningUrl, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -468,12 +491,42 @@ const MajorHoldJobs: React.FC = () => {
 
       // Find all steps that are on hold/major hold
       const stepsOnHold = (job.steps || []).filter((step) => {
-        const isMajorHold =
+        // Check direct step status
+        if (step.status === "major_hold" || step.status === "hold") {
+          return true;
+        }
+        
+        // Check step-specific properties (paperStore, printingDetails, etc.)
+        if (
+          step.paperStore?.status === "major_hold" ||
+          step.printingDetails?.status === "major_hold" ||
+          step.corrugation?.status === "major_hold" ||
+          step.flutelam?.status === "major_hold" ||
+          step.fluteLaminateBoardConversion?.status === "major_hold" ||
+          step.punching?.status === "major_hold" ||
+          step.sideFlapPasting?.status === "major_hold" ||
+          step.qualityDept?.status === "major_hold" ||
+          step.dispatchProcess?.status === "major_hold" ||
+          step.paperStore?.status === "hold" ||
+          step.printingDetails?.status === "hold" ||
+          step.corrugation?.status === "hold" ||
+          step.flutelam?.status === "hold" ||
+          step.fluteLaminateBoardConversion?.status === "hold" ||
+          step.punching?.status === "hold" ||
+          step.sideFlapPasting?.status === "hold" ||
+          step.qualityDept?.status === "hold" ||
+          step.dispatchProcess?.status === "hold"
+        ) {
+          return true;
+        }
+        
+        // Check stepDetails
+        return (
           step.stepDetails?.data?.status === "major_hold" ||
           step.stepDetails?.data?.status === "hold" ||
           step.stepDetails?.status === "major_hold" ||
-          step.stepDetails?.status === "hold";
-        return isMajorHold;
+          step.stepDetails?.status === "hold"
+        );
       });
 
       console.log("📋 Steps on hold:", stepsOnHold.length, stepsOnHold);
@@ -491,10 +544,12 @@ const MajorHoldJobs: React.FC = () => {
 
       console.log("🔧 Total machines on hold:", totalMachines);
 
-      // Find the first step that has a machine (since major hold is job-wide, we only need one)
+      // Find the first step that has a machine
+      // Since major hold is job-wide, we can use ANY step's machine (not just held steps)
       let targetStep = null;
       let targetMachine = null;
 
+      // First, try to find a machine from held steps
       for (const step of stepsOnHold) {
         const machineDetails = step.machineDetails || [];
         if (machineDetails.length > 0) {
@@ -510,12 +565,33 @@ const MajorHoldJobs: React.FC = () => {
         }
       }
 
+      // If no machine found on held steps, try ALL steps (since major hold is job-wide)
+      if (!targetStep || !targetMachine) {
+        console.log("🔍 No machine found on held steps, searching all steps...");
+        const allSteps = job.steps || [];
+        for (const step of allSteps) {
+          const machineDetails = step.machineDetails || [];
+          if (machineDetails.length > 0) {
+            const machineId = machineDetails[0].machineId || machineDetails[0].id;
+            if (machineId) {
+              targetStep = step;
+              targetMachine = {
+                id: machineId,
+                code: machineDetails[0].machineCode || "Unknown",
+              };
+              console.log(`✅ Found machine on step ${step.stepNo} (${step.stepName}): ${targetMachine.code}`);
+              break;
+            }
+          }
+        }
+      }
+
       if (!targetStep || !targetMachine) {
         alert(
-          "Cannot resume this job: No machines found with valid IDs on any held steps.\n\n" +
+          "Cannot resume this job: No machines found with valid IDs on any steps.\n\n" +
             "This may happen if:\n" +
-            "- Steps were major held but no machines were assigned\n" +
-            "- Machine assignments were removed after the hold\n\n" +
+            "- No machines were assigned to any step\n" +
+            "- Machine assignments were removed\n\n" +
             "Please contact an administrator to manually resolve this issue."
         );
         setIsResumingJob(false);

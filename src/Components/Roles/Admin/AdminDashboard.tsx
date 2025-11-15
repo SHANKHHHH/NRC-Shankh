@@ -33,13 +33,27 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop" | "accept";
+  status: "planned" | "start" | "stop" | "accept" | "major_hold";
   startDate: string | null;
   endDate: string | null;
   user: string | null;
   createdAt: string;
   updatedAt: string;
   stepDetails?: any; // Step-specific details from API endpoints
+  // Step-specific properties that may contain status
+  paperStore?: { id?: number; status?: string; [key: string]: any };
+  printingDetails?: { id?: number; status?: string; [key: string]: any };
+  corrugation?: { id?: number; status?: string; [key: string]: any };
+  flutelam?: { id?: number; status?: string; [key: string]: any };
+  fluteLaminateBoardConversion?: {
+    id?: number;
+    status?: string;
+    [key: string]: any;
+  };
+  punching?: { id?: number; status?: string; [key: string]: any };
+  sideFlapPasting?: { id?: number; status?: string; [key: string]: any };
+  qualityDept?: { id?: number; status?: string; [key: string]: any };
+  dispatchProcess?: { id?: number; status?: string; [key: string]: any };
 }
 
 interface JobPlan {
@@ -914,6 +928,26 @@ const AdminDashboard: React.FC = () => {
   // Helper function to check if a job has major hold
   const isMajorHold = (job: JobPlan): boolean => {
     for (const step of job.steps || []) {
+      // Check direct step status
+      if (step.status === "major_hold") {
+        return true;
+      }
+
+      // Check step-specific properties (paperStore, printingDetails, etc.)
+      if (
+        step.paperStore?.status === "major_hold" ||
+        step.printingDetails?.status === "major_hold" ||
+        step.corrugation?.status === "major_hold" ||
+        step.flutelam?.status === "major_hold" ||
+        step.fluteLaminateBoardConversion?.status === "major_hold" ||
+        step.punching?.status === "major_hold" ||
+        step.sideFlapPasting?.status === "major_hold" ||
+        step.qualityDept?.status === "major_hold" ||
+        step.dispatchProcess?.status === "major_hold"
+      ) {
+        return true;
+      }
+
       // Check stepDetails.data.status for "major_hold"
       if (step.stepDetails?.data?.status === "major_hold") {
         return true;
@@ -1396,7 +1430,9 @@ const AdminDashboard: React.FC = () => {
     let totalSteps = 0;
     // Use held jobs count from the API data, not recalculated
     const heldJobs = data.heldJobs;
-    let majorHoldJobs = 0;
+    // 🔥 IMPORTANT: Major hold jobs should always show regardless of date filter
+    // Use the original count from all jobs, not filtered ones
+    const majorHoldJobs = data.majorHoldJobs;
     let completedSteps = 0;
     const uniqueUsers = new Set<string>();
 
@@ -1407,11 +1443,6 @@ const AdminDashboard: React.FC = () => {
       let jobOnHold = false;
       const totalStepsInJob = jobPlan.steps.length;
       let completedStepsInJob = 0;
-
-      // Check if this job has major hold
-      if (isMajorHold(jobPlan)) {
-        majorHoldJobs++;
-      }
 
       totalSteps += totalStepsInJob;
 

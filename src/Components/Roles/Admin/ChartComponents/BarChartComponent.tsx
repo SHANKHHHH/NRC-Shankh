@@ -43,13 +43,23 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop" | "accept";
+  status: "planned" | "start" | "stop" | "accept" | "major_hold";
   startDate: string | null;
   endDate: string | null;
   user: string | null;
   createdAt: string;
   updatedAt: string;
   stepDetails?: any; // Step-specific details from API endpoints
+  // Step-specific properties that may contain status
+  paperStore?: { id?: number; status?: string; [key: string]: any };
+  printingDetails?: { id?: number; status?: string; [key: string]: any };
+  corrugation?: { id?: number; status?: string; [key: string]: any };
+  flutelam?: { id?: number; status?: string; [key: string]: any };
+  fluteLaminateBoardConversion?: { id?: number; status?: string; [key: string]: any };
+  punching?: { id?: number; status?: string; [key: string]: any };
+  sideFlapPasting?: { id?: number; status?: string; [key: string]: any };
+  qualityDept?: { id?: number; status?: string; [key: string]: any };
+  dispatchProcess?: { id?: number; status?: string; [key: string]: any };
 }
 
 interface JobPlan {
