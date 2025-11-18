@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Upload, X, Image as ImageIcon } from "lucide-react";
 
@@ -70,7 +70,7 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
   const [formData, setFormData] = useState<CreateNewJobFormData>(() => {
     const prefilledData = getPrefilledData();
     return {
-      nrcJobNo: "",
+      nrcJobNo: null,
       styleItemSKU: prefilledData?.style || "",
       customerName: prefilledData?.customer || "",
       fluteType: prefilledData?.fluteType || "5PLY", // Set default value
@@ -129,6 +129,38 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
       }));
     }
   };
+
+  const formatBoxDimensions = (
+    length: number | null,
+    width: number | null,
+    height: number | null
+  ) => {
+    const sanitizeDimension = (value: number | null) => {
+      if (value === null || Number.isNaN(value)) return "0";
+      return value.toString();
+    };
+
+    return `${sanitizeDimension(length)}x${sanitizeDimension(
+      width
+    )}x${sanitizeDimension(height)}`;
+  };
+
+  useEffect(() => {
+    setFormData((prev) => {
+      const formatted = formatBoxDimensions(
+        prev.length,
+        prev.width,
+        prev.height
+      );
+      if (prev.boxDimensions === formatted) {
+        return prev;
+      }
+      return {
+        ...prev,
+        boxDimensions: formatted,
+      };
+    });
+  }, [formData.length, formData.width, formData.height]);
 
   // Convert file to Base64
   const convertToBase64 = (file: File): Promise<string> => {
@@ -341,9 +373,9 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
       }
 
       // Validate dimensions
-      if (formData.length <= 0 || formData.width <= 0 || formData.height <= 0) {
+      if (formData.length <= 0 || formData.width <= 0 || formData.height < 0) {
         throw new Error(
-          "Please enter valid dimensions (Length, Width, and Height must be greater than 0)"
+          "Please enter valid dimensions (Length and Width must be greater than 0, Height cannot be negative)"
         );
       }
 
@@ -474,7 +506,7 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
   // Reset form to initial state
   const resetForm = () => {
     setFormData({
-      nrcJobNo: "",
+      nrcJobNo: null,
       styleItemSKU: "",
       customerName: "",
       fluteType: "5PLY",
@@ -551,20 +583,6 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  NRC Job Number
-                </label>
-                <input
-                  type="text"
-                  name="nrcJobNo"
-                  value={formData.nrcJobNo || ""}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., NRC001, NRC002"
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Style Item SKU
@@ -717,10 +735,9 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
                   type="text"
                   name="boxDimensions"
                   value={formData.boxDimensions}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 460x350x310, 500x400x350"
-                  required
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700 focus:outline-none"
+                  placeholder="Auto-generated from Length x Width x Height"
                 />
               </div>
             </div>
