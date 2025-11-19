@@ -532,14 +532,37 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
               })
             );
 
-            // Check if this job has major hold
+            // Check if this job has major hold - using same logic as AdminDashboard
             const jobWithMajorHold = stepsWithDetails.some((step: any) => {
+              // Check direct step status
+              if (step.status === "major_hold") {
+                return true;
+              }
+
+              // Check step-specific properties (paperStore, printingDetails, etc.)
+              if (
+                step.paperStore?.status === "major_hold" ||
+                step.printingDetails?.status === "major_hold" ||
+                step.corrugation?.status === "major_hold" ||
+                step.flutelam?.status === "major_hold" ||
+                step.fluteLaminateBoardConversion?.status === "major_hold" ||
+                step.punching?.status === "major_hold" ||
+                step.sideFlapPasting?.status === "major_hold" ||
+                step.qualityDept?.status === "major_hold" ||
+                step.dispatchProcess?.status === "major_hold"
+              ) {
+                return true;
+              }
+
+              // Check stepDetails.data.status for "major_hold"
               if (step?.stepDetails?.data?.status === "major_hold") {
                 return true;
               }
+              // Also check stepDetails.status
               if (step?.stepDetails?.status === "major_hold") {
                 return true;
               }
+              // Check for major hold remark
               if (
                 step?.stepDetails?.data?.majorHoldRemark ||
                 (step?.stepDetails?.data?.holdRemark &&
@@ -1258,24 +1281,24 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
               <p className="text-gray-600 text-2xl">
                 Job planning overview and progress tracking
               </p>
-              {majorHoldJobsCount >0 && (
-                <button
-                  onClick={() => navigate("/dashboard/major-hold-jobs")}
-                  className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                  title="View major hold jobs"
-                >
-                  <ExclamationTriangleIcon
-                    className={`text-red-500 ${
-                      majorHoldJobsCount > 0 ? "animate-pulse" : ""
-                    }`}
-                    width={24}
-                    height={24}
-                  />
-                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-none text-white bg-red-600 rounded-full">
+              <button
+                onClick={() => navigate("/dashboard/major-hold-jobs")}
+                className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                title="View major hold jobs"
+              >
+                <ExclamationTriangleIcon
+                  className={`text-red-500 ${
+                    majorHoldJobsCount > 0 ? "animate-pulse" : ""
+                  }`}
+                  width={24}
+                  height={24}
+                />
+                {majorHoldJobsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
                     {majorHoldJobsCount}
                   </span>
-                </button>
-              )}
+                )}
+              </button>
             </div>
           </div>
         </div>

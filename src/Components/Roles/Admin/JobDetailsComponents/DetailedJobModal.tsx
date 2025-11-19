@@ -992,14 +992,26 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                     </h3>
                     {(() => {
                       // Check if any step is on hold (including major hold)
+                      // Using same priority order: stepDetails.data.status > stepDetails.status > step-specific properties > step.status
                       const availableSteps = job.allSteps || job.steps || [];
                       const hasHoldSteps = availableSteps.some((step: any) => {
-                        // Check direct step status
-                        if (step.status === "major_hold" || step.status === "hold") {
+                        // Priority 1: Check stepDetails.data.status first
+                        if (
+                          step.stepDetails?.data?.status === "major_hold" ||
+                          step.stepDetails?.data?.status === "hold"
+                        ) {
                           return true;
                         }
                         
-                        // Check step-specific properties (paperStore, printingDetails, etc.)
+                        // Priority 2: Check stepDetails.status
+                        if (
+                          step.stepDetails?.status === "major_hold" ||
+                          step.stepDetails?.status === "hold"
+                        ) {
+                          return true;
+                        }
+                        
+                        // Priority 3: Check step-specific properties (paperStore, printingDetails, etc.)
                         if (
                           step.paperStore?.status === "major_hold" ||
                           step.printingDetails?.status === "major_hold" ||
@@ -1023,12 +1035,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           return true;
                         }
                         
-                        // Check stepDetails
+                        // Priority 4: Check direct step status (fallback)
                         return (
-                          step.stepDetails?.data?.status === "major_hold" ||
-                          step.stepDetails?.data?.status === "hold" ||
-                          step.stepDetails?.status === "major_hold" ||
-                          step.stepDetails?.status === "hold"
+                          step.status === "major_hold" || step.status === "hold"
                         );
                       });
 
@@ -1127,11 +1136,74 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
 
                         const stepDetails = getStepDetails(step.stepName);
 
-                        // Check if step is on major hold
-                        const isMajorHold =
-                          step.stepDetails?.data?.status === "major_hold" ||
-                          step.stepDetails?.status === "major_hold" ||
-                          (stepDetails && stepDetails.length > 0 && stepDetails[0]?.status === "major_hold");
+                        // Helper function to get step status in priority order:
+                        // 1. stepDetails.data.status (highest priority)
+                        // 2. stepDetails.status
+                        // 3. Step-specific properties (paperStore.status, printingDetails.status, etc.)
+                        // 4. step.status (lowest priority)
+                        const getStepStatus = (step: any): string => {
+                          // Priority 1: stepDetails.data.status
+                          if (step.stepDetails?.data?.data?.status) {
+                            return step.stepDetails.data.data.status;
+                          }
+                          
+                          // Priority 2: stepDetails.status
+                          if (step.stepDetails?.status) {
+                            return step.stepDetails.status;
+                          }
+                          
+                          // Priority 3: Step-specific properties
+                          const stepSpecificStatus = 
+                            step.paperStore?.status ||
+                            step.printingDetails?.status ||
+                            step.corrugation?.status ||
+                            step.flutelam?.status ||
+                            step.fluteLaminateBoardConversion?.status ||
+                            step.punching?.status ||
+                            step.sideFlapPasting?.status ||
+                            step.qualityDept?.status ||
+                            step.dispatchProcess?.status;
+                          
+                          if (stepSpecificStatus) {
+                            return stepSpecificStatus;
+                          }
+                          
+                          // Priority 4: step.status (fallback)
+                          return step.status || "planned";
+                        };
+
+                        const stepStatus = getStepStatus(step);
+                        const isMajorHold = stepStatus === "major_hold" || stepStatus === "hold";
+
+                        // Format status for display
+                        const getStatusDisplay = (status: string): string => {
+                          if (status === "major_hold" || status === "hold") {
+                            return "Major Hold";
+                          }
+                          if (status === "completed" || status === "stop" || status === "accept") {
+                            return "Completed";
+                          }
+                          if (status === "in-progress" || status === "start") {
+                            return "In Progress";
+                          }
+                          return status || "Planned";
+                        };
+
+                        const statusDisplay = getStatusDisplay(stepStatus);
+
+                        // Get status badge color
+                        const getStatusBadgeColor = (status: string): string => {
+                          if (status === "major_hold" || status === "hold") {
+                            return "bg-red-100 text-red-800";
+                          }
+                          if (status === "completed" || status === "stop" || status === "accept") {
+                            return "bg-green-100 text-green-800";
+                          }
+                          if (status === "in-progress" || status === "start") {
+                            return "bg-yellow-100 text-yellow-800";
+                          }
+                          return "bg-gray-100 text-gray-800";
+                        };
 
                         return (
                           <div
@@ -1147,29 +1219,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               </span>
                               <div className="flex items-center space-x-2">
                                 <span
-                                  className={`px-2 py-1 rounded text-xs font-medium ${
-                                    isMajorHold
-                                      ? "bg-red-100 text-red-800"
-                                      : step.status === "completed" ||
-                                        step.status === "stop"
-                                      ? "bg-green-100 text-green-800"
-                                      : step.status === "in-progress" ||
-                                        step.status === "start"
-                                      ? "bg-yellow-100 text-yellow-800"
-                                      : "bg-gray-100 text-gray-800"
-                                  }`}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(stepStatus)}`}
                                 >
-                                  {isMajorHold
-                                    ? "Major Hold"
-                                    : step.status === "completed"
-                                    ? "Completed"
-                                    : step.status === "stop"
-                                    ? "Completed"
-                                    : step.status === "in-progress"
-                                    ? "In Progress"
-                                    : step.status === "start"
-                                    ? "In Progress"
-                                    : step.status || "Planned"}
+                                  {statusDisplay}
                                 </span>
                               </div>
                             </div>
