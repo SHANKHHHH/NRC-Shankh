@@ -489,126 +489,20 @@ const MajorHoldJobs: React.FC = () => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Find all steps that are on hold/major hold
-      const stepsOnHold = (job.steps || []).filter((step) => {
-        // Check direct step status
-        if (step.status === "major_hold" || step.status === "hold") {
-          return true;
-        }
-        
-        // Check step-specific properties (paperStore, printingDetails, etc.)
-        if (
-          step.paperStore?.status === "major_hold" ||
-          step.printingDetails?.status === "major_hold" ||
-          step.corrugation?.status === "major_hold" ||
-          step.flutelam?.status === "major_hold" ||
-          step.fluteLaminateBoardConversion?.status === "major_hold" ||
-          step.punching?.status === "major_hold" ||
-          step.sideFlapPasting?.status === "major_hold" ||
-          step.qualityDept?.status === "major_hold" ||
-          step.dispatchProcess?.status === "major_hold" ||
-          step.paperStore?.status === "hold" ||
-          step.printingDetails?.status === "hold" ||
-          step.corrugation?.status === "hold" ||
-          step.flutelam?.status === "hold" ||
-          step.fluteLaminateBoardConversion?.status === "hold" ||
-          step.punching?.status === "hold" ||
-          step.sideFlapPasting?.status === "hold" ||
-          step.qualityDept?.status === "hold" ||
-          step.dispatchProcess?.status === "hold"
-        ) {
-          return true;
-        }
-        
-        // Check stepDetails
-        return (
-          step.stepDetails?.data?.status === "major_hold" ||
-          step.stepDetails?.data?.status === "hold" ||
-          step.stepDetails?.status === "major_hold" ||
-          step.stepDetails?.status === "hold"
-        );
-      });
-
-      console.log("📋 Steps on hold:", stepsOnHold.length, stepsOnHold);
-
-      if (stepsOnHold.length === 0) {
-        alert("No steps are currently on hold for this job.");
+      // Get job plan ID from the job object
+      const jobPlanId = job.jobPlanId || job.id;
+      if (!jobPlanId) {
+        alert("Cannot resume this job: Job plan ID not found.");
         setIsResumingJob(false);
         return;
       }
 
-      // Count total machines across all held steps
-      const totalMachines = stepsOnHold.reduce((count, step) => {
-        return count + (step.machineDetails?.length || 0);
-      }, 0);
-
-      console.log("🔧 Total machines on hold:", totalMachines);
-
-      // Find the first step that has a machine
-      // Since major hold is job-wide, we can use ANY step's machine (not just held steps)
-      let targetStep = null;
-      let targetMachine = null;
-
-      // First, try to find a machine from held steps
-      for (const step of stepsOnHold) {
-        const machineDetails = step.machineDetails || [];
-        if (machineDetails.length > 0) {
-          const machineId = machineDetails[0].machineId || machineDetails[0].id;
-          if (machineId) {
-            targetStep = step;
-            targetMachine = {
-              id: machineId,
-              code: machineDetails[0].machineCode || "Unknown",
-            };
-            break;
-          }
-        }
-      }
-
-      // If no machine found on held steps, try ALL steps (since major hold is job-wide)
-      if (!targetStep || !targetMachine) {
-        console.log("🔍 No machine found on held steps, searching all steps...");
-        const allSteps = job.steps || [];
-        for (const step of allSteps) {
-          const machineDetails = step.machineDetails || [];
-          if (machineDetails.length > 0) {
-            const machineId = machineDetails[0].machineId || machineDetails[0].id;
-            if (machineId) {
-              targetStep = step;
-              targetMachine = {
-                id: machineId,
-                code: machineDetails[0].machineCode || "Unknown",
-              };
-              console.log(`✅ Found machine on step ${step.stepNo} (${step.stepName}): ${targetMachine.code}`);
-              break;
-            }
-          }
-        }
-      }
-
-      if (!targetStep || !targetMachine) {
-        alert(
-          "Cannot resume this job: No machines found with valid IDs on any steps.\n\n" +
-            "This may happen if:\n" +
-            "- No machines were assigned to any step\n" +
-            "- Machine assignments were removed\n\n" +
-            "Please contact an administrator to manually resolve this issue."
-        );
-        setIsResumingJob(false);
-        return;
-      }
-
-      console.log("🎯 Target machine for resume:", {
-        stepNo: targetStep.stepNo,
-        stepName: targetStep.stepName,
-        machineId: targetMachine.id,
-        machineCode: targetMachine.code,
-      });
+      console.log("📋 Job Plan ID:", jobPlanId);
 
       // Prompt for resume remark
       const resumeRemark = window.prompt(
         `Resume job ${jobNo} from major hold?\n\n` +
-          `This will resume ALL ${stepsOnHold.length} held step(s) and ${totalMachines} machine(s).\n\n` +
+          `This will resume all steps and machines for this job.\n\n` +
           `Enter a remark for the resume action:`,
         "Issue resolved, resuming work"
       );
@@ -628,9 +522,7 @@ const MajorHoldJobs: React.FC = () => {
       // Confirm before resuming
       const confirmed = window.confirm(
         `Resume entire job ${jobNo}?\n\n` +
-          `• ${stepsOnHold.length} step(s) will be resumed\n` +
-          `• ${totalMachines} machine(s) will be resumed\n` +
-          `• Resume from: Step ${targetStep.stepNo} (${targetStep.stepName}) - ${targetMachine.code}\n\n` +
+          `This will resume all steps and machines for this job plan.\n\n` +
           `Note: Major hold is job-wide. This single action will resume the entire job.`
       );
 
@@ -642,16 +534,12 @@ const MajorHoldJobs: React.FC = () => {
 
       console.log("✅ User confirmed, making API call...");
 
-      // Major hold is job-wide - we only need to resume from ONE machine to resume the ENTIRE job
-      const stepNo = targetStep.stepNo || targetStep.id;
-      const apiUrl = `https://nrprod.nrcontainers.com/api/job-step-machines/${encodeURIComponent(
-        jobNo
-      )}/steps/${stepNo}/machines/${targetMachine.id}/admin-resume-major-hold`;
+      // New simplified API endpoint - only needs job plan ID
+      const apiUrl = `https://nrprod.nrcontainers.com/api/job-step-machines/job-plan/${jobPlanId}/resume-major-hold`;
 
       console.log(`🚀 Making API call to resume entire job:`, {
         jobNo,
-        stepNo,
-        machineId: targetMachine.id,
+        jobPlanId,
         url: apiUrl,
       });
 
@@ -683,10 +571,7 @@ const MajorHoldJobs: React.FC = () => {
       setIsModalOpen(false);
       alert(
         `✅ Successfully resumed job ${jobNo}!\n\n` +
-          `• ${
-            result.data?.totalMachinesAffected || totalMachines
-          } machine(s) resumed\n` +
-          `• All ${stepsOnHold.length} held step(s) are now in progress`
+          `All steps and machines for this job have been resumed.`
       );
     } catch (err) {
       const errorMessage =

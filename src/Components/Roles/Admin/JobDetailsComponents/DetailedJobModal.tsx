@@ -345,13 +345,13 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           // If stepDetails is nested in .data property
           if (step.stepDetails.data) {
             return [step.stepDetails.data];
-          } 
+          }
           // If stepDetails is an array
           else if (Array.isArray(step.stepDetails)) {
             return step.stepDetails;
           }
           // If stepDetails is directly an object (most common case now)
-          else if (typeof step.stepDetails === 'object') {
+          else if (typeof step.stepDetails === "object") {
             return [step.stepDetails];
           }
         }
@@ -1002,7 +1002,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         ) {
                           return true;
                         }
-                        
+
                         // Priority 2: Check stepDetails.status
                         if (
                           step.stepDetails?.status === "major_hold" ||
@@ -1010,14 +1010,15 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         ) {
                           return true;
                         }
-                        
+
                         // Priority 3: Check step-specific properties (paperStore, printingDetails, etc.)
                         if (
                           step.paperStore?.status === "major_hold" ||
                           step.printingDetails?.status === "major_hold" ||
                           step.corrugation?.status === "major_hold" ||
                           step.flutelam?.status === "major_hold" ||
-                          step.fluteLaminateBoardConversion?.status === "major_hold" ||
+                          step.fluteLaminateBoardConversion?.status ===
+                            "major_hold" ||
                           step.punching?.status === "major_hold" ||
                           step.sideFlapPasting?.status === "major_hold" ||
                           step.qualityDept?.status === "major_hold" ||
@@ -1026,7 +1027,8 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           step.printingDetails?.status === "hold" ||
                           step.corrugation?.status === "hold" ||
                           step.flutelam?.status === "hold" ||
-                          step.fluteLaminateBoardConversion?.status === "hold" ||
+                          step.fluteLaminateBoardConversion?.status ===
+                            "hold" ||
                           step.punching?.status === "hold" ||
                           step.sideFlapPasting?.status === "hold" ||
                           step.qualityDept?.status === "hold" ||
@@ -1034,7 +1036,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         ) {
                           return true;
                         }
-                        
+
                         // Priority 4: Check direct step status (fallback)
                         return (
                           step.status === "major_hold" || step.status === "hold"
@@ -1126,7 +1128,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               return step.stepDetails;
                             }
                             // If stepDetails is directly an object (most common case now)
-                            else if (typeof step.stepDetails === 'object') {
+                            else if (typeof step.stepDetails === "object") {
                               return [step.stepDetails];
                             }
                           }
@@ -1146,14 +1148,14 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           if (step.stepDetails?.data?.data?.status) {
                             return step.stepDetails.data.data.status;
                           }
-                          
+
                           // Priority 2: stepDetails.status
                           if (step.stepDetails?.status) {
                             return step.stepDetails.status;
                           }
-                          
+
                           // Priority 3: Step-specific properties
-                          const stepSpecificStatus = 
+                          const stepSpecificStatus =
                             step.paperStore?.status ||
                             step.printingDetails?.status ||
                             step.corrugation?.status ||
@@ -1163,24 +1165,29 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             step.sideFlapPasting?.status ||
                             step.qualityDept?.status ||
                             step.dispatchProcess?.status;
-                          
+
                           if (stepSpecificStatus) {
                             return stepSpecificStatus;
                           }
-                          
+
                           // Priority 4: step.status (fallback)
                           return step.status || "planned";
                         };
 
                         const stepStatus = getStepStatus(step);
-                        const isMajorHold = stepStatus === "major_hold" || stepStatus === "hold";
+                        const isMajorHold =
+                          stepStatus === "major_hold" || stepStatus === "hold";
 
                         // Format status for display
                         const getStatusDisplay = (status: string): string => {
                           if (status === "major_hold" || status === "hold") {
                             return "Major Hold";
                           }
-                          if (status === "completed" || status === "stop" || status === "accept") {
+                          if (
+                            status === "completed" ||
+                            status === "stop" ||
+                            status === "accept"
+                          ) {
                             return "Completed";
                           }
                           if (status === "in-progress" || status === "start") {
@@ -1192,11 +1199,17 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         const statusDisplay = getStatusDisplay(stepStatus);
 
                         // Get status badge color
-                        const getStatusBadgeColor = (status: string): string => {
+                        const getStatusBadgeColor = (
+                          status: string
+                        ): string => {
                           if (status === "major_hold" || status === "hold") {
                             return "bg-red-100 text-red-800";
                           }
-                          if (status === "completed" || status === "stop" || status === "accept") {
+                          if (
+                            status === "completed" ||
+                            status === "stop" ||
+                            status === "accept"
+                          ) {
                             return "bg-green-100 text-green-800";
                           }
                           if (status === "in-progress" || status === "start") {
@@ -1219,7 +1232,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               </span>
                               <div className="flex items-center space-x-2">
                                 <span
-                                  className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(stepStatus)}`}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(
+                                    stepStatus
+                                  )}`}
                                 >
                                   {statusDisplay}
                                 </span>
