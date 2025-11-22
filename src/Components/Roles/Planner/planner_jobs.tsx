@@ -157,6 +157,9 @@ const PlannerJobs: React.FC = () => {
   // State for PO data
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [filteredPOs, setFilteredPOs] = useState<PurchaseOrder[]>([]);
+  
+  // State for finished goods
+  const [finishedGoods, setFinishedGoods] = useState<Record<string, number>>({});
 
   // State for job search
   const [searchedJob, setSearchedJob] = useState<Job | null>(null);
@@ -968,7 +971,7 @@ const PlannerJobs: React.FC = () => {
       }
 
       // Fetch all three APIs simultaneously
-      const [poResponse, jobPlanResponse, jobsResponse] = await Promise.all([
+      const [poResponse, jobPlanResponse, jobsResponse, finishedGoodsResponse] = await Promise.all([
         fetch("https://nrprod.nrcontainers.com/api/purchase-orders", {
           method: "GET",
           headers: {
@@ -984,6 +987,13 @@ const PlannerJobs: React.FC = () => {
           },
         }),
         fetch("https://nrprod.nrcontainers.com/api/jobs", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }),
+        fetch("https://nrprod.nrcontainers.com/api/finish-quantity/", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -1019,6 +1029,25 @@ const PlannerJobs: React.FC = () => {
       const jobsData = jobsResponse.ok
         ? await jobsResponse.json()
         : { success: true, data: [] };
+      const finishedGoodsData = finishedGoodsResponse.ok
+        ? await finishedGoodsResponse.json()
+        : { success: true, data: [] };
+
+      // Process finished goods data - create a map of job number to available quantity
+      const finishedGoodsMap: Record<string, number> = {};
+      if (finishedGoodsData.success && Array.isArray(finishedGoodsData.data)) {
+        finishedGoodsData.data.forEach((jobData: any) => {
+          if (jobData.nrcJobNo && jobData.finishQuantities) {
+            const totalAvailable = jobData.finishQuantities
+              .filter((fq: any) => fq.status === "available")
+              .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
+            if (totalAvailable > 0) {
+              finishedGoodsMap[jobData.nrcJobNo] = totalAvailable;
+            }
+          }
+        });
+      }
+      setFinishedGoods(finishedGoodsMap);
 
       if (poData.success && Array.isArray(poData.data)) {
         // Merge all three data sources
@@ -3799,6 +3828,12 @@ const PlannerJobs: React.FC = () => {
                                 <div className="text-sm text-gray-500">
                                   {po.noOfSheets} sheets
                                 </div>
+                                {/* Show finished goods if available for this job */}
+                                {po.jobNrcJobNo && finishedGoods[po.jobNrcJobNo] && (
+                                  <div className="text-xs text-green-600 font-medium mt-1">
+                                    FG: {finishedGoods[po.jobNrcJobNo].toLocaleString()}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-900">

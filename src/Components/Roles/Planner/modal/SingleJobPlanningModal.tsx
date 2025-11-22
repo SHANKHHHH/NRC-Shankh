@@ -83,10 +83,28 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
   const [showDemandModal, setShowDemandModal] = useState(false);
   const [showStepsModal, setShowStepsModal] = useState(false);
 
+  // Finished goods state
+  const [availableFinishedGoods, setAvailableFinishedGoods] = useState<number>(0);
+  const [useFinishedGoods, setUseFinishedGoods] = useState<boolean>(false);
+  const [isLoadingFinishedGoods, setIsLoadingFinishedGoods] = useState<boolean>(true);
+
   // 🔥 NEW: Fetch machines on component mount
   useEffect(() => {
     fetchMachines();
   }, []);
+
+  // Fetch finished goods when PO changes
+  useEffect(() => {
+    // Reset state when PO changes
+    setAvailableFinishedGoods(0);
+    setUseFinishedGoods(false);
+    setIsLoadingFinishedGoods(true);
+    // Fetch finished goods with a small delay to ensure PO is fully loaded
+    const timer = setTimeout(() => {
+      fetchFinishedGoods();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [po]);
 
   const fetchMachines = async () => {
     try {
@@ -103,6 +121,74 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
       }
     } catch (err) {
       console.error("Machine fetch error:", err);
+    }
+  };
+
+  const fetchFinishedGoods = async () => {
+    setIsLoadingFinishedGoods(true);
+    try {
+      // Try multiple ways to get the job number
+      const jobNo = po.jobNrcJobNo || po.job?.nrcJobNo || (po as any).nrcJobNo;
+      
+      console.log("🔍 Fetching finished goods for job:", jobNo, "PO:", po);
+      
+      if (!jobNo) {
+        console.log("⚠️ No job number found for PO:", po.poNumber);
+        setAvailableFinishedGoods(0);
+        setIsLoadingFinishedGoods(false);
+        return;
+      }
+
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        console.error("No access token found");
+        setIsLoadingFinishedGoods(false);
+        return;
+      }
+
+      // Use the same approach as the table - fetch all finished goods and filter by job number
+      const allUrl = `https://nrprod.nrcontainers.com/api/finish-quantity/`;
+      console.log("📡 Fetching all finished goods from:", allUrl);
+      
+      const response = await fetch(allUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Finished goods API returned ${response.status}`);
+        setAvailableFinishedGoods(0);
+        setIsLoadingFinishedGoods(false);
+        return;
+      }
+
+      const data = await response.json();
+      console.log("📦 All finished goods response:", data);
+      
+      if (data.success && Array.isArray(data.data)) {
+        // Find the job data that matches this job number
+        const jobData = data.data.find((job: any) => job.nrcJobNo === jobNo);
+        
+        if (jobData && jobData.finishQuantities && Array.isArray(jobData.finishQuantities)) {
+          // Calculate total available finished goods (same logic as table)
+          const totalAvailable = jobData.finishQuantities
+            .filter((fq: any) => fq.status === "available")
+            .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
+          
+          console.log("✅ Found finished goods for job:", jobNo, "Available:", totalAvailable);
+          setAvailableFinishedGoods(totalAvailable);
+        } else {
+          console.log("⚠️ No finished goods data found for job:", jobNo);
+          setAvailableFinishedGoods(0);
+        }
+      } else {
+        console.log("⚠️ Invalid response format");
+        setAvailableFinishedGoods(0);
+      }
+    } catch (err) {
+      console.error("❌ Finished goods fetch error:", err);
+      setAvailableFinishedGoods(0);
+    } finally {
+      setIsLoadingFinishedGoods(false);
     }
   };
 
@@ -200,6 +286,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
         nrcJobNo: po.jobNrcJobNo || po.job?.nrcJobNo,
         jobDemand: jobDemand,
         purchaseOrderId: po.id, // Include PO ID
+        finishedGoodsQty: useFinishedGoods ? availableFinishedGoods : 0, // Include finished goods if selected
 
         // 🔥 CRITICAL: This is the steps array the API expects at root level
         steps: selectedSteps.map((step, stepIndex) => {
@@ -236,6 +323,11 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
         "📤 Single job planning API payload:",
         JSON.stringify(jobPlanningData, null, 2)
       );
+      console.log("📦 Finished Goods in payload:", {
+        useFinishedGoods,
+        availableFinishedGoods,
+        finishedGoodsQty: jobPlanningData.finishedGoodsQty
+      });
 
       // 🔥 NEW: Validate the payload before sending
       if (!jobPlanningData.nrcJobNo) {
@@ -280,8 +372,15 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
             Job Planning
           </h2>
           <p className="text-gray-500 text-center mb-2">
-            Create job plan for {po.jobNrcJobNo || po.job?.nrcJobNo}
+            Create job plan for {po.jobNrcJobNo || po.job?.nrcJobNo || "N/A"}
           </p>
+          {/* Debug: Show job number and finished goods status */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-xs text-gray-400 mb-2">
+              Job: {po.jobNrcJobNo || po.job?.nrcJobNo || "Not found"} | 
+              FG: {availableFinishedGoods > 0 ? `${availableFinishedGoods} available` : "None"}
+            </div>
+          )}
 
           {/* Show PO details */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 w-full">
@@ -328,6 +427,28 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Finished Goods Checkbox */}
+            {availableFinishedGoods > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useFinishedGoods}
+                    onChange={(e) => setUseFinishedGoods(e.target.checked)}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-900">
+                      Use Finished Goods
+                    </span>
+                    <div className="text-xs text-gray-600 mt-1">
+                      Available: {availableFinishedGoods.toLocaleString()} units
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
 
             {/* Add Steps */}
             <div>

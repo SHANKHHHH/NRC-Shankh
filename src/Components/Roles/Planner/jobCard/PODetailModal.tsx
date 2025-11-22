@@ -487,6 +487,7 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
         nrcJobNo: po.jobNrcJobNo || po.job?.nrcJobNo,
         jobDemand: jobPlanningData.jobDemand,
         purchaseOrderId: po.id, // Include PO ID if available
+        finishedGoodsQty: jobPlanningData.finishedGoodsQty || 0, // Include finished goods quantity
         steps: jobPlanningData.steps.map((step: any, index: number) => {
           console.log(`🔍 Processing step ${step.stepName}:`, step);
 

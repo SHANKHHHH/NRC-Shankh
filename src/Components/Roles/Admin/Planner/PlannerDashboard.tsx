@@ -64,6 +64,7 @@ interface PurchaseOrder {
   jobPlanningId?: string | null;
   hasJobPlan?: boolean;
   jobPlanId?: number;
+  availableFinishedGoods?: number; // Finished goods quantity available for this job
 }
 
 interface FilterState {
@@ -287,6 +288,25 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         throw new Error("Failed to fetch job planning");
       const jobPlanningData = await jobPlanningResponse.json();
 
+      // Fetch finished goods
+      const finishedGoodsResponse = await fetch(
+        "https://nrprod.nrcontainers.com/api/finish-quantity/",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      let finishedGoodsData: any[] = [];
+      if (finishedGoodsResponse.ok) {
+        const finishedGoodsResult = await finishedGoodsResponse.json();
+        if (finishedGoodsResult.success && Array.isArray(finishedGoodsResult.data)) {
+          finishedGoodsData = finishedGoodsResult.data;
+        }
+      }
+
       // Merge data
       const mergedPOs = (pos || []).map((po: any) => {
         const matchingJob = jobsData?.data?.find(
@@ -300,6 +320,24 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         const matchingJobPlan = jobPlanningData?.data?.find(
           (jp: any) => jp.purchaseOrderId === po.id
         );
+
+        // Find finished goods for this job
+        const jobNo = po.jobNrcJobNo || matchingJob?.nrcJobNo;
+        let availableFinishedGoods: number | undefined = undefined;
+        if (jobNo && finishedGoodsData.length > 0) {
+          const jobFinishedGoods = finishedGoodsData.find(
+            (fg: any) => fg.nrcJobNo === jobNo
+          );
+          if (jobFinishedGoods && jobFinishedGoods.finishQuantities) {
+            const calculatedQty = jobFinishedGoods.finishQuantities
+              .filter((fq: any) => fq.status === "available")
+              .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
+            // Only set if we actually found finished goods (greater than 0)
+            if (calculatedQty > 0) {
+              availableFinishedGoods = calculatedQty;
+            }
+          }
+        }
 
         return {
           ...po,
@@ -326,6 +364,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
           steps: matchingJobPlan?.steps || [],
           jobDemand: matchingJobPlan?.jobDemand || null,
           jobPlanningId: matchingJobPlan?.jobPlanId || null, // Track which PO has job planning
+          availableFinishedGoods: availableFinishedGoods,
         };
       });
 
@@ -2127,6 +2166,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                       </div>
                     )}
                   </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Finished Goods
+                  </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
                       <div className="flex items-center space-x-1">
@@ -2443,6 +2485,20 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         <span className="font-bold">
                           {po.totalPOQuantity || "N/A"}
                         </span>
+                        {po.availableFinishedGoods && po.availableFinishedGoods > 0 && (
+                          <div className="text-xs text-green-600 mt-1">
+                            FG: {po.availableFinishedGoods.toLocaleString()}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-gray-500">
+                        {po.availableFinishedGoods !== undefined && po.availableFinishedGoods > 0 ? (
+                          <span className="text-green-600 font-medium">
+                            {po.availableFinishedGoods.toLocaleString()} units
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">None</span>
+                        )}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-gray-500">
                         {po.boxDimensions ||
