@@ -282,12 +282,18 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
 
       if (!userResponse.ok) {
         const errorData = await userResponse.json();
-        throw new Error(errorData.message || "Failed to update user");
+        // Handle both 'error' and 'message' fields from backend
+        const errorMessage =
+          errorData.error || errorData.message || "Failed to update user";
+        throw new Error(errorMessage);
       }
 
       const userResult = await userResponse.json();
       if (!userResult.success) {
-        throw new Error(userResult.message || "Failed to update user");
+        // Handle both 'error' and 'message' fields from backend
+        const errorMessage =
+          userResult.error || userResult.message || "Failed to update user";
+        throw new Error(errorMessage);
       }
 
       // Step 2: Update machine assignments intelligently
