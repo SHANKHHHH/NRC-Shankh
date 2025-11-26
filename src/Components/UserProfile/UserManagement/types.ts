@@ -20,7 +20,8 @@ export interface CreateUserPayload {
 }
 
 export interface UpdateUserPayload {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   roles: string[];
   password?: string;

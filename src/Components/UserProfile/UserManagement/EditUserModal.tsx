@@ -251,8 +251,13 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
       if (!accessToken) throw new Error("Authentication token not found.");
 
       // Step 1: Update user data (name, email, roles, password)
+      const nameParts = form.name.trim().split(/\s+/);
+      const firstName = nameParts.shift() || "";
+      const lastName = nameParts.length > 0 ? nameParts.join(" ") : firstName;
+
       const userPayload: UpdateUserPayload = {
-        name: form.name,
+        firstName,
+        lastName,
         email: form.email,
         roles: selectedRoles,
         machineId: [], // Empty array since machine assignments are handled separately

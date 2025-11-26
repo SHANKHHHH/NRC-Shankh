@@ -157,7 +157,7 @@ const PlannerJobs: React.FC = () => {
   // State for PO data
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [filteredPOs, setFilteredPOs] = useState<PurchaseOrder[]>([]);
-  
+
   // State for finished goods
   const [finishedGoods, setFinishedGoods] = useState<Record<string, number>>({});
 
