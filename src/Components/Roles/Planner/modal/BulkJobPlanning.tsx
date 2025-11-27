@@ -73,9 +73,9 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
   );
   const [selectedSteps, setSelectedSteps] = useState<JobStep[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<Machine[]>([]);
-  const [stepMachines, setStepMachines] = useState<Record<string, string[]>>(
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
     {}
-  ); // 🔥 NEW: Track step-machine mappings
+  ); // 🔥 CHANGED: Single machine ID per step (not array)
   const [allMachines, setAllMachines] = useState<Machine[]>([]); // 🔥 NEW: Store all fetched machines
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,8 +158,8 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
       });
 
       const stepsWithoutMachines = stepsRequiringMachines.filter((step) => {
-        const assignedMachineIds = stepMachines[step.stepName] || [];
-        return assignedMachineIds.length === 0;
+        const assignedMachineId = stepMachines[step.stepName];
+        return !assignedMachineId;
       });
 
       if (stepsWithoutMachines.length > 0) {
@@ -189,19 +189,20 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
           jobDemand: jobDemand,
           purchaseOrderId: po.id,
           steps: selectedSteps.map((step, stepIndex) => {
-            const assignedMachineIds = stepMachines[step.stepName] || [];
-            const assignedMachines = assignedMachineIds
-              .map((machineId) => allMachines.find((m) => m.id === machineId))
-              .filter(Boolean) as Machine[];
+            const assignedMachineId = stepMachines[step.stepName];
+            const assignedMachine = assignedMachineId
+              ? allMachines.find((m) => m.id === assignedMachineId)
+              : null;
 
             let machineDetails;
-            if (assignedMachines.length > 0) {
-              machineDetails = assignedMachines.map((machine) => ({
-                id: machine.id,
-                unit: po.unit || machine.unit || "Unit 1",
-                machineCode: machine.machineCode,
-                machineType: machine.machineType,
-              }));
+            if (assignedMachine) {
+              // Single machine selection
+              machineDetails = [{
+                id: assignedMachine.id,
+                unit: po.unit || assignedMachine.unit || "Unit 1",
+                machineCode: assignedMachine.machineCode,
+                machineType: assignedMachine.machineType,
+              }];
             } else {
               machineDetails = [
                 {
@@ -416,13 +417,10 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
               {selectedSteps.length > 0 && (
                 <div className="mt-3 space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
                   {selectedSteps.map((step) => {
-                    const assignedMachineIds =
-                      stepMachines[step.stepName] || [];
-                    const assignedMachines = assignedMachineIds
-                      .map((machineId) =>
-                        allMachines.find((m) => m.id === machineId)
-                      )
-                      .filter(Boolean) as Machine[];
+                    const assignedMachineId = stepMachines[step.stepName];
+                    const assignedMachine = assignedMachineId
+                      ? allMachines.find((m) => m.id === assignedMachineId)
+                      : null;
 
                     return (
                       <div
@@ -433,23 +431,17 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
                           <span className="text-sm font-medium text-gray-800">
                             {step.stepName.replace(/([A-Z])/g, " $1").trim()}
                           </span>
-                          {assignedMachines.length > 0 && (
+                          {assignedMachine && (
                             <span className="text-xs text-[#00AEEF] font-semibold">
-                              {assignedMachines.length} machine
-                              {assignedMachines.length > 1 ? "s" : ""}
+                              1 machine
                             </span>
                           )}
                         </div>
-                        {assignedMachines.length > 0 ? (
+                        {assignedMachine ? (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {assignedMachines.map((machine) => (
-                              <span
-                                key={machine.id}
-                                className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full"
-                              >
-                                {machine.machineCode}
-                              </span>
-                            ))}
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                              {assignedMachine.machineCode}
+                            </span>
                           </div>
                         ) : (
                           <span className="text-xs text-gray-500 mt-1 block">

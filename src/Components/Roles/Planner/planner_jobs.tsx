@@ -226,6 +226,10 @@ const PlannerJobs: React.FC = () => {
     type: "success" | "error" | "warning" | "info";
   }>({ open: false, message: "", type: "info" });
 
+  // Pagination state
+  const [displayedPOsCount, setDisplayedPOsCount] = useState(50); // Initial batch size
+  const ITEMS_PER_PAGE = 50; // Load 50 more items at a time
+
   // Helper function to show snackbar
   const showSnackbar = (
     message: string,
@@ -587,6 +591,25 @@ const PlannerJobs: React.FC = () => {
     }
   };
 
+  // Helper function to parse date string (dd/mm/yyyy) to Date object for sorting
+  const parseDateForSorting = (dateStr: string): Date | null => {
+    if (!dateStr || dateStr === "N/A") return null;
+    try {
+      // Parse dd/mm/yyyy format
+      const parts = dateStr.split("/");
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+      // Fallback to standard date parsing
+      return new Date(dateStr);
+    } catch {
+      return null;
+    }
+  };
+
   // Get unique values for a specific column
   const getUniqueColumnValues = (columnName: keyof ColumnFilters): string[] => {
     const values = new Set<string>();
@@ -631,7 +654,26 @@ const PlannerJobs: React.FC = () => {
       }
       if (value) values.add(value);
     });
-    return Array.from(values).sort();
+    
+    const valuesArray = Array.from(values);
+    
+    // Sort dates chronologically instead of alphabetically
+    if (columnName === "poDate" || columnName === "deliveryDate") {
+      return valuesArray.sort((a, b) => {
+        const dateA = parseDateForSorting(a);
+        const dateB = parseDateForSorting(b);
+        
+        // Handle "N/A" or invalid dates - put them at the end
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
+        return dateA.getTime() - dateB.getTime();
+      });
+    }
+    
+    // For non-date columns, use alphabetical sorting
+    return valuesArray.sort();
   };
 
   // Handle column filter toggle
@@ -759,12 +801,17 @@ const PlannerJobs: React.FC = () => {
     );
   };
 
-  // Handle select all/none
+  // Handle select all/none (only for displayed POs)
   const handleSelectAll = () => {
-    if (selectedPOs.length === filteredPOs.length) {
-      setSelectedPOs([]);
+    const displayedPOIds = displayedPOs.map((po) => po.id);
+    const allDisplayedSelected = displayedPOIds.every(id => selectedPOs.includes(id));
+    
+    if (allDisplayedSelected) {
+      // Deselect all displayed POs
+      setSelectedPOs(prev => prev.filter(id => !displayedPOIds.includes(id)));
     } else {
-      setSelectedPOs(filteredPOs.map((po) => po.id));
+      // Select all displayed POs
+      setSelectedPOs(prev => [...new Set([...prev, ...displayedPOIds])]);
     }
   };
 
@@ -787,7 +834,18 @@ const PlannerJobs: React.FC = () => {
     // Apply additional filters
     const filtered = applyFilters(basePOs);
     setFilteredPOs(filtered);
+    // Reset pagination when filters change
+    setDisplayedPOsCount(ITEMS_PER_PAGE);
   }, [filters, columnFilters, purchaseOrders, searchedJob]);
+
+  // Get displayed POs based on pagination
+  const displayedPOs = filteredPOs.slice(0, displayedPOsCount);
+  const hasMorePOs = filteredPOs.length > displayedPOsCount;
+
+  // Load more POs
+  const handleLoadMore = () => {
+    setDisplayedPOsCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredPOs.length));
+  };
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -2448,7 +2506,7 @@ const PlannerJobs: React.FC = () => {
           <div className="text-sm text-gray-600">
             {activeFilterCount > 0 ? (
               <>
-                Showing {filteredPOs.length} POs needing job planning
+                Showing {displayedPOs.length} of {filteredPOs.length} POs needing job planning
                 {activeFilterCount > 0 &&
                   ` (${activeFilterCount} filters applied)`}
                 {selectedPOs.length > 0 && (
@@ -2459,7 +2517,7 @@ const PlannerJobs: React.FC = () => {
               </>
             ) : (
               <>
-                Showing {filteredPOs.length} of {purchaseOrders.length} purchase
+                Showing {displayedPOs.length} of {filteredPOs.length} purchase
                 orders (all statuses)
                 {selectedPOs.length > 0 && (
                   <span className="ml-2 text-green-600 font-medium">
@@ -2473,11 +2531,11 @@ const PlannerJobs: React.FC = () => {
           {/* Bulk Job Planning Button - Show if there are filtered POs with filters OR multiple POs from search */}
           {(() => {
             // Filter out completed POs for bulk planning
-            const pendingPOs = filteredPOs.filter(
+            const pendingPOs = displayedPOs.filter(
               (po) => checkPOCompletionStatus(po) !== "completed"
             );
             const shouldShowBulkButton =
-              filteredPOs.length > 0 &&
+              displayedPOs.length > 0 &&
               (hasColumnFilters ||
                 activeFilterCount > 0 ||
                 (searchedJob && pendingPOs.length > 1));
@@ -2516,7 +2574,7 @@ const PlannerJobs: React.FC = () => {
               ? getSelectedPOObjects().filter(
                   (po) => checkPOCompletionStatus(po) !== "completed"
                 )
-              : filteredPOs.filter(
+              : displayedPOs.filter(
                   (po) => checkPOCompletionStatus(po) !== "completed"
                 )
           }
@@ -2617,7 +2675,7 @@ const PlannerJobs: React.FC = () => {
 
       {!loading && !error && (
         <>
-          {filteredPOs.length === 0 ? (
+          {displayedPOs.length === 0 ? (
             <div className="text-center py-8 sm:py-12">
               <p className="text-gray-500 text-base sm:text-lg">
                 {searchedJob || activeFilterCount > 0
@@ -2630,7 +2688,7 @@ const PlannerJobs: React.FC = () => {
               {/* Grid View */}
               {viewMode === "grid" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
-                  {filteredPOs.map((po) => {
+                  {displayedPOs.map((po) => {
                     let completionStatus:
                       | "artwork_pending"
                       | "po_pending"
@@ -2665,13 +2723,14 @@ const PlannerJobs: React.FC = () => {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          {filteredPOs.length > 0 && (
+                          {displayedPOs.length > 0 && (
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               <input
                                 type="checkbox"
                                 checked={
-                                  selectedPOs.length === filteredPOs.length &&
-                                  filteredPOs.length > 0
+                                  selectedPOs.length === displayedPOs.length &&
+                                  displayedPOs.length > 0 &&
+                                  displayedPOs.every(po => selectedPOs.includes(po.id))
                                 }
                                 onChange={handleSelectAll}
                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3733,7 +3792,7 @@ const PlannerJobs: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredPOs.map((po) => {
+                        {displayedPOs.map((po) => {
                           let completionStatus:
                             | "artwork_pending"
                             | "po_pending"
@@ -3883,6 +3942,21 @@ const PlannerJobs: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* Load More Button */}
+              {hasMorePOs && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={handleLoadMore}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  >
+                    <span>Load More</span>
+                    <span className="text-sm opacity-75">
+                      ({filteredPOs.length - displayedPOs.length} remaining)
+                    </span>
+                  </button>
                 </div>
               )}
             </>

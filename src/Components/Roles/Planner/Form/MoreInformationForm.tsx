@@ -23,7 +23,7 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
     job.jobSteps || []
   );
   const [selectedMachines, setSelectedMachines] = useState<Machine[]>([]);
-  const [stepMachines, setStepMachines] = useState<Record<string, string[]>>(
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
     {}
   ); // 🔥 NEW: Track step-machine mapping
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -148,33 +148,30 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
         jobDemand: jobDemand,
         poId: poId,
         steps: selectedSteps.map((step) => {
-          // 🔥 UPDATED: Use stepMachines mapping to get assigned machines
-          const machineIdsForStep = stepMachines[step.stepName] || [];
-          const assignedMachines = machineIdsForStep
-            .map((machineId) =>
-              selectedMachines.find((m) => m.id === machineId)
-            )
-            .filter(Boolean) as Machine[];
+          // 🔥 UPDATED: Use stepMachines mapping to get assigned machine (single)
+          const machineIdForStep = stepMachines[step.stepName];
+          const assignedMachine = machineIdForStep
+            ? selectedMachines.find((m) => m.id === machineIdForStep)
+            : null;
 
           // 🔥 FIXED: Get unit from job, not from machine
           const jobUnit = job.unit || "Mk"; // Fallback to "Mk" if job.unit is not available
 
-          // 🔥 NEW: Create machineDetails array for multiple machines or default "Not Assigned"
-          const machineDetails =
-            assignedMachines.length > 0
-              ? assignedMachines.map((machine) => ({
-                  id: machine.id,
-                  unit: jobUnit, // 🔥 FIXED: Use job unit instead of machine unit
-                  machineCode: machine.machineCode,
-                  machineType: machine.machineType,
-                }))
-              : [
-                  {
-                    unit: jobUnit, // 🔥 FIXED: Use job unit instead of hardcoded "Mk"
-                    machineCode: null,
-                    machineType: "Not Assigned",
-                  },
-                ];
+          // 🔥 CHANGED: Create machineDetails array for single machine or default "Not Assigned"
+          const machineDetails = assignedMachine
+            ? [{
+                id: assignedMachine.id,
+                unit: jobUnit, // 🔥 FIXED: Use job unit instead of machine unit
+                machineCode: assignedMachine.machineCode,
+                machineType: assignedMachine.machineType,
+              }]
+            : [
+                {
+                  unit: jobUnit, // 🔥 FIXED: Use job unit instead of hardcoded "Mk"
+                  machineCode: null,
+                  machineType: "Not Assigned",
+                },
+              ];
 
           return {
             stepNo: step.stepNo,
