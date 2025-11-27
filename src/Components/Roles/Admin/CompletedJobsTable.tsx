@@ -235,12 +235,12 @@ const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
   };
 
   // Format currency
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, fractionDigits = 2) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits
     }).format(amount);
   };
 

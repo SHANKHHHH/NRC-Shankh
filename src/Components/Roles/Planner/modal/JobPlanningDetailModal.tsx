@@ -14,12 +14,10 @@ const JobPlanningDetailModal: React.FC<JobPlanningDetailModalProps> = ({
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A";
     try {
-      return new Date(dateString).toLocaleString("en-US", {
+      return new Date(dateString).toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       });
     } catch (e) {
       return "Invalid Date";

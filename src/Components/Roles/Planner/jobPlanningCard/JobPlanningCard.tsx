@@ -21,13 +21,11 @@ const JobPlanningCard: React.FC<JobPlanningCardProps> = ({
 }) => {
   const formatDate = (dateString: string) => {
     try {
-      return new Date(dateString).toLocaleString("en-IN", {
+      return new Date(dateString).toLocaleDateString("en-IN", {
         timeZone: "Asia/Kolkata",
         year: "numeric",
         month: "short",
         day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       });
     } catch {
       return "N/A";

@@ -711,6 +711,14 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         ₹{job.jobDetails.preRate || "N/A"}
                       </span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">
+                        Latest Rate:
+                      </span>
+                      <span className="text-gray-900">
+                        ₹{job.jobDetails.latestRate || "N/A"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}

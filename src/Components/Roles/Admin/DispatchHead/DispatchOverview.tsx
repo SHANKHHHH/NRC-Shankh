@@ -28,6 +28,7 @@ const DispatchOverview: React.FC = () => {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [showAllData, setShowAllData] = useState(false);
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [jobRates, setJobRates] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -119,6 +120,11 @@ const DispatchOverview: React.FC = () => {
                   user: step.operatorName || null,
                   machineDetails: [],
                   jobPlanId: job.jobPlanId || null,
+                  latestRate:
+                    job?.jobDetails?.latestRate ??
+                    job?.latestRate ??
+                    step.latestRate ??
+                    null,
                   dispatchDetails: {
                     dispatchHistory: step.dispatchHistory || null,
                     totalDispatchedQty:
@@ -159,6 +165,76 @@ const DispatchOverview: React.FC = () => {
     return combined;
   }, [dispatchData, completedJobs]);
 
+  useEffect(() => {
+    const fetchMissingRates = async () => {
+      if (allDispatchData.length === 0) return;
+
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        console.warn("Authentication token not found. Cannot fetch job rates.");
+        return;
+      }
+
+      const jobsToFetch = Array.from(
+        new Set(
+          allDispatchData
+            .filter(
+              (dispatch) =>
+                dispatch.jobNrcJobNo &&
+                dispatch.latestRate == null &&
+                jobRates[dispatch.jobNrcJobNo] === undefined
+            )
+            .map((dispatch) => dispatch.jobNrcJobNo)
+            .filter(Boolean)
+        )
+      );
+
+      if (jobsToFetch.length === 0) {
+        return;
+      }
+
+      for (const jobNo of jobsToFetch) {
+        try {
+          const response = await fetch(
+            `https://nrprod.nrcontainers.com/api/jobs/${encodeURIComponent(
+              jobNo
+            )}/with-po-details`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!response.ok) {
+            console.warn(
+              `Failed to fetch job details for ${jobNo}: ${response.status}`
+            );
+            continue;
+          }
+
+          const result = await response.json();
+          const latestRate =
+            result?.data?.jobDetails?.latestRate ??
+            result?.data?.latestRate ??
+            null;
+
+          if (typeof latestRate === "number" && !Number.isNaN(latestRate)) {
+            setJobRates((prev) => ({
+              ...prev,
+              [jobNo]: latestRate,
+            }));
+          }
+        } catch (error) {
+          console.error(`Error fetching job rate for ${jobNo}:`, error);
+        }
+      }
+    };
+
+    fetchMissingRates();
+  }, [allDispatchData, jobRates]);
+
   // Helper function to get the first dispatch detail item (when dispatchDetails is an array)
   const getFirstDispatchDetail = (dispatch: DispatchProcess): any | null => {
     if (
@@ -197,6 +273,21 @@ const DispatchOverview: React.FC = () => {
     return dispatch.status || "pending";
   };
 
+  const getLatestRateValue = (dispatch: DispatchProcess): number | null => {
+    if (
+      dispatch.latestRate !== undefined &&
+      dispatch.latestRate !== null &&
+      !Number.isNaN(dispatch.latestRate)
+    ) {
+      return dispatch.latestRate;
+    }
+    const rateFromMap = jobRates[dispatch.jobNrcJobNo];
+    if (rateFromMap !== undefined && !Number.isNaN(rateFromMap)) {
+      return rateFromMap;
+    }
+    return null;
+  };
+
   // Helper function to get total dispatched quantity
   // Handles both data structures:
   // 1. dispatchDetails as object (from completed jobs): { totalDispatchedQty: number }
@@ -228,6 +319,15 @@ const DispatchOverview: React.FC = () => {
 
     // Fallback to quantity field
     return dispatch.quantity || 0;
+  };
+
+  const formatCurrency = (value: number, fractionDigits = 0) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(value);
   };
 
   // Calculate updated summary data including completed jobs
@@ -726,6 +826,9 @@ const DispatchOverview: React.FC = () => {
                   Balance Qty
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Value
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -740,7 +843,7 @@ const DispatchOverview: React.FC = () => {
               {displayData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-6 py-8 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center space-y-2">
@@ -764,6 +867,11 @@ const DispatchOverview: React.FC = () => {
                     totalQuantity > 0
                       ? (dispatchedQty / totalQuantity) * 100
                       : 0;
+                  const latestRateValue = getLatestRateValue(dispatch);
+                  const revenueValue =
+                    latestRateValue !== null
+                      ? latestRateValue * totalQuantity
+                      : null;
 
                   return (
                     <tr
@@ -823,6 +931,23 @@ const DispatchOverview: React.FC = () => {
                             </>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {revenueValue !== null ? (
+                          <div className="flex flex-col items-center space-y-1">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {formatCurrency(revenueValue, 2)}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              Rate:{" "}
+                              {latestRateValue !== null
+                                ? formatCurrency(latestRateValue, 2)
+                                : "N/A"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span

@@ -26,6 +26,7 @@ export interface DispatchProcess {
     machineType: string;
   }>;
   jobPlanId?: number;
+  latestRate?: number | null;
   // dispatchDetails can be either:
   // 1. An object (from completed jobs): { totalDispatchedQty, dispatchHistory, ... }
   // 2. An array (from regular API): [{ totalDispatchedQty, dispatchHistory, ... }, ...]
@@ -149,6 +150,7 @@ class DispatchService {
             user: item.user,
             machineDetails: item.machineDetails || [],
             jobPlanId: item.jobPlanId,
+            latestRate: item.latestRate ?? null,
             dispatchDetails: null,
           };
         }
@@ -190,6 +192,11 @@ class DispatchService {
           user: item.user,
           machineDetails: item.machineDetails || [],
           jobPlanId: item.jobPlanId,
+          latestRate:
+            dispatchDetails.latestRate ??
+            item.latestRate ??
+            dispatchDetails.jobDetails?.latestRate ??
+            null,
           dispatchDetails,
         };
       });

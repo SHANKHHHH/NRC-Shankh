@@ -10,6 +10,8 @@ import {
   ClipboardDocumentCheckIcon,
   CalendarIcon,
   PlayCircleIcon,
+  ChartBarIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { qcService, type QCData } from "./qcService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
@@ -24,6 +26,7 @@ const QCDashboard: React.FC = () => {
   const [selectedQC, setSelectedQC] = useState<QCData | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [showAllData, setShowAllData] = useState(false);
+  const [showReasonModal, setShowReasonModal] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -246,10 +249,20 @@ const QCDashboard: React.FC = () => {
       rejectionPercentage,
       topRejectionReason,
       topRejectionCount,
+      rejectionReasons,
     };
   };
 
   const combinedStats = calculateCombinedStats();
+  const rejectionReasonEntries = Object.entries(
+    combinedStats.rejectionReasons || {}
+  );
+  const hasRejectionReasonData = rejectionReasonEntries.length > 0;
+  const sortedRejectionReasons = rejectionReasonEntries.sort(
+    (a, b) => b[1] - a[1]
+  );
+  const maxReasonCount =
+    sortedRejectionReasons.length > 0 ? sortedRejectionReasons[0][1] : 0;
 
   // Get status color and label
   const getStatusInfo = (status: string) => {
@@ -561,7 +574,27 @@ const QCDashboard: React.FC = () => {
         </div>
 
         {/* Top Reason Card */}
-        <div className="bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow duration-200">
+        <div
+          className={`bg-gray-50 rounded-xl shadow-sm border border-gray-100 p-5 transition-shadow duration-200 ${
+            hasRejectionReasonData
+              ? "hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+              : "cursor-not-allowed opacity-90"
+          }`}
+          role={hasRejectionReasonData ? "button" : undefined}
+          tabIndex={hasRejectionReasonData ? 0 : -1}
+          onClick={() => hasRejectionReasonData && setShowReasonModal(true)}
+          onKeyDown={(e) => {
+            if (hasRejectionReasonData && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setShowReasonModal(true);
+            }
+          }}
+          title={
+            hasRejectionReasonData
+              ? "View rejection reasons breakdown"
+              : "No rejection data available"
+          }
+        >
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
@@ -573,6 +606,11 @@ const QCDashboard: React.FC = () => {
               <p className="text-sm text-gray-600">
                 {combinedStats.topRejectionCount.toLocaleString()} qty
               </p>
+              {hasRejectionReasonData && (
+                <p className="text-xs text-blue-600 font-medium mt-2">
+                  View breakdown →
+                </p>
+              )}
             </div>
             <div className="bg-gray-100 p-3 rounded-lg flex-shrink-0 ml-2">
               <ExclamationTriangleIcon className="h-5 w-5 text-gray-600" />
@@ -597,6 +635,176 @@ const QCDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showReasonModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setShowReasonModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[80vh] overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rejection-reasons-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center space-x-3">
+                <div className="bg-blue-50 p-2 rounded-lg">
+                  <ChartBarIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3
+                    id="rejection-reasons-title"
+                    className="text-lg font-semibold text-gray-900"
+                  >
+                    Rejection Reasons Breakdown
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Review how each rejection reason contributes to total waste.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReasonModal(false)}
+                className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+                aria-label="Close reason breakdown"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 overflow-y-auto max-h-[calc(80vh-80px)]">
+              {hasRejectionReasonData ? (
+                <div className="space-y-6">
+                  {/* Histogram Container */}
+                  <div className="flex items-end justify-between gap-4 h-80 border-b-2 border-gray-200 pb-4">
+                    {sortedRejectionReasons.map(([reason, count], index) => {
+                      const percentage =
+                        combinedStats.totalRejectedQuantity > 0
+                          ? (count / combinedStats.totalRejectedQuantity) * 100
+                          : 0;
+                      const heightPercent =
+                        maxReasonCount > 0
+                          ? Math.max((count / maxReasonCount) * 100, 5)
+                          : 0;
+                      const isMostCommon = index === 0;
+                      const placeholderLabels = ["A", "B", "C", "D", "E", "F", "G"];
+                      const displayLabel =
+                        placeholderLabels[index] || `Reason ${index + 1}`;
+                      return (
+                        <div
+                          key={reason}
+                          className="flex-1 flex flex-col items-center justify-end group"
+                        >
+                          {/* Vertical Bar */}
+                          <div className="relative w-full flex flex-col items-center">
+                            <div
+                              className={`w-full rounded-t-lg transition-all duration-300 ${
+                                isMostCommon
+                                  ? "bg-gradient-to-t from-blue-600 to-blue-400 shadow-lg"
+                                  : "bg-gradient-to-t from-blue-500 to-blue-300"
+                              }`}
+                              style={{
+                                height: `${heightPercent}%`,
+                                minHeight: "20px",
+                              }}
+                            >
+                              {/* Value on top of bar */}
+                              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                                <span
+                                  className={`text-xs font-bold ${
+                                    isMostCommon
+                                      ? "text-blue-700"
+                                      : "text-blue-600"
+                                  }`}
+                                >
+                                  {count.toLocaleString()}
+                                </span>
+                              </div>
+                              {/* Percentage inside bar (if bar is tall enough) */}
+                              {heightPercent > 15 && (
+                                <div className="h-full flex items-center justify-center">
+                                  <span className="text-xs font-semibold text-white">
+                                    {percentage.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {/* Reason Label */}
+                          <div className="mt-2 w-full text-center">
+                            <p
+                              className={`text-xs font-medium truncate ${
+                                isMostCommon
+                                  ? "text-blue-700 font-semibold"
+                                  : "text-gray-700"
+                              }`}
+                              title={reason}
+                            >
+                              {displayLabel}
+                            </p>
+                            {isMostCommon && (
+                              <span className="inline-block mt-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                Most Common
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-xs text-blue-600 font-medium mb-1">
+                        Total Reasons
+                      </p>
+                      <p className="text-lg font-bold text-blue-700">
+                        {sortedRejectionReasons.length}
+                      </p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-3">
+                      <p className="text-xs text-red-600 font-medium mb-1">
+                        Total Rejected Qty
+                      </p>
+                      <p className="text-lg font-bold text-red-700">
+                        {combinedStats.totalRejectedQuantity.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 font-medium mb-1">
+                        Top Reason Share
+                      </p>
+                      <p className="text-lg font-bold text-gray-700">
+                        {sortedRejectionReasons.length > 0
+                          ? (
+                              (sortedRejectionReasons[0][1] /
+                                combinedStats.totalRejectedQuantity) *
+                              100
+                            ).toFixed(1)
+                          : 0}
+                        %
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <ExclamationTriangleIcon className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600 font-medium">
+                    No rejection reasons available.
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Once QC rejections are recorded, their reasons will appear
+                    here.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">

@@ -1232,8 +1232,8 @@ const PlannerJobs: React.FC = () => {
       }
 
       // Prepare data for Excel export in the specified order
-      const excelData = poData.map((po) => ({
-        "Sr #": po.srNo || "",
+      const excelData = poData.map((po, index) => ({
+        "Sr #": index + 1,
         Style: po.style || "",
         Unit: po.unit || "",
         "Flute Type": po.fluteType || "",
