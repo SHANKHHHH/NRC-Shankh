@@ -49,7 +49,8 @@ interface POdetailCardProps {
     | "artwork_pending"
     | "po_pending"
     | "more_info_pending"
-    | "completed";
+    | "completed"
+    | "dispatched";
   hasJobCreationNotification?: boolean;
   onDelete?: (po: PurchaseOrder) => void;
 }
@@ -69,6 +70,8 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "completed":
         return "bg-green-100 text-green-800 border-green-200";
+      case "dispatched":
+        return "bg-purple-100 text-purple-800 border-purple-200";
       case "cancelled":
         return "bg-red-100 text-red-800 border-red-200";
       default:
@@ -80,6 +83,8 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
     switch (status) {
       case "completed":
         return <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />;
+      case "dispatched":
+        return <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />;
       case "artwork_pending":
         return (
           <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-600" />
@@ -97,6 +102,8 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
     switch (status) {
       case "completed":
         return "Completed";
+      case "dispatched":
+        return "Dispatched";
       case "artwork_pending":
         return "Artwork Pending";
       case "po_pending":
@@ -112,6 +119,8 @@ const POdetailCard: React.FC<POdetailCardProps> = ({
     switch (status) {
       case "completed":
         return "text-green-600 bg-green-50";
+      case "dispatched":
+        return "text-purple-600 bg-purple-50";
       case "artwork_pending":
         return "text-yellow-600 bg-yellow-50";
       case "po_pending":

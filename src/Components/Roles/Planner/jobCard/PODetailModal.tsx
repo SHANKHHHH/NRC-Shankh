@@ -388,6 +388,13 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
 
   const handleFormNavigation = (po: PurchaseOrder, formType: string) => {
     if (formType === "moreInfo") {
+      // Prevent job planning for dispatched POs
+      if (po.status === "dispatched") {
+        alert(
+          "This PO has been dispatched and cannot be used for job planning."
+        );
+        return;
+      }
       setShowJobPlanningModal(true);
       return;
     }
@@ -749,6 +756,8 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
                           : po.status === "in_progress"
                           ? "bg-yellow-100 text-yellow-800"
                           : po.status === "completed"
+                          ? "bg-green-100 text-green-800"
+                          : po.status === "dispatched"
                           ? "bg-green-100 text-green-800"
                           : "bg-gray-100 text-gray-800"
                       }`}
@@ -1317,14 +1326,15 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
             </>
           ) : (
             <>
-              {completionStatus === "more_info_pending" && (
-                <button
-                  onClick={() => handleFormNavigation(po, "moreInfo")}
-                  className="px-4 sm:px-6 py-2 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm sm:text-base"
-                >
-                  Complete More Info
-                </button>
-              )}
+              {completionStatus === "more_info_pending" &&
+                po.status !== "dispatched" && (
+                  <button
+                    onClick={() => handleFormNavigation(po, "moreInfo")}
+                    className="px-4 sm:px-6 py-2 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm sm:text-base"
+                  >
+                    Complete More Info
+                  </button>
+                )}
 
               {completionStatus === "artwork_pending" && (
                 <button

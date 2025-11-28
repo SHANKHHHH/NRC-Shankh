@@ -676,9 +676,14 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     fetchMajorHoldJobsCount();
   }, []);
 
-  // Apply filters - EXCLUDE COMPLETED POs
+  // Apply filters - EXCLUDE COMPLETED AND DISPATCHED POs
   const filteredPOs = useMemo(() => {
     return purchaseOrders.filter((po) => {
+      // Filter out dispatched POs - they are done and should not appear in planner dashboard
+      if (po.status === "dispatched") {
+        return false;
+      }
+
       // Filter out completed POs
       const completionStatus = checkPOCompletionStatus(po);
       if (completionStatus === "completed") {
@@ -799,23 +804,28 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
 
       // Status filter
       if (columnFilters.status.length > 0) {
-        const completionStatus = checkPOCompletionStatus(po);
         let statusLabel = "";
-        switch (completionStatus) {
-          case "artwork_pending":
-            statusLabel = "Artwork Pending";
-            break;
-          case "po_pending":
-            statusLabel = "PO Pending";
-            break;
-          case "more_info_pending":
-            statusLabel = "More Info Pending";
-            break;
-          case "completed":
-            statusLabel = "Completed";
-            break;
-          default:
-            statusLabel = "Unknown";
+        // Check dispatched status first
+        if (po.status === "dispatched") {
+          statusLabel = "Dispatched";
+        } else {
+          const completionStatus = checkPOCompletionStatus(po);
+          switch (completionStatus) {
+            case "artwork_pending":
+              statusLabel = "Artwork Pending";
+              break;
+            case "po_pending":
+              statusLabel = "PO Pending";
+              break;
+            case "more_info_pending":
+              statusLabel = "More Info Pending";
+              break;
+            case "completed":
+              statusLabel = "Completed";
+              break;
+            default:
+              statusLabel = "Unknown";
+          }
         }
         if (!columnFilters.status.includes(statusLabel)) {
           return false;
@@ -895,9 +905,11 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     }
   };
 
-  // Get selected PO objects
+  // Get selected PO objects - exclude dispatched POs
   const getSelectedPOObjects = () => {
-    return paginatedPOs.filter((po) => selectedPOs.includes(po.id));
+    return paginatedPOs.filter(
+      (po) => selectedPOs.includes(po.id) && po.status !== "dispatched"
+    );
   };
 
   // Toggle filters
@@ -966,22 +978,27 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       } else if (columnName === "dieCode") {
         value = po.dieCode?.toString() || "";
       } else if (columnName === "status") {
-        const completionStatus = checkPOCompletionStatus(po);
-        switch (completionStatus) {
-          case "artwork_pending":
-            value = "Artwork Pending";
-            break;
-          case "po_pending":
-            value = "PO Pending";
-            break;
-          case "more_info_pending":
-            value = "More Info Pending";
-            break;
-          case "completed":
-            value = "Completed";
-            break;
-          default:
-            value = "Unknown";
+        // Check dispatched status first
+        if (po.status === "dispatched") {
+          value = "Dispatched";
+        } else {
+          const completionStatus = checkPOCompletionStatus(po);
+          switch (completionStatus) {
+            case "artwork_pending":
+              value = "Artwork Pending";
+              break;
+            case "po_pending":
+              value = "PO Pending";
+              break;
+            case "more_info_pending":
+              value = "More Info Pending";
+              break;
+            case "completed":
+              value = "Completed";
+              break;
+            default:
+              value = "Unknown";
+          }
         }
       }
       values.add(value);
@@ -1270,6 +1287,8 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     switch (status.toLowerCase()) {
       case "completed":
         return "bg-green-100 text-green-800 border-green-200";
+      case "dispatched":
+        return "bg-purple-100 text-purple-800 border-purple-200";
       case "artwork_pending":
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "po_pending":
@@ -2709,10 +2728,14 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                       <td className="px-4 py-2 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
-                            completionStatus
+                            po.status === "dispatched"
+                              ? "dispatched"
+                              : completionStatus
                           )}`}
                         >
-                          {completionStatus.replace(/_/g, " ").toUpperCase()}
+                          {po.status === "dispatched"
+                            ? "DISPATCHED"
+                            : completionStatus.replace(/_/g, " ").toUpperCase()}
                         </span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap font-medium">

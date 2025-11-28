@@ -255,6 +255,8 @@ const PlannerJobs: React.FC = () => {
         return "bg-orange-100 text-orange-800 border-orange-200";
       case "completed":
         return "bg-green-100 text-green-800 border-green-200";
+      case "dispatched":
+        return "bg-purple-100 text-purple-800 border-purple-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
@@ -466,14 +468,19 @@ const PlannerJobs: React.FC = () => {
         }
       }
       if (columnFilters.status.length > 0) {
-        const status = checkPOCompletionStatus(po);
         let statusLabel = "";
-        if (status === "artwork_pending") statusLabel = "Artwork Pending";
-        else if (status === "po_pending") statusLabel = "PO Pending";
-        else if (status === "more_info_pending")
-          statusLabel = "More Info Pending";
-        else if (status === "completed") statusLabel = "Completed";
-        else statusLabel = "Unknown";
+        // Check dispatched status first
+        if (po.status === "dispatched") {
+          statusLabel = "Dispatched";
+        } else {
+          const status = checkPOCompletionStatus(po);
+          if (status === "artwork_pending") statusLabel = "Artwork Pending";
+          else if (status === "po_pending") statusLabel = "PO Pending";
+          else if (status === "more_info_pending")
+            statusLabel = "More Info Pending";
+          else if (status === "completed") statusLabel = "Completed";
+          else statusLabel = "Unknown";
+        }
 
         if (!columnFilters.status.includes(statusLabel)) {
           return false;
@@ -661,12 +668,18 @@ const PlannerJobs: React.FC = () => {
           value = po.dieCode ? String(po.dieCode) : "";
           break;
         case "status":
-          const status = checkPOCompletionStatus(po);
-          if (status === "artwork_pending") value = "Artwork Pending";
-          else if (status === "po_pending") value = "PO Pending";
-          else if (status === "more_info_pending") value = "More Info Pending";
-          else if (status === "completed") value = "Completed";
-          else value = "Unknown";
+          // Check dispatched status first
+          if (po.status === "dispatched") {
+            value = "Dispatched";
+          } else {
+            const status = checkPOCompletionStatus(po);
+            if (status === "artwork_pending") value = "Artwork Pending";
+            else if (status === "po_pending") value = "PO Pending";
+            else if (status === "more_info_pending")
+              value = "More Info Pending";
+            else if (status === "completed") value = "Completed";
+            else value = "Unknown";
+          }
           break;
       }
       if (value) values.add(value);
@@ -811,34 +824,45 @@ const PlannerJobs: React.FC = () => {
     setSelectedPOs([]);
   }, [searchTerm, filters]);
 
-  // Handle PO selection
+  // Handle PO selection - prevent selecting dispatched POs
   const handlePOSelection = (poId: number) => {
+    const po = displayedPOs.find((p) => p.id === poId);
+    // Prevent selecting dispatched POs
+    if (po && po.status === "dispatched") {
+      return;
+    }
     setSelectedPOs((prev) =>
       prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]
     );
   };
 
-  // Handle select all/none (only for displayed POs)
+  // Handle select all/none (only for displayed POs, excluding dispatched)
   const handleSelectAll = () => {
-    const displayedPOIds = displayedPOs.map((po) => po.id);
-    const allDisplayedSelected = displayedPOIds.every((id) =>
+    // Filter out dispatched POs from selection
+    const selectablePOIds = displayedPOs
+      .filter((po) => po.status !== "dispatched")
+      .map((po) => po.id);
+
+    const allDisplayedSelected = selectablePOIds.every((id) =>
       selectedPOs.includes(id)
     );
 
     if (allDisplayedSelected) {
       // Deselect all displayed POs
       setSelectedPOs((prev) =>
-        prev.filter((id) => !displayedPOIds.includes(id))
+        prev.filter((id) => !selectablePOIds.includes(id))
       );
     } else {
-      // Select all displayed POs
-      setSelectedPOs((prev) => [...new Set([...prev, ...displayedPOIds])]);
+      // Select all displayed POs (excluding dispatched)
+      setSelectedPOs((prev) => [...new Set([...prev, ...selectablePOIds])]);
     }
   };
 
-  // Get selected PO objects
+  // Get selected PO objects - exclude dispatched POs
   const getSelectedPOObjects = () => {
-    return filteredPOs.filter((po) => selectedPOs.includes(po.id));
+    return filteredPOs.filter(
+      (po) => selectedPOs.includes(po.id) && po.status !== "dispatched"
+    );
   };
 
   // Apply filters whenever filters change or purchase orders change
@@ -2595,9 +2619,11 @@ const PlannerJobs: React.FC = () => {
 
           {/* Bulk Job Planning Button - Show if there are filtered POs with filters OR multiple POs from search */}
           {(() => {
-            // Filter out completed POs for bulk planning
+            // Filter out completed and dispatched POs for bulk planning
             const pendingPOs = displayedPOs.filter(
-              (po) => checkPOCompletionStatus(po) !== "completed"
+              (po) =>
+                po.status !== "dispatched" &&
+                checkPOCompletionStatus(po) !== "completed"
             );
             const shouldShowBulkButton =
               displayedPOs.length > 0 &&
@@ -2637,10 +2663,14 @@ const PlannerJobs: React.FC = () => {
           filteredPOs={
             selectedPOs.length > 0
               ? getSelectedPOObjects().filter(
-                  (po) => checkPOCompletionStatus(po) !== "completed"
+                  (po) =>
+                    po.status !== "dispatched" &&
+                    checkPOCompletionStatus(po) !== "completed"
                 )
               : displayedPOs.filter(
-                  (po) => checkPOCompletionStatus(po) !== "completed"
+                  (po) =>
+                    po.status !== "dispatched" &&
+                    checkPOCompletionStatus(po) !== "completed"
                 )
           }
           onSave={handleBulkJobPlanning}
@@ -2754,12 +2784,20 @@ const PlannerJobs: React.FC = () => {
               {viewMode === "grid" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
                   {displayedPOs.map((po) => {
+                    // Check dispatched status first
+                    const isDispatched = po.status === "dispatched";
                     let completionStatus:
                       | "artwork_pending"
                       | "po_pending"
                       | "more_info_pending"
-                      | "completed" = "po_pending";
-                    completionStatus = checkPOCompletionStatus(po);
+                      | "completed"
+                      | "dispatched" = "po_pending";
+
+                    if (isDispatched) {
+                      completionStatus = "dispatched";
+                    } else {
+                      completionStatus = checkPOCompletionStatus(po);
+                    }
 
                     return (
                       <POdetailCard
@@ -3860,12 +3898,20 @@ const PlannerJobs: React.FC = () => {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {displayedPOs.map((po) => {
+                          // Check dispatched status first
+                          const isDispatched = po.status === "dispatched";
                           let completionStatus:
                             | "artwork_pending"
                             | "po_pending"
                             | "more_info_pending"
-                            | "completed" = "po_pending";
-                          completionStatus = checkPOCompletionStatus(po);
+                            | "completed"
+                            | "dispatched" = "po_pending";
+
+                          if (isDispatched) {
+                            completionStatus = "dispatched";
+                          } else {
+                            completionStatus = checkPOCompletionStatus(po);
+                          }
 
                           const getStatusLabel = (status: string) => {
                             switch (status) {
@@ -3877,6 +3923,8 @@ const PlannerJobs: React.FC = () => {
                                 return "More Info Pending";
                               case "completed":
                                 return "Completed";
+                              case "dispatched":
+                                return "Dispatched";
                               default:
                                 return "Unknown";
                             }
@@ -3896,7 +3944,8 @@ const PlannerJobs: React.FC = () => {
                                   type="checkbox"
                                   checked={selectedPOs.includes(po.id)}
                                   onChange={() => handlePOSelection(po.id)}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  disabled={po.status === "dispatched"}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
