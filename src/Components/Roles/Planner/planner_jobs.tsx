@@ -159,7 +159,9 @@ const PlannerJobs: React.FC = () => {
   const [filteredPOs, setFilteredPOs] = useState<PurchaseOrder[]>([]);
 
   // State for finished goods
-  const [finishedGoods, setFinishedGoods] = useState<Record<string, number>>({});
+  const [finishedGoods, setFinishedGoods] = useState<Record<string, number>>(
+    {}
+  );
 
   // State for job search
   const [searchedJob, setSearchedJob] = useState<Job | null>(null);
@@ -338,7 +340,22 @@ const PlannerJobs: React.FC = () => {
           bottomLinerGSM:
             matchingJob?.bottomLinerGSM || po.bottomLinerGSM || null,
           // Add more job fields that should be populated - PRIORITIZE JOB DATA
-          boardSize: matchingJob?.boardSize || po.boardSize || null,
+          boardSize: (() => {
+            const finalBoardSize =
+              matchingJob?.boardSize || po.boardSize || null;
+            // Debug: Log merge logic for first few POs
+            if (po.id <= 5 || po.id % 100 === 0) {
+              console.log(`🔍 Merge Debug - PO ${po.id} (${po.poNumber}):`, {
+                poBoardSize: po.boardSize,
+                jobBoardSize: matchingJob?.boardSize,
+                jobBoxDimensions: matchingJob?.boxDimensions,
+                finalBoardSize: finalBoardSize,
+                hasMatchingJob: !!matchingJob,
+                jobNrcJobNo: matchingJob?.nrcJobNo,
+              });
+            }
+            return finalBoardSize;
+          })(),
           diePunchCode: matchingJob?.diePunchCode || po.diePunchCode || null,
           boardCategory: matchingJob?.boardCategory || po.boardCategory || null,
           specialColor1: matchingJob?.specialColor1 || po.specialColor1 || null,
@@ -654,24 +671,24 @@ const PlannerJobs: React.FC = () => {
       }
       if (value) values.add(value);
     });
-    
+
     const valuesArray = Array.from(values);
-    
+
     // Sort dates chronologically instead of alphabetically
     if (columnName === "poDate" || columnName === "deliveryDate") {
       return valuesArray.sort((a, b) => {
         const dateA = parseDateForSorting(a);
         const dateB = parseDateForSorting(b);
-        
+
         // Handle "N/A" or invalid dates - put them at the end
         if (!dateA && !dateB) return 0;
         if (!dateA) return 1;
         if (!dateB) return -1;
-        
+
         return dateA.getTime() - dateB.getTime();
       });
     }
-    
+
     // For non-date columns, use alphabetical sorting
     return valuesArray.sort();
   };
@@ -804,14 +821,18 @@ const PlannerJobs: React.FC = () => {
   // Handle select all/none (only for displayed POs)
   const handleSelectAll = () => {
     const displayedPOIds = displayedPOs.map((po) => po.id);
-    const allDisplayedSelected = displayedPOIds.every(id => selectedPOs.includes(id));
-    
+    const allDisplayedSelected = displayedPOIds.every((id) =>
+      selectedPOs.includes(id)
+    );
+
     if (allDisplayedSelected) {
       // Deselect all displayed POs
-      setSelectedPOs(prev => prev.filter(id => !displayedPOIds.includes(id)));
+      setSelectedPOs((prev) =>
+        prev.filter((id) => !displayedPOIds.includes(id))
+      );
     } else {
       // Select all displayed POs
-      setSelectedPOs(prev => [...new Set([...prev, ...displayedPOIds])]);
+      setSelectedPOs((prev) => [...new Set([...prev, ...displayedPOIds])]);
     }
   };
 
@@ -844,7 +865,9 @@ const PlannerJobs: React.FC = () => {
 
   // Load more POs
   const handleLoadMore = () => {
-    setDisplayedPOsCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredPOs.length));
+    setDisplayedPOsCount((prev) =>
+      Math.min(prev + ITEMS_PER_PAGE, filteredPOs.length)
+    );
   };
 
   // Close filter dropdown when clicking outside
@@ -1029,36 +1052,37 @@ const PlannerJobs: React.FC = () => {
       }
 
       // Fetch all three APIs simultaneously
-      const [poResponse, jobPlanResponse, jobsResponse, finishedGoodsResponse] = await Promise.all([
-        fetch("https://nrprod.nrcontainers.com/api/purchase-orders", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }),
-        fetch("https://nrprod.nrcontainers.com/api/job-planning/", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }),
-        fetch("https://nrprod.nrcontainers.com/api/jobs", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }),
-        fetch("https://nrprod.nrcontainers.com/api/finish-quantity/", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }),
-      ]);
+      const [poResponse, jobPlanResponse, jobsResponse, finishedGoodsResponse] =
+        await Promise.all([
+          fetch("https://nrprod.nrcontainers.com/api/purchase-orders", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }),
+          fetch("https://nrprod.nrcontainers.com/api/job-planning/", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }),
+          fetch("https://nrprod.nrcontainers.com/api/jobs", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }),
+          fetch("https://nrprod.nrcontainers.com/api/finish-quantity/", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }),
+        ]);
 
       // Check responses
       if (!poResponse.ok) {
@@ -1098,7 +1122,11 @@ const PlannerJobs: React.FC = () => {
           if (jobData.nrcJobNo && jobData.finishQuantities) {
             const totalAvailable = jobData.finishQuantities
               .filter((fq: any) => fq.status === "available")
-              .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
+              .reduce(
+                (sum: number, fq: any) =>
+                  sum + (fq.overDispatchedQuantity || 0),
+                0
+              );
             if (totalAvailable > 0) {
               finishedGoodsMap[jobData.nrcJobNo] = totalAvailable;
             }
@@ -1113,6 +1141,42 @@ const PlannerJobs: React.FC = () => {
           poData.data,
           jobPlanData.data || [],
           jobsData.data || []
+        );
+
+        // Debug: Log board size data for first few POs
+        console.log(
+          "🔍 Board Size Debug - Sample POs:",
+          mergedData.slice(0, 5).map((po: any) => ({
+            poId: po.id,
+            poNumber: po.poNumber,
+            style: po.style,
+            jobNrcJobNo: po.jobNrcJobNo,
+            // Board size fields
+            boardSize: po.boardSize,
+            jobBoardSize: po.jobBoardSize,
+            boxDimensions: po.boxDimensions,
+            // Source data
+            originalPOBoardSize: poData.data.find((p: any) => p.id === po.id)
+              ?.boardSize,
+            matchingJob: jobsData.data?.find(
+              (j: any) =>
+                j.nrcJobNo === po.jobNrcJobNo ||
+                j.nrcJobNo === po.nrcJobNo ||
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+            ),
+            jobBoardSizeFromAPI: jobsData.data?.find(
+              (j: any) =>
+                j.nrcJobNo === po.jobNrcJobNo ||
+                j.nrcJobNo === po.nrcJobNo ||
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+            )?.boardSize,
+            jobBoxDimensionsFromAPI: jobsData.data?.find(
+              (j: any) =>
+                j.nrcJobNo === po.jobNrcJobNo ||
+                j.nrcJobNo === po.nrcJobNo ||
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+            )?.boxDimensions,
+          }))
         );
 
         setPurchaseOrders(mergedData);
@@ -2506,7 +2570,8 @@ const PlannerJobs: React.FC = () => {
           <div className="text-sm text-gray-600">
             {activeFilterCount > 0 ? (
               <>
-                Showing {displayedPOs.length} of {filteredPOs.length} POs needing job planning
+                Showing {displayedPOs.length} of {filteredPOs.length} POs
+                needing job planning
                 {activeFilterCount > 0 &&
                   ` (${activeFilterCount} filters applied)`}
                 {selectedPOs.length > 0 && (
@@ -2730,7 +2795,9 @@ const PlannerJobs: React.FC = () => {
                                 checked={
                                   selectedPOs.length === displayedPOs.length &&
                                   displayedPOs.length > 0 &&
-                                  displayedPOs.every(po => selectedPOs.includes(po.id))
+                                  displayedPOs.every((po) =>
+                                    selectedPOs.includes(po.id)
+                                  )
                                 }
                                 onChange={handleSelectAll}
                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3888,15 +3955,56 @@ const PlannerJobs: React.FC = () => {
                                   {po.noOfSheets} sheets
                                 </div>
                                 {/* Show finished goods if available for this job */}
-                                {po.jobNrcJobNo && finishedGoods[po.jobNrcJobNo] && (
-                                  <div className="text-xs text-green-600 font-medium mt-1">
-                                    FG: {finishedGoods[po.jobNrcJobNo].toLocaleString()}
-                                  </div>
-                                )}
+                                {po.jobNrcJobNo &&
+                                  finishedGoods[po.jobNrcJobNo] && (
+                                    <div className="text-xs text-green-600 font-medium mt-1">
+                                      FG:{" "}
+                                      {finishedGoods[
+                                        po.jobNrcJobNo
+                                      ].toLocaleString()}
+                                    </div>
+                                  )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  {po.boardSize}
+                                <div
+                                  className="text-sm text-gray-900"
+                                  title={`Board Size: ${
+                                    po.boardSize || "N/A"
+                                  }\nJob Board Size: ${
+                                    po.jobBoardSize || "N/A"
+                                  }\nBox Dimensions: ${
+                                    po.boxDimensions || "N/A"
+                                  }`}
+                                  onMouseEnter={() => {
+                                    // Log when hovering over board size cell
+                                    console.log(
+                                      `🔍 Table Cell Debug - PO ${po.id} (${po.poNumber}):`,
+                                      {
+                                        displayedValue: po.boardSize || "N/A",
+                                        boardSize: po.boardSize,
+                                        jobBoardSize: po.jobBoardSize,
+                                        boxDimensions: po.boxDimensions,
+                                        style: po.style,
+                                        jobNrcJobNo: po.jobNrcJobNo,
+                                      }
+                                    );
+                                  }}
+                                >
+                                  {(() => {
+                                    // Log first few rows on render
+                                    if (displayedPOs.indexOf(po) < 3) {
+                                      console.log(
+                                        `🔍 Rendering Board Size Cell - PO ${po.id} (${po.poNumber}):`,
+                                        {
+                                          displayedValue: po.boardSize || "N/A",
+                                          boardSize: po.boardSize,
+                                          jobBoardSize: po.jobBoardSize,
+                                          boxDimensions: po.boxDimensions,
+                                        }
+                                      );
+                                    }
+                                    return po.boardSize || "N/A";
+                                  })()}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">

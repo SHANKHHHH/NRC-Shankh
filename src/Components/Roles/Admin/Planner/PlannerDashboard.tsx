@@ -176,7 +176,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     dieCode: [],
     status: [],
   });
-  const [activeColumnFilter, setActiveColumnFilter] = useState<string | null>(null);
+  const [activeColumnFilter, setActiveColumnFilter] = useState<string | null>(
+    null
+  );
   const [filterSearch, setFilterSearch] = useState<string>("");
   const [filterDropdownPosition, setFilterDropdownPosition] = useState<{
     top: number;
@@ -302,7 +304,10 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       let finishedGoodsData: any[] = [];
       if (finishedGoodsResponse.ok) {
         const finishedGoodsResult = await finishedGoodsResponse.json();
-        if (finishedGoodsResult.success && Array.isArray(finishedGoodsResult.data)) {
+        if (
+          finishedGoodsResult.success &&
+          Array.isArray(finishedGoodsResult.data)
+        ) {
           finishedGoodsData = finishedGoodsResult.data;
         }
       }
@@ -331,7 +336,11 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
           if (jobFinishedGoods && jobFinishedGoods.finishQuantities) {
             const calculatedQty = jobFinishedGoods.finishQuantities
               .filter((fq: any) => fq.status === "available")
-              .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
+              .reduce(
+                (sum: number, fq: any) =>
+                  sum + (fq.overDispatchedQuantity || 0),
+                0
+              );
             // Only set if we actually found finished goods (greater than 0)
             if (calculatedQty > 0) {
               availableFinishedGoods = calculatedQty;
@@ -367,6 +376,41 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
           availableFinishedGoods: availableFinishedGoods,
         };
       });
+
+      // Debug: Log board size data for first few POs
+      console.log(
+        "🔍 PlannerDashboard - Board Size Debug - Sample POs:",
+        mergedPOs.slice(0, 5).map((po: any) => ({
+          poId: po.id,
+          poNumber: po.poNumber,
+          style: po.style,
+          jobNrcJobNo: po.jobNrcJobNo,
+          // Board size fields
+          boardSize: po.boardSize,
+          jobBoardSize: po.jobBoardSize,
+          boxDimensions: po.boxDimensions,
+          // Source data
+          originalPOBoardSize: pos?.find((p: any) => p.id === po.id)?.boardSize,
+          matchingJob: jobsData?.data?.find(
+            (j: any) =>
+              j.nrcJobNo === po.jobNrcJobNo ||
+              j.nrcJobNo === po.nrcJobNo ||
+              (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+          ),
+          jobBoardSizeFromAPI: jobsData?.data?.find(
+            (j: any) =>
+              j.nrcJobNo === po.jobNrcJobNo ||
+              j.nrcJobNo === po.nrcJobNo ||
+              (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+          )?.boardSize,
+          jobBoxDimensionsFromAPI: jobsData?.data?.find(
+            (j: any) =>
+              j.nrcJobNo === po.jobNrcJobNo ||
+              j.nrcJobNo === po.nrcJobNo ||
+              (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+          )?.boxDimensions,
+        }))
+      );
 
       setPurchaseOrders(mergedPOs);
     } catch (err: any) {
@@ -719,7 +763,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
 
       // Delivery Date filter
       if (columnFilters.deliveryDate.length > 0) {
-        const deliveryDateFormatted = po.deliveryDate ? formatDate(po.deliveryDate) : "";
+        const deliveryDateFormatted = po.deliveryDate
+          ? formatDate(po.deliveryDate)
+          : "";
         if (!columnFilters.deliveryDate.includes(deliveryDateFormatted)) {
           return false;
         }
@@ -736,7 +782,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       // Board Size filter
       if (
         columnFilters.boardSize.length > 0 &&
-        !columnFilters.boardSize.includes(po.boxDimensions || po.jobBoardSize || po.boardSize || "")
+        !columnFilters.boardSize.includes(
+          po.boxDimensions || po.jobBoardSize || po.boardSize || ""
+        )
       ) {
         return false;
       }
@@ -892,7 +940,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
   const getUniqueColumnValues = (columnName: keyof ColumnFilters): string[] => {
     const values = new Set<string>();
     const dateMap = new Map<string, string>(); // Map formatted date to original date string
-    
+
     filteredPOs.forEach((po) => {
       let value: string = "";
       if (columnName === "style") {
@@ -938,9 +986,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       }
       values.add(value);
     });
-    
+
     const valuesArray = Array.from(values);
-    
+
     // Sort dates chronologically for date columns
     if (columnName === "poDate" || columnName === "deliveryDate") {
       return valuesArray.sort((a, b) => {
@@ -950,7 +998,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         return new Date(dateA).getTime() - new Date(dateB).getTime();
       });
     }
-    
+
     // Sort numbers numerically for quantity and dieCode columns
     if (columnName === "totalPOQuantity" || columnName === "dieCode") {
       return valuesArray.sort((a, b) => {
@@ -959,7 +1007,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         return numA - numB;
       });
     }
-    
+
     // Default alphabetical sort for other columns
     return valuesArray.sort();
   };
@@ -1010,7 +1058,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     }
   };
 
-  const areAllVisibleValuesSelected = (columnName: keyof ColumnFilters): boolean => {
+  const areAllVisibleValuesSelected = (
+    columnName: keyof ColumnFilters
+  ): boolean => {
     const visibleValues = getUniqueColumnValues(columnName).filter(
       (value) =>
         filterSearch === "" ||
@@ -1144,7 +1194,10 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
   };
 
   // Snackbar function
-  const showSnackbar = (message: string, type: "success" | "error" | "warning" | "info" = "info") => {
+  const showSnackbar = (
+    message: string,
+    type: "success" | "error" | "warning" | "info" = "info"
+  ) => {
     alert(message); // Simple alert for now, can be upgraded to a snackbar component
   };
 
@@ -1695,16 +1748,23 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("customer", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("customer", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "customer" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "customer"
+                              ? "rotate-180"
+                              : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "customer" && filterDropdownPosition && (
+                    {activeColumnFilter === "customer" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -1712,67 +1772,81 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("customer")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("customer");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">Select All</span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected(
+                                  "customer"
+                                )}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("customer");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("customer")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.customer.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("customer", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("customer");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("customer")
-                            .filter((value) => filterSearch === "" || value.toLowerCase().includes(filterSearch.toLowerCase()))
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.customer.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("customer", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">{value || "(Blank)"}</span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("customer");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -1785,16 +1859,23 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("poNumber", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("poNumber", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "poNumber" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "poNumber"
+                              ? "rotate-180"
+                              : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "poNumber" && filterDropdownPosition && (
+                    {activeColumnFilter === "poNumber" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -1802,75 +1883,81 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("poNumber")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("poNumber");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">
-                              Select All
-                            </span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected(
+                                  "poNumber"
+                                )}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("poNumber");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("poNumber")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.poNumber.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("poNumber", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("poNumber");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("poNumber")
-                            .filter(
-                              (value) =>
-                                filterSearch === "" ||
-                                value.toLowerCase().includes(filterSearch.toLowerCase())
-                            )
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.poNumber.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("poNumber", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">
-                                  {value || "(Blank)"}
-                                </span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("poNumber");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -1888,11 +1975,14 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "poDate" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "poDate" ? "rotate-180" : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "poDate" && filterDropdownPosition && (
+                    {activeColumnFilter === "poDate" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -1900,75 +1990,79 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("poDate")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("poDate");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">
-                              Select All
-                            </span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected("poDate")}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("poDate");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("poDate")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.poDate.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("poDate", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("poDate");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("poDate")
-                            .filter(
-                              (value) =>
-                                filterSearch === "" ||
-                                value.toLowerCase().includes(filterSearch.toLowerCase())
-                            )
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.poDate.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("poDate", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">
-                                  {value || "(Blank)"}
-                                </span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("poDate");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -1981,16 +2075,23 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("deliveryDate", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("deliveryDate", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "deliveryDate" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "deliveryDate"
+                              ? "rotate-180"
+                              : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "deliveryDate" && filterDropdownPosition && (
+                    {activeColumnFilter === "deliveryDate" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -1998,75 +2099,81 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("deliveryDate")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("deliveryDate");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">
-                              Select All
-                            </span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected(
+                                  "deliveryDate"
+                                )}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("deliveryDate");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("deliveryDate")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.deliveryDate.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("deliveryDate", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("deliveryDate");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("deliveryDate")
-                            .filter(
-                              (value) =>
-                                filterSearch === "" ||
-                                value.toLowerCase().includes(filterSearch.toLowerCase())
-                            )
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.deliveryDate.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("deliveryDate", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">
-                                  {value || "(Blank)"}
-                                </span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("deliveryDate");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -2079,16 +2186,23 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("totalPOQuantity", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("totalPOQuantity", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "totalPOQuantity" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "totalPOQuantity"
+                              ? "rotate-180"
+                              : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "totalPOQuantity" && filterDropdownPosition && (
+                    {activeColumnFilter === "totalPOQuantity" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -2096,75 +2210,84 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("totalPOQuantity")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("totalPOQuantity");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">
-                              Select All
-                            </span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected(
+                                  "totalPOQuantity"
+                                )}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("totalPOQuantity");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("totalPOQuantity")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.totalPOQuantity.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter(
+                                        "totalPOQuantity",
+                                        value
+                                      );
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("totalPOQuantity");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("totalPOQuantity")
-                            .filter(
-                              (value) =>
-                                filterSearch === "" ||
-                                value.toLowerCase().includes(filterSearch.toLowerCase())
-                            )
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.totalPOQuantity.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("totalPOQuantity", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">
-                                  {value || "(Blank)"}
-                                </span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("totalPOQuantity");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Finished Goods
@@ -2180,16 +2303,23 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("boardSize", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("boardSize", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "boardSize" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "boardSize"
+                              ? "rotate-180"
+                              : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "boardSize" && filterDropdownPosition && (
+                    {activeColumnFilter === "boardSize" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -2197,67 +2327,81 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("boardSize")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("boardSize");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">Select All</span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected(
+                                  "boardSize"
+                                )}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("boardSize");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("boardSize")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.boardSize.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("boardSize", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("boardSize");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("boardSize")
-                            .filter((value) => filterSearch === "" || value.toLowerCase().includes(filterSearch.toLowerCase()))
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.boardSize.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("boardSize", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">{value || "(Blank)"}</span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("boardSize");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -2270,16 +2414,21 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         )}
                       </div>
                       <button
-                        onClick={(e) => handleToggleFilterDropdown("dieCode", e)}
+                        onClick={(e) =>
+                          handleToggleFilterDropdown("dieCode", e)
+                        }
                         className="ml-2 hover:bg-gray-200 rounded p-1"
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "dieCode" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "dieCode" ? "rotate-180" : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "dieCode" && filterDropdownPosition && (
+                    {activeColumnFilter === "dieCode" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -2287,67 +2436,79 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("dieCode")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("dieCode");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">Select All</span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected("dieCode")}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("dieCode");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("dieCode")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.dieCode.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("dieCode", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("dieCode");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("dieCode")
-                            .filter((value) => filterSearch === "" || value.toLowerCase().includes(filterSearch.toLowerCase()))
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.dieCode.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("dieCode", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">{value || "(Blank)"}</span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("dieCode");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative">
                     <div className="flex items-center justify-between filter-dropdown-container">
@@ -2365,11 +2526,14 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                       >
                         <ChevronDown
                           size={16}
-                          className={activeColumnFilter === "status" ? "rotate-180" : ""}
+                          className={
+                            activeColumnFilter === "status" ? "rotate-180" : ""
+                          }
                         />
                       </button>
                     </div>
-                    {activeColumnFilter === "status" && filterDropdownPosition && (
+                    {activeColumnFilter === "status" &&
+                      filterDropdownPosition && (
                         <div
                           className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-80 overflow-hidden flex flex-col filter-dropdown-container"
                           style={{
@@ -2377,67 +2541,79 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                             left: `${filterDropdownPosition.left}px`,
                           }}
                         >
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={filterSearch}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setFilterSearch(e.target.value);
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div className="px-2 py-1 border-b border-gray-200">
-                          <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div className="p-2 border-b border-gray-200">
                             <input
-                              type="checkbox"
-                              checked={areAllVisibleValuesSelected("status")}
+                              type="text"
+                              placeholder="Search..."
+                              value={filterSearch}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleSelectAllFilter("status");
+                                setFilterSearch(e.target.value);
                               }}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-sm font-semibold text-gray-900">Select All</span>
-                          </label>
+                          </div>
+                          <div className="px-2 py-1 border-b border-gray-200">
+                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={areAllVisibleValuesSelected("status")}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAllFilter("status");
+                                }}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm font-semibold text-gray-900">
+                                Select All
+                              </span>
+                            </label>
+                          </div>
+                          <div className="overflow-y-auto max-h-64 p-2">
+                            {getUniqueColumnValues("status")
+                              .filter(
+                                (value) =>
+                                  filterSearch === "" ||
+                                  value
+                                    .toLowerCase()
+                                    .includes(filterSearch.toLowerCase())
+                              )
+                              .map((value) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={columnFilters.status.includes(
+                                      value
+                                    )}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleColumnFilter("status", value);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 truncate">
+                                    {value || "(Blank)"}
+                                  </span>
+                                </label>
+                              ))}
+                          </div>
+                          <div className="p-2 border-t border-gray-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearColumnFilter("status");
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Clear Filter
+                            </button>
+                          </div>
                         </div>
-                        <div className="overflow-y-auto max-h-64 p-2">
-                          {getUniqueColumnValues("status")
-                            .filter((value) => filterSearch === "" || value.toLowerCase().includes(filterSearch.toLowerCase()))
-                            .map((value) => (
-                              <label
-                                key={value}
-                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={columnFilters.status.includes(value)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleColumnFilter("status", value);
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700 truncate">{value || "(Blank)"}</span>
-                              </label>
-                            ))}
-                        </div>
-                        <div className="p-2 border-t border-gray-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearColumnFilter("status");
-                            }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            Clear Filter
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -2485,14 +2661,16 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                         <span className="font-bold">
                           {po.totalPOQuantity || "N/A"}
                         </span>
-                        {po.availableFinishedGoods && po.availableFinishedGoods > 0 && (
-                          <div className="text-xs text-green-600 mt-1">
-                            FG: {po.availableFinishedGoods.toLocaleString()}
-                          </div>
-                        )}
+                        {po.availableFinishedGoods &&
+                          po.availableFinishedGoods > 0 && (
+                            <div className="text-xs text-green-600 mt-1">
+                              FG: {po.availableFinishedGoods.toLocaleString()}
+                            </div>
+                          )}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-gray-500">
-                        {po.availableFinishedGoods !== undefined && po.availableFinishedGoods > 0 ? (
+                        {po.availableFinishedGoods !== undefined &&
+                        po.availableFinishedGoods > 0 ? (
                           <span className="text-green-600 font-medium">
                             {po.availableFinishedGoods.toLocaleString()} units
                           </span>
@@ -2500,11 +2678,30 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
                           <span className="text-gray-400">None</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-gray-500">
-                        {po.boxDimensions ||
-                          po.jobBoardSize ||
-                          po.boardSize ||
-                          "0x0x0"}
+                      <td
+                        className="px-4 py-2 whitespace-nowrap text-gray-500"
+                        title={`Board Size: ${
+                          po.boardSize || "N/A"
+                        }\nJob Board Size: ${
+                          po.jobBoardSize || "N/A"
+                        }\nBox Dimensions: ${po.boxDimensions || "N/A"}`}
+                        onMouseEnter={() => {
+                          // Log when hovering over board size cell
+                          console.log(
+                            `🔍 PlannerDashboard Table Cell Debug - PO ${po.id} (${po.poNumber}):`,
+                            {
+                              displayedValue:
+                                po.boardSize || po.jobBoardSize || "N/A",
+                              boardSize: po.boardSize,
+                              jobBoardSize: po.jobBoardSize,
+                              boxDimensions: po.boxDimensions,
+                              style: po.style,
+                              jobNrcJobNo: po.jobNrcJobNo,
+                            }
+                          );
+                        }}
+                      >
+                        {po.boardSize || po.jobBoardSize || "N/A"}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-gray-500">
                         {po.dieCode || "N/A"}
