@@ -418,7 +418,20 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Prepare the update payload
+      // Helper function to convert date string to ISO-8601 format
+      const toISOString = (dateString: string | null | undefined) => {
+        if (!dateString) return null;
+        // If already in ISO format (contains 'T'), return as is
+        if (dateString.includes("T")) return dateString;
+        // If it's just a date string (YYYY-MM-DD), convert to ISO format
+        try {
+          return new Date(dateString + "T00:00:00.000Z").toISOString();
+        } catch {
+          return null;
+        }
+      };
+
+      // Prepare the update payload with proper date formatting
       const updatePayload = {
         poNumber: editedData.poNumber,
         customer: editedData.customer,
@@ -429,10 +442,11 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
         fluteType: editedData.fluteType,
         noOfSheets: editedData.noOfSheets,
         noOfUps: editedData.noOfUps,
-        deliveryDate: editedData.deliveryDate,
-        dispatchDate: editedData.dispatchDate,
-        poDate: editedData.poDate,
-        shadeCardApprovalDate: editedData.shadeCardApprovalDate,
+        deliveryDate: toISOString(editedData.deliveryDate),
+        dispatchDate: toISOString(editedData.dispatchDate),
+        nrcDeliveryDate: toISOString(editedData.nrcDeliveryDate),
+        poDate: toISOString(editedData.poDate),
+        shadeCardApprovalDate: toISOString(editedData.shadeCardApprovalDate),
         dieCode: editedData.dieCode,
         style: editedData.style,
         plant: editedData.plant,
@@ -756,8 +770,6 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
                           : po.status === "in_progress"
                           ? "bg-yellow-100 text-yellow-800"
                           : po.status === "completed"
-                          ? "bg-green-100 text-green-800"
-                          : po.status === "dispatched"
                           ? "bg-green-100 text-green-800"
                           : "bg-gray-100 text-gray-800"
                       }`}
