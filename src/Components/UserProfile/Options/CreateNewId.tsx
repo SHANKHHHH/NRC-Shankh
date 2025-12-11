@@ -304,7 +304,7 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
 
       const response = await fetch(
         `${
-           "http://localhost:3000"
+          import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
         }/api/auth/add-member`,
         {
           method: "POST",

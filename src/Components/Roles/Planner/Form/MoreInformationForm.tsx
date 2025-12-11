@@ -41,7 +41,7 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
       const accessToken = localStorage.getItem("accessToken");
       const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || "http://localhost:3000"
+          import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
         }/api/machines?`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },

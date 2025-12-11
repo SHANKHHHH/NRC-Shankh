@@ -42,7 +42,9 @@ export interface QCSummary {
 }
 
 class QCService {
-  private baseUrl = `${"http://localhost:3000"}/api`;
+  private baseUrl = `${
+    import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
+  }/api`;
 
   // Get all QC data
   async getAllQCData(): Promise<QCData[]> {

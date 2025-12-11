@@ -54,7 +54,7 @@ const QCDashboard: React.FC = () => {
           qcService.getQCStatistics(),
           fetch(
             `${
-              import.meta.env.VITE_API_URL || "http://localhost:3000"
+              import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
             }/api/completed-jobs?${queryParams.toString()}`,
             {
               headers: {
@@ -255,7 +255,7 @@ const QCDashboard: React.FC = () => {
         qcService.getQCStatistics(),
         fetch(
           `${
-            import.meta.env.VITE_API_URL || "http://localhost:3000"
+            import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
           }/api/completed-jobs?${queryParams.toString()}`,
           {
             headers: {

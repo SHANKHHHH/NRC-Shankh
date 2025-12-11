@@ -67,7 +67,9 @@ export default function Login({
       }
 
       // API endpoint - using localhost for development
-      const API_ENDPOINT = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/login`;
+      const API_ENDPOINT = `${
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
+      }/api/auth/login`;
 
       // 🔥 Make the API call - this was missing!
       const response = await axios.post(API_ENDPOINT, { email, password });
