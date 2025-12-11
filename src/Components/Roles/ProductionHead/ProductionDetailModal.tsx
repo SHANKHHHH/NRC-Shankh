@@ -32,6 +32,7 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "completed":
+      case "accepted":
         return "bg-green-100 text-green-800 border-green-200";
       case "start":
         return "bg-blue-100 text-blue-800 border-blue-200";
@@ -47,6 +48,7 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case "completed":
+      case "accepted":
         return <CheckCircle className="h-4 w-4" />;
       case "start":
         return <Clock className="h-4 w-4" />;
@@ -199,7 +201,9 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
           20,
           yPosition + 18
         );
-        pdf.text(`Status: ${step.status.toUpperCase()}`, 20, yPosition + 26);
+        const displayStatus =
+          step.status === "accepted" ? "ACCEPTED" : step.status.toUpperCase();
+        pdf.text(`Status: ${displayStatus}`, 20, yPosition + 26);
 
         // Dates
         pdf.text(`Started: ${formatDate(step.startDate)}`, 20, yPosition + 34);

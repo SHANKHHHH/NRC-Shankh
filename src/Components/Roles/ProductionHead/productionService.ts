@@ -22,6 +22,13 @@ export interface ProductionStep {
   }>;
   createdAt: string;
   updatedAt: string;
+  // Step-specific details (from allStepDetails)
+  corrugation?: Array<{ status?: string; [key: string]: any }>;
+  flutelam?: Array<{ status?: string; [key: string]: any }>;
+  fluteLaminateBoardConversion?: Array<{ status?: string; [key: string]: any }>;
+  punching?: Array<{ status?: string; [key: string]: any }>;
+  sideFlapPasting?: Array<{ status?: string; [key: string]: any }>;
+  [key: string]: any; // Allow other properties
 }
 
 export interface JobPlan {
@@ -31,6 +38,18 @@ export interface JobPlan {
   createdAt: string;
   updatedAt: string;
   steps: ProductionStep[];
+  allStepDetails?: {
+    corrugation?: Array<{ status?: string; [key: string]: any }>;
+    flutelam?: Array<{ status?: string; [key: string]: any }>;
+    fluteLaminateBoardConversion?: Array<{
+      status?: string;
+      [key: string]: any;
+    }>;
+    punching?: Array<{ status?: string; [key: string]: any }>;
+    sideFlapPasting?: Array<{ status?: string; [key: string]: any }>;
+    [key: string]: any;
+  };
+  [key: string]: any; // Allow other properties
 }
 
 export interface ProductionData {
@@ -89,12 +108,12 @@ export interface ApiResponse<T> {
 class ProductionService {
   // Check if user is authenticated
   private isAuthenticated(): boolean {
-    const accessToken = localStorage.getItem('accessToken');
+    const accessToken = localStorage.getItem("accessToken");
     if (!accessToken) return false;
-    
+
     try {
       // Check if token is expired
-      const tokenData = JSON.parse(atob(accessToken.split('.')[1]));
+      const tokenData = JSON.parse(atob(accessToken.split(".")[1]));
       const currentTime = Date.now() / 1000;
       return tokenData.exp > currentTime;
     } catch {
@@ -104,14 +123,14 @@ class ProductionService {
 
   // Check if token is about to expire (within 5 minutes)
   private isTokenExpiringSoon(): boolean {
-    const accessToken = localStorage.getItem('accessToken');
+    const accessToken = localStorage.getItem("accessToken");
     if (!accessToken) return false;
-    
+
     try {
-      const tokenData = JSON.parse(atob(accessToken.split('.')[1]));
+      const tokenData = JSON.parse(atob(accessToken.split(".")[1]));
       const currentTime = Date.now() / 1000;
       const fiveMinutes = 5 * 60; // 5 minutes in seconds
-      return (tokenData.exp - currentTime) < fiveMinutes;
+      return tokenData.exp - currentTime < fiveMinutes;
     } catch {
       return false;
     }
@@ -121,47 +140,51 @@ class ProductionService {
     try {
       // Check authentication first
       if (!this.isAuthenticated()) {
-        throw new Error('Authentication token not found or expired. Please log in.');
+        throw new Error(
+          "Authentication token not found or expired. Please log in."
+        );
       }
 
       // Warn if token is expiring soon
       if (this.isTokenExpiringSoon()) {
-        console.warn('Warning: Your session will expire soon. Please save your work and log in again.');
+        console.warn(
+          "Warning: Your session will expire soon. Please save your work and log in again."
+        );
       }
 
       // Get access token from localStorage
-      const accessToken = localStorage.getItem('accessToken');
+      const accessToken = localStorage.getItem("accessToken");
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          throw new Error("Authentication failed. Please log in again.");
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result: ApiResponse<T> = await response.json();
       if (!result.success) {
-        throw new Error(result.message || 'API request failed');
+        throw new Error(result.message || "API request failed");
       }
       return result.data;
     } catch (error) {
       console.error(`Error fetching from ${endpoint}:`, error);
-      
+
       // Handle authentication errors
       if (error instanceof Error) {
         this.handleAuthError(error);
       }
-      
+
       throw error;
     }
   }
@@ -176,25 +199,91 @@ class ProductionService {
   async getJobPlanByNrcJobNo(nrcJobNo: string): Promise<JobPlan | null> {
     try {
       const allJobs = await this.getAllJobPlans();
-      const job = allJobs.find(job => job.nrcJobNo === nrcJobNo);
+      const job = allJobs.find((job) => job.nrcJobNo === nrcJobNo);
       return job || null;
     } catch (error) {
-      console.error('Error fetching job plan:', error);
+      console.error("Error fetching job plan:", error);
       return null;
+    }
+  }
+
+  // Get completed jobs data (includes allStepDetails)
+  async getCompletedJobs(): Promise<any[]> {
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      const response = await fetch(`${API_BASE_URL}/completed-jobs`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Authentication failed. Please log in again.");
+        }
+        return [];
+      }
+
+      const result: ApiResponse<any[]> = await response.json();
+      if (!result.success || !Array.isArray(result.data)) {
+        return [];
+      }
+      return result.data;
+    } catch (error) {
+      console.error("Error fetching completed jobs:", error);
+      return [];
     }
   }
 
   // Get aggregated production data for all jobs (4 production steps only)
   async getAggregatedProductionData(): Promise<AggregatedProductionData> {
     try {
-      const allJobPlans = await this.getAllJobPlans();
-      
+      const [allJobPlans, completedJobs] = await Promise.all([
+        this.getAllJobPlans(),
+        this.getCompletedJobs(),
+      ]);
+
+      // Create a map of completed jobs by nrcJobNo for quick lookup
+      const completedJobsMap = new Map<string, any>();
+      completedJobs.forEach((job: any) => {
+        completedJobsMap.set(job.nrcJobNo, job);
+      });
+
       // Initialize counters for each step
       const stepSummary = {
-        corrugation: { total: 0, planned: 0, start: 0, stop: 0, completed: 0, inProgress: 0 },
-        fluteLamination: { total: 0, planned: 0, start: 0, stop: 0, completed: 0, inProgress: 0 },
-        punching: { total: 0, planned: 0, start: 0, stop: 0, completed: 0, inProgress: 0 },
-        flapPasting: { total: 0, planned: 0, start: 0, stop: 0, completed: 0, inProgress: 0 }
+        corrugation: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
+        fluteLamination: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
+        punching: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
+        flapPasting: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
       };
 
       let totalJobs = 0;
@@ -202,54 +291,115 @@ class ProductionService {
       let totalSteps = 0;
 
       // Process each job plan
-      allJobPlans.forEach(jobPlan => {
+      allJobPlans.forEach((jobPlan) => {
         totalJobs++;
-        
+
+        // Get completed job data if available (for allStepDetails)
+        const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
+        const allStepDetails =
+          completedJob?.allStepDetails || jobPlan.allStepDetails;
+
         // Filter only the 4 production steps we care about
-        const productionSteps = jobPlan.steps.filter(step => 
-          step.stepName === 'Corrugation' ||
-          step.stepName === 'FluteLaminateBoardConversion' ||
-          step.stepName === 'Punching' ||
-          step.stepName === 'SideFlapPasting'
+        const productionSteps = jobPlan.steps.filter(
+          (step) =>
+            step.stepName === "Corrugation" ||
+            step.stepName === "FluteLaminateBoardConversion" ||
+            step.stepName === "Punching" ||
+            step.stepName === "SideFlapPasting"
         );
 
         // Count statuses for each step
-        productionSteps.forEach(step => {
+        productionSteps.forEach((step) => {
           totalSteps++;
-          
+
           let stepKey: keyof typeof stepSummary;
           switch (step.stepName) {
-            case 'Corrugation':
-              stepKey = 'corrugation';
+            case "Corrugation":
+              stepKey = "corrugation";
               break;
-            case 'FluteLaminateBoardConversion':
-              stepKey = 'fluteLamination';
+            case "FluteLaminateBoardConversion":
+              stepKey = "fluteLamination";
               break;
-            case 'Punching':
-              stepKey = 'punching';
+            case "Punching":
+              stepKey = "punching";
               break;
-            case 'SideFlapPasting':
-              stepKey = 'flapPasting';
+            case "SideFlapPasting":
+              stepKey = "flapPasting";
               break;
             default:
               return; // Skip if not one of our 4 steps
           }
 
           stepSummary[stepKey].total++;
-          
+
+          // 🔥 NEW: Check if step.status is "stop" and check allStepDetails for "accept" status
+          let isCompleted = false;
+          if (step.status === "stop") {
+            // Map step name to allStepDetails key
+            const stepDetailKey =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            // Check allStepDetails from completed job or jobPlan
+            if (allStepDetails) {
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                // Check if any step detail has "accept" status
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  isCompleted = true;
+                }
+              }
+            }
+
+            // Also check step-level details (for backward compatibility)
+            if (!isCompleted) {
+              const stepDetailProp =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+
+              const stepDetails = (step as any)[stepDetailProp];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  isCompleted = true;
+                }
+              }
+            }
+          }
+
           switch (step.status) {
-            case 'planned':
+            case "planned":
               stepSummary[stepKey].planned++;
               break;
-            case 'start':
+            case "start":
               stepSummary[stepKey].start++;
               stepSummary[stepKey].inProgress++;
               break;
-            case 'stop':
-              stepSummary[stepKey].stop++;
-              stepSummary[stepKey].inProgress++;
+            case "stop":
+              if (isCompleted) {
+                // If step detail has "accept", count as completed (NOT as stop)
+                stepSummary[stepKey].completed++;
+                completedSteps++;
+              } else {
+                // Otherwise, count as stop and in progress
+                stepSummary[stepKey].stop++;
+                stepSummary[stepKey].inProgress++;
+              }
               break;
-            case 'completed':
+            case "completed":
+            case "accept": // 🔥 NEW: Treat 'accept' status as completed
               stepSummary[stepKey].completed++;
               completedSteps++;
               break;
@@ -261,236 +411,554 @@ class ProductionService {
       });
 
       // Calculate overall efficiency
-      const overallEfficiency = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+      const overallEfficiency =
+        totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
       return {
         totalJobs,
         stepSummary,
-        overallEfficiency
+        overallEfficiency,
       };
     } catch (error) {
-      console.error('Error fetching aggregated production data:', error);
+      console.error("Error fetching aggregated production data:", error);
       throw error;
     }
   }
 
   // Add these methods to your ProductionService class
 
-// Get jobs by step and status
-async getJobsByStepAndStatus(stepName: string, status: string): Promise<Array<{
-  jobPlan: JobPlan;
-  step: ProductionStep;
-}>> {
-  try {
-    const allJobPlans = await this.getAllJobPlans();
-    const filteredJobs: Array<{ jobPlan: JobPlan; step: ProductionStep }> = [];
-    
-    // Map step names to match the data
-    const stepNameMapping: { [key: string]: string } = {
-      'corrugation': 'Corrugation',
-      'fluteLamination': 'FluteLaminateBoardConversion',
-      'punching': 'Punching',
-      'flapPasting': 'SideFlapPasting'
-    };
-    
-    const targetStepName = stepNameMapping[stepName];
-    if (!targetStepName) return [];
-    
-    allJobPlans.forEach(jobPlan => {
-      const matchingSteps = jobPlan.steps.filter(step => 
-        step.stepName === targetStepName && step.status === status
-      );
-      
-      matchingSteps.forEach(step => {
-        filteredJobs.push({ jobPlan, step });
-      });
-    });
-    
-    return filteredJobs;
-  } catch (error) {
-    console.error('Error fetching jobs by step and status:', error);
-    return [];
-  }
-}
+  // Get jobs by step and status
+  async getJobsByStepAndStatus(
+    stepName: string,
+    status: string
+  ): Promise<
+    Array<{
+      jobPlan: JobPlan;
+      step: ProductionStep;
+    }>
+  > {
+    try {
+      const [allJobPlans, completedJobs] = await Promise.all([
+        this.getAllJobPlans(),
+        this.getCompletedJobs(),
+      ]);
 
-// Get all steps by status across all jobs
-async getAllStepsByStatus(status: string): Promise<Array<{
-  jobPlan: JobPlan;
-  step: ProductionStep;
-}>> {
-  try {
-    const allJobPlans = await this.getAllJobPlans();
-    const filteredJobs: Array<{ jobPlan: JobPlan; step: ProductionStep }> = [];
-    
-    const productionStepNames = ['Corrugation', 'FluteLaminateBoardConversion', 'Punching', 'SideFlapPasting'];
-    
-    allJobPlans.forEach(jobPlan => {
-      const matchingSteps = jobPlan.steps.filter(step => 
-        productionStepNames.includes(step.stepName) && step.status === status
-      );
-      
-      matchingSteps.forEach(step => {
-        filteredJobs.push({ jobPlan, step });
+      // Create a map of completed jobs by nrcJobNo for quick lookup
+      const completedJobsMap = new Map<string, any>();
+      completedJobs.forEach((job: any) => {
+        completedJobsMap.set(job.nrcJobNo, job);
       });
-    });
-    
-    return filteredJobs;
-  } catch (error) {
-    console.error('Error fetching all steps by status:', error);
-    return [];
-  }
-}
 
+      const filteredJobs: Array<{ jobPlan: JobPlan; step: ProductionStep }> =
+        [];
+
+      // Map step names to match the data
+      const stepNameMapping: { [key: string]: string } = {
+        corrugation: "Corrugation",
+        fluteLamination: "FluteLaminateBoardConversion",
+        punching: "Punching",
+        flapPasting: "SideFlapPasting",
+      };
+
+      const targetStepName = stepNameMapping[stepName];
+      if (!targetStepName) return [];
+
+      allJobPlans.forEach((jobPlan) => {
+        // Get completed job data if available (for allStepDetails)
+        const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
+        const allStepDetails =
+          completedJob?.allStepDetails || jobPlan.allStepDetails;
+
+        const matchingSteps = jobPlan.steps.filter((step) => {
+          if (step.stepName !== targetStepName) return false;
+
+          // Helper function to check if step has "accept" status in allStepDetails
+          const hasAcceptStatus = () => {
+            const stepDetailKey =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            // Check allStepDetails from completed job or jobPlan
+            if (allStepDetails) {
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                if (
+                  stepDetails.some((detail: any) => detail.status === "accept")
+                ) {
+                  return true;
+                }
+              }
+            }
+
+            // Check step-level details
+            const stepDetailProp =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            const stepDetails = (step as any)[stepDetailProp];
+            if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+              if (
+                stepDetails.some((detail: any) => detail.status === "accept")
+              ) {
+                return true;
+              }
+            }
+            return false;
+          };
+
+          // 🔥 NEW: If filtering for 'completed', check multiple conditions
+          if (status === "completed") {
+            // Direct status check
+            if (step.status === "completed" || step.status === "accept") {
+              return true;
+            }
+
+            // Check if step.status is "stop" and allStepDetails has "accept"
+            if (step.status === "stop" && hasAcceptStatus()) {
+              return true;
+            }
+
+            return false;
+          }
+
+          // 🔥 NEW: If filtering for 'stop', exclude steps that have "accept" status
+          if (status === "stop") {
+            // If step has "accept" status in allStepDetails, exclude it from stop list
+            if (step.status === "stop" && hasAcceptStatus()) {
+              return false;
+            }
+            return step.status === status;
+          }
+
+          return step.status === status;
+        });
+
+        matchingSteps.forEach((step) => {
+          // 🔥 NEW: Check if step has "accept" status in allStepDetails and update status to "accepted"
+          let displayStep = { ...step };
+          if (step.status === "stop") {
+            const stepDetailKey =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            // Check allStepDetails from completed job or jobPlan
+            if (allStepDetails) {
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  displayStep = { ...step, status: "accepted" };
+                }
+              }
+            }
+
+            // Check step-level details
+            if (displayStep.status === "stop") {
+              const stepDetailProp =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+
+              const stepDetails = (step as any)[stepDetailProp];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  displayStep = { ...step, status: "accepted" };
+                }
+              }
+            }
+          }
+
+          filteredJobs.push({ jobPlan, step: displayStep });
+        });
+      });
+
+      return filteredJobs;
+    } catch (error) {
+      console.error("Error fetching jobs by step and status:", error);
+      return [];
+    }
+  }
+
+  // Get all steps by status across all jobs
+  async getAllStepsByStatus(status: string): Promise<
+    Array<{
+      jobPlan: JobPlan;
+      step: ProductionStep;
+    }>
+  > {
+    try {
+      const [allJobPlans, completedJobs] = await Promise.all([
+        this.getAllJobPlans(),
+        this.getCompletedJobs(),
+      ]);
+
+      // Create a map of completed jobs by nrcJobNo for quick lookup
+      const completedJobsMap = new Map<string, any>();
+      completedJobs.forEach((job: any) => {
+        completedJobsMap.set(job.nrcJobNo, job);
+      });
+
+      const filteredJobs: Array<{ jobPlan: JobPlan; step: ProductionStep }> =
+        [];
+
+      const productionStepNames = [
+        "Corrugation",
+        "FluteLaminateBoardConversion",
+        "Punching",
+        "SideFlapPasting",
+      ];
+
+      allJobPlans.forEach((jobPlan) => {
+        // Get completed job data if available (for allStepDetails)
+        const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
+        const allStepDetails =
+          completedJob?.allStepDetails || jobPlan.allStepDetails;
+
+        const matchingSteps = jobPlan.steps.filter((step) => {
+          if (!productionStepNames.includes(step.stepName)) return false;
+
+          // Helper function to check if step has "accept" status in allStepDetails
+          const hasAcceptStatus = () => {
+            const stepDetailKey =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            // Check allStepDetails from completed job or jobPlan
+            if (allStepDetails) {
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                if (
+                  stepDetails.some((detail: any) => detail.status === "accept")
+                ) {
+                  return true;
+                }
+              }
+            }
+
+            // Check step-level details
+            const stepDetailProp =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            const stepDetails = (step as any)[stepDetailProp];
+            if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+              if (
+                stepDetails.some((detail: any) => detail.status === "accept")
+              ) {
+                return true;
+              }
+            }
+            return false;
+          };
+
+          // 🔥 NEW: If filtering for 'completed', check multiple conditions
+          if (status === "completed") {
+            // Direct status check
+            if (step.status === "completed" || step.status === "accept") {
+              return true;
+            }
+
+            // Check if step.status is "stop" and allStepDetails has "accept"
+            if (step.status === "stop" && hasAcceptStatus()) {
+              return true;
+            }
+
+            return false;
+          }
+
+          // 🔥 NEW: If filtering for 'stop', exclude steps that have "accept" status
+          if (status === "stop") {
+            // If step has "accept" status in allStepDetails, exclude it from stop list
+            if (step.status === "stop" && hasAcceptStatus()) {
+              return false;
+            }
+            return step.status === status;
+          }
+
+          return step.status === status;
+        });
+
+        matchingSteps.forEach((step) => {
+          // 🔥 NEW: Check if step has "accept" status in allStepDetails and update status to "accepted"
+          let displayStep = { ...step };
+          if (step.status === "stop") {
+            const stepDetailKey =
+              step.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : step.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : step.stepName.toLowerCase();
+
+            // Check allStepDetails from completed job or jobPlan
+            if (allStepDetails) {
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  displayStep = { ...step, status: "accepted" };
+                }
+              }
+            }
+
+            // Check step-level details
+            if (displayStep.status === "stop") {
+              const stepDetailProp =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+
+              const stepDetails = (step as any)[stepDetailProp];
+              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                const hasAcceptStatus = stepDetails.some(
+                  (detail: any) => detail.status === "accept"
+                );
+                if (hasAcceptStatus) {
+                  displayStep = { ...step, status: "accepted" };
+                }
+              }
+            }
+          }
+
+          filteredJobs.push({ jobPlan, step: displayStep });
+        });
+      });
+
+      return filteredJobs;
+    } catch (error) {
+      console.error("Error fetching all steps by status:", error);
+      return [];
+    }
+  }
 
   // Get production data for a specific job (4 production steps only)
   async getProductionDataByJob(nrcJobNo: string): Promise<ProductionData> {
     try {
       const jobPlan = await this.getJobPlanByNrcJobNo(nrcJobNo);
-      
+
       if (!jobPlan) {
         return {
           corrugation: [],
           fluteLamination: [],
           punching: [],
-          flapPasting: []
+          flapPasting: [],
         };
       }
 
       // Filter and map only the 4 production steps
-      const corrugation = jobPlan.steps.filter(step => step.stepName === 'Corrugation');
-      const fluteLamination = jobPlan.steps.filter(step => step.stepName === 'FluteLaminateBoardConversion');
-      const punching = jobPlan.steps.filter(step => step.stepName === 'Punching');
-      const flapPasting = jobPlan.steps.filter(step => step.stepName === 'SideFlapPasting');
+      const corrugation = jobPlan.steps.filter(
+        (step) => step.stepName === "Corrugation"
+      );
+      const fluteLamination = jobPlan.steps.filter(
+        (step) => step.stepName === "FluteLaminateBoardConversion"
+      );
+      const punching = jobPlan.steps.filter(
+        (step) => step.stepName === "Punching"
+      );
+      const flapPasting = jobPlan.steps.filter(
+        (step) => step.stepName === "SideFlapPasting"
+      );
 
       return {
         corrugation,
         fluteLamination,
         punching,
-        flapPasting
+        flapPasting,
       };
     } catch (error) {
-      console.error('Error fetching production data for job:', error);
+      console.error("Error fetching production data for job:", error);
       return {
         corrugation: [],
         fluteLamination: [],
         punching: [],
-        flapPasting: []
+        flapPasting: [],
       };
     }
   }
 
   // Search jobs by NRC Job No or partial match
-  async searchJobs(searchTerm: string): Promise<Array<{ nrcJobNo: string; jobDemand: string; totalSteps: number; hasProductionSteps: boolean }>> {
+  async searchJobs(searchTerm: string): Promise<
+    Array<{
+      nrcJobNo: string;
+      jobDemand: string;
+      totalSteps: number;
+      hasProductionSteps: boolean;
+    }>
+  > {
     try {
       const allJobs = await this.getAllJobPlans();
-      
+
       if (!searchTerm.trim()) {
-        return allJobs.map(job => {
+        return allJobs.map((job) => {
           // Check if this job has any of the 4 production steps
-          const hasProductionSteps = job.steps.some(step => 
-            step.stepName === 'Corrugation' ||
-            step.stepName === 'FluteLaminateBoardConversion' ||
-            step.stepName === 'Punching' ||
-            step.stepName === 'SideFlapPasting'
+          const hasProductionSteps = job.steps.some(
+            (step) =>
+              step.stepName === "Corrugation" ||
+              step.stepName === "FluteLaminateBoardConversion" ||
+              step.stepName === "Punching" ||
+              step.stepName === "SideFlapPasting"
           );
-          
+
           return {
             nrcJobNo: job.nrcJobNo,
             jobDemand: job.jobDemand,
             totalSteps: job.steps.length,
-            hasProductionSteps
+            hasProductionSteps,
           };
         });
       }
 
       const term = searchTerm.toLowerCase();
-      const filteredJobs = allJobs.filter(job => 
+      const filteredJobs = allJobs.filter((job) =>
         job.nrcJobNo.toLowerCase().includes(term)
       );
 
-      return filteredJobs.map(job => {
+      return filteredJobs.map((job) => {
         // Check if this job has any of the 4 production steps
-        const hasProductionSteps = job.steps.some(step => 
-          step.stepName === 'Corrugation' ||
-          step.stepName === 'FluteLaminateBoardConversion' ||
-          step.stepName === 'Punching' ||
-          step.stepName === 'SideFlapPasting'
+        const hasProductionSteps = job.steps.some(
+          (step) =>
+            step.stepName === "Corrugation" ||
+            step.stepName === "FluteLaminateBoardConversion" ||
+            step.stepName === "Punching" ||
+            step.stepName === "SideFlapPasting"
         );
-        
+
         return {
           nrcJobNo: job.nrcJobNo,
           jobDemand: job.jobDemand,
           totalSteps: job.steps.length,
-          hasProductionSteps
+          hasProductionSteps,
         };
       });
     } catch (error) {
-      console.error('Error searching jobs:', error);
+      console.error("Error searching jobs:", error);
       return [];
     }
   }
 
   // Get analytics data for charts
   getAnalyticsData(productionData: ProductionData) {
-    // Production efficiency over time
+    // Production efficiency over time - include 'accept' status as completed
     const efficiencyData = {
-      corrugation: productionData.corrugation.length > 0 ? 
-        (productionData.corrugation.filter(step => step.status === 'completed').length / productionData.corrugation.length) * 100 : 0,
-      fluteLamination: productionData.fluteLamination.length > 0 ? 
-        (productionData.fluteLamination.filter(step => step.status === 'completed').length / productionData.fluteLamination.length) * 100 : 0,
-      punching: productionData.punching.length > 0 ? 
-        (productionData.punching.filter(step => step.status === 'completed').length / productionData.punching.length) * 100 : 0,
-      flapPasting: productionData.flapPasting.length > 0 ? 
-        (productionData.flapPasting.filter(step => step.status === 'completed').length / productionData.flapPasting.length) * 100 : 0
+      corrugation:
+        productionData.corrugation.length > 0
+          ? (productionData.corrugation.filter(
+              (step) => step.status === "completed" || step.status === "accept"
+            ).length /
+              productionData.corrugation.length) *
+            100
+          : 0,
+      fluteLamination:
+        productionData.fluteLamination.length > 0
+          ? (productionData.fluteLamination.filter(
+              (step) => step.status === "completed" || step.status === "accept"
+            ).length /
+              productionData.fluteLamination.length) *
+            100
+          : 0,
+      punching:
+        productionData.punching.length > 0
+          ? (productionData.punching.filter(
+              (step) => step.status === "completed" || step.status === "accept"
+            ).length /
+              productionData.punching.length) *
+            100
+          : 0,
+      flapPasting:
+        productionData.flapPasting.length > 0
+          ? (productionData.flapPasting.filter(
+              (step) => step.status === "completed" || step.status === "accept"
+            ).length /
+              productionData.flapPasting.length) *
+            100
+          : 0,
     };
 
     // Machine utilization (if machine data is available)
     const machineData = {
-      corrugation: productionData.corrugation.map(step => step.machineDetails[0]?.machineType || 'Unknown').filter(Boolean),
-      punching: productionData.punching.map(step => step.machineDetails[0]?.machineType || 'Unknown').filter(Boolean),
-      flapPasting: productionData.flapPasting.map(step => step.machineDetails[0]?.machineType || 'Unknown').filter(Boolean)
+      corrugation: productionData.corrugation
+        .map((step) => step.machineDetails[0]?.machineType || "Unknown")
+        .filter(Boolean),
+      punching: productionData.punching
+        .map((step) => step.machineDetails[0]?.machineType || "Unknown")
+        .filter(Boolean),
+      flapPasting: productionData.flapPasting
+        .map((step) => step.machineDetails[0]?.machineType || "Unknown")
+        .filter(Boolean),
     };
 
     return {
       efficiencyData,
-      machineData
+      machineData,
     };
   }
 
   // Handle authentication errors
   private handleAuthError(error: Error): void {
-    if (error.message.includes('Authentication') || error.message.includes('log in')) {
+    if (
+      error.message.includes("Authentication") ||
+      error.message.includes("log in")
+    ) {
       // Clear invalid tokens
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('userData');
-      
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("userData");
+
       // Redirect to login page
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
   }
 
   // Check authentication status
   checkAuthStatus(): { isAuthenticated: boolean; message: string } {
     if (!this.isAuthenticated()) {
-      return { 
-        isAuthenticated: false, 
-        message: 'Not authenticated. Please log in.' 
+      return {
+        isAuthenticated: false,
+        message: "Not authenticated. Please log in.",
       };
     }
-    
+
     if (this.isTokenExpiringSoon()) {
-      return { 
-        isAuthenticated: true, 
-        message: 'Session expiring soon. Please save your work.' 
+      return {
+        isAuthenticated: true,
+        message: "Session expiring soon. Please save your work.",
       };
     }
-    
-    return { 
-      isAuthenticated: true, 
-      message: 'Authenticated successfully.' 
+
+    return {
+      isAuthenticated: true,
+      message: "Authenticated successfully.",
     };
   }
 }
 
 export const productionService = new ProductionService();
-export default productionService; 
+export default productionService;
