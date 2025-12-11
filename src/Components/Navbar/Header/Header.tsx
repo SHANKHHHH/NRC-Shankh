@@ -38,27 +38,27 @@ const sidebarConfig: {
   },
   printing_manager: {
     displayName: "Printing Manager",
-    options: [
-      { label: "Dashboard", tab: "dashboard" },
-      { label: "Jobs", tab: "jobs" },
-      // { label: "Notifications", tab: "notifications" }
-    ],
+    options: [], // No options - only logout available
   },
   production_head: {
     displayName: "Production Head",
-    options: [
-      { label: "Dashboard", tab: "dashboard" },
-      { label: "Jobs", tab: "jobs" },
-      // { label: "Notifications", tab: "notifications" }
-    ],
+    options: [], // No options - only logout available
   },
   dispatch_executive: {
     displayName: "Dispatch Executive",
-    options: [
-      { label: "Dashboard", tab: "dashboard" },
-      { label: "Jobs", tab: "jobs" },
-      // { label: "Notifications", tab: "notifications" }
-    ],
+    options: [], // No options - only logout available
+  },
+  qc_manager: {
+    displayName: "QC Manager",
+    options: [], // No options - only logout available
+  },
+  qc_head: {
+    displayName: "QC Head",
+    options: [], // No options - only logout available
+  },
+  dispatch_manager: {
+    displayName: "Dispatch Manager",
+    options: [], // No options - only logout available
   },
   planner: {
     displayName: "Planner",
@@ -86,21 +86,12 @@ const allTabSets: { [key: string]: { label: string; value: string }[] } = {
     // { label: 'Notifications', value: 'notifications' },
     // ...add any others you had
   ],
-  printing_manager: [
-    { label: "Dashboard", value: "dashboard" },
-    { label: "Jobs", value: "jobs" },
-    // { label: 'Notifications', value: 'notifications' },
-  ],
-  production_head: [
-    { label: "Dashboard", value: "dashboard" },
-    { label: "Jobs", value: "jobs" },
-    // { label: 'Notifications', value: 'notifications' },
-  ],
-  dispatch_executive: [
-    { label: "Dashboard", value: "jobs" },
-    { label: "Jobs", value: "jobs" },
-    // { label: 'Notifications', value: 'notifications' },
-  ],
+  printing_manager: [], // No tabs - only dashboard view
+  production_head: [], // No tabs - only dashboard view
+  dispatch_executive: [], // No tabs - only dashboard view
+  qc_manager: [], // No tabs - only dashboard view
+  qc_head: [], // No tabs - only dashboard view
+  dispatch_manager: [], // No tabs - only dashboard view
   planner: [
     { label: "Dashboard", value: "planner" },
     // { label: 'Start New Job', value: 'start new job' },
@@ -220,21 +211,23 @@ const Header: React.FC<HeaderProps> = ({
           <img src={logo} alt="Logo" className="h-15 w-auto cursor-pointer" />
         </button>
 
-        {/* Desktop Tabs */}
-        <TabProvider value={tabValue}>
-          <div className="hidden sm:flex flex-1 justify-center">
-            <TabList value={tabValue} onChange={handleTabChange}>
-              {tabItems.map((tab: { label: string; value: string }) => (
-                <Tab
-                  key={tab.value}
-                  label={tab.label}
-                  value={tab.value}
-                  selected={tabValue === tab.value}
-                />
-              ))}
-            </TabList>
-          </div>
-        </TabProvider>
+        {/* Desktop Tabs - Hide for printing_manager (no tabs) */}
+        {tabItems.length > 0 && (
+          <TabProvider value={tabValue}>
+            <div className="hidden sm:flex flex-1 justify-center">
+              <TabList value={tabValue} onChange={handleTabChange}>
+                {tabItems.map((tab: { label: string; value: string }) => (
+                  <Tab
+                    key={tab.value}
+                    label={tab.label}
+                    value={tab.value}
+                    selected={tabValue === tab.value}
+                  />
+                ))}
+              </TabList>
+            </div>
+          </TabProvider>
+        )}
 
         {/* Desktop Notifications and User Icon */}
         <div className="hidden sm:flex items-center space-x-2">
@@ -280,23 +273,25 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Dropdown Menu - Hide tabs for printing_manager */}
       {menuOpen && (
         <div className="sm:hidden bg-[#fafafa] border-t border-gray-200 shadow-md animate-fade-in-down flex flex-col items-center py-4 gap-2">
-          <TabProvider value={tabValue}>
-            <TabList
-              value={tabValue}
-              onChange={(value) => {
-                handleTabChange(value);
-                setMenuOpen(false);
-              }}
-              direction="vertical"
-            >
-              {tabItems.map((tab: { label: string; value: string }) => (
-                <Tab key={tab.value} label={tab.label} value={tab.value} />
-              ))}
-            </TabList>
-          </TabProvider>
+          {tabItems.length > 0 && (
+            <TabProvider value={tabValue}>
+              <TabList
+                value={tabValue}
+                onChange={(value) => {
+                  handleTabChange(value);
+                  setMenuOpen(false);
+                }}
+                direction="vertical"
+              >
+                {tabItems.map((tab: { label: string; value: string }) => (
+                  <Tab key={tab.value} label={tab.label} value={tab.value} />
+                ))}
+              </TabList>
+            </TabProvider>
+          )}
           <div className="flex justify-center items-center">
             <span
               className="text-base font-medium text-gray-700 hover:cursor-pointer px-4 py-2 rounded hover:bg-gray-100 transition"
@@ -375,7 +370,9 @@ const Header: React.FC<HeaderProps> = ({
           } else if (
             normalizedRole === "printing_manager" ||
             normalizedRole === "production_head" ||
-            normalizedRole === "dispatch_executive"
+            normalizedRole === "dispatch_executive" ||
+            normalizedRole === "qc_head" ||
+            normalizedRole === "dispatch_manager"
           ) {
             const found = sidebarConfig[normalizedRole].options.find(
               (o) => o.label === option

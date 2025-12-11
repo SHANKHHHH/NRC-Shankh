@@ -23,14 +23,38 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
     job.jobSteps || []
   );
   const [selectedMachines, setSelectedMachines] = useState<Machine[]>([]);
-  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
-    {}
-  ); // 🔥 NEW: Track step-machine mapping
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>({}); // 🔥 NEW: Track step-machine mapping
+  const [allMachines, setAllMachines] = useState<Machine[]>([]); // 🔥 NEW: Store all fetched machines
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [showDemandModal, setShowDemandModal] = useState(false);
   const [showStepsModal, setShowStepsModal] = useState(false);
+
+  // 🔥 NEW: Fetch machines on component mount
+  useEffect(() => {
+    fetchMachines();
+  }, []);
+
+  const fetchMachines = async () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      const response = await fetch(
+        `${
+          import.meta.env.VITE_API_URL || "http://localhost:3000"
+        }/api/machines?`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        setAllMachines(data.data);
+      }
+    } catch (err) {
+      console.error("Machine fetch error:", err);
+    }
+  };
 
   useEffect(() => {
     if (job.machineId) {
@@ -108,24 +132,47 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
       return;
     }
 
-    // Demand-specific validation
-    if (jobDemand === "medium" && selectedSteps.length === 0) {
-      setError(
-        "Regular demand requires at least one production step to be selected."
-      );
-      setIsSubmitting(false);
-      return;
-    }
+    // Demand-specific validation - only for regular (medium) demand
+    if (jobDemand === "medium") {
+      if (selectedSteps.length === 0) {
+        setError(
+          "Regular demand requires at least one production step to be selected."
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
-    if (
-      jobDemand === "medium" &&
-      (!selectedMachines || selectedMachines.length === 0)
-    ) {
-      setError(
-        "Regular demand requires machine assignment for all selected steps."
-      );
-      setIsSubmitting(false);
-      return;
+      // Check if all steps requiring machines have machine assignments
+      const STEP_TO_MACHINE_MAPPING: Record<string, string[]> = {
+        SideFlapPasting: ["auto flap", "manual fi"],
+        Punching: ["auto pund", "manual pu"],
+        FluteLaminateBoardConversion: ["flute lam"],
+        Corrugation: ["corrugatic"],
+        PrintingDetails: ["printing"],
+        PaperStore: [],
+        QualityDept: [],
+        DispatchProcess: [],
+      };
+
+      const stepsRequiringMachines = selectedSteps.filter((step) => {
+        const machineTypes = STEP_TO_MACHINE_MAPPING[step.stepName];
+        return machineTypes && machineTypes.length > 0;
+      });
+
+      const stepsWithoutMachines = stepsRequiringMachines.filter((step) => {
+        const assignedMachineId = stepMachines[step.stepName];
+        return !assignedMachineId;
+      });
+
+      if (stepsWithoutMachines.length > 0) {
+        setError(
+          `Regular demand requires machine assignment for steps: ${stepsWithoutMachines
+            .map((s) => s.stepName)
+            .join(", ")}`
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -159,12 +206,14 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
 
           // 🔥 CHANGED: Create machineDetails array for single machine or default "Not Assigned"
           const machineDetails = assignedMachine
-            ? [{
-                id: assignedMachine.id,
-                unit: jobUnit, // 🔥 FIXED: Use job unit instead of machine unit
-                machineCode: assignedMachine.machineCode,
-                machineType: assignedMachine.machineType,
-              }]
+            ? [
+                {
+                  id: assignedMachine.id,
+                  unit: jobUnit, // 🔥 FIXED: Use job unit instead of machine unit
+                  machineCode: assignedMachine.machineCode,
+                  machineType: assignedMachine.machineType,
+                },
+              ]
             : [
                 {
                   unit: jobUnit, // 🔥 FIXED: Use job unit instead of hardcoded "Mk"
@@ -176,21 +225,15 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
           return {
             stepNo: step.stepNo,
             stepName: step.stepName,
-            // Keep single machine detail for backward compatibility (use first machine)
-            machineDetail:
-              assignedMachines.length > 0
-                ? assignedMachines[0].machineType ||
-                  assignedMachines[0].machineCode
-                : "Not Assigned",
-            machineId:
-              assignedMachines.length > 0 ? assignedMachines[0].id : null,
-            machineCode:
-              assignedMachines.length > 0
-                ? assignedMachines[0].machineCode
-                : null,
-            // 🔥 NEW: Add array of all machines for this step
+            // Keep single machine detail for backward compatibility
+            machineDetail: assignedMachine
+              ? assignedMachine.machineType || assignedMachine.machineCode
+              : "Not Assigned",
+            machineId: assignedMachine ? assignedMachine.id : null,
+            machineCode: assignedMachine ? assignedMachine.machineCode : null,
+            // 🔥 NEW: Add array of machine details for this step
             machineDetails: machineDetails,
-            allMachineIds: assignedMachines.map((m) => m.id), // Array of all machine IDs
+            allMachineIds: assignedMachine ? [assignedMachine.id] : [], // Array of machine IDs
           };
         }),
       };
@@ -258,9 +301,10 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
             </div>
 
             {/* Demand-specific info */}
-            {jobDemand === 'high' && (
+            {jobDemand === "high" && (
               <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                <strong>Urgent:</strong> Flexible machine assignment - not all machines required
+                <strong>Urgent:</strong> Flexible machine assignment - not all
+                machines required
               </div>
             )}
             {jobDemand === "medium" && (
@@ -388,6 +432,9 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
         <AddStepsModal
           currentSteps={selectedSteps}
           selectedMachines={selectedMachines} // Pass current machines
+          stepMachines={stepMachines} // 🔥 NEW: Pass current step-machine mapping
+          allMachines={allMachines} // 🔥 NEW: Pass fetched machines
+          jobDemand={jobDemand} // 🔥 NEW: Pass job demand to hide machine selection for urgent jobs
           onSelect={(steps, machines, stepMachineMapping) => {
             // 🔥 FIXED: Accept third parameter
             setSelectedSteps(steps);

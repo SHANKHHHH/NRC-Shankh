@@ -75,18 +75,18 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // 🔥 CHANGED: State for tracking step-machine mappings (single machine per step)
-  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
-    {}
-  );
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>({});
   const [allMachines, setAllMachines] = useState<Machine[]>([]);
 
   const [showDemandModal, setShowDemandModal] = useState(false);
   const [showStepsModal, setShowStepsModal] = useState(false);
 
   // Finished goods state
-  const [availableFinishedGoods, setAvailableFinishedGoods] = useState<number>(0);
+  const [availableFinishedGoods, setAvailableFinishedGoods] =
+    useState<number>(0);
   const [useFinishedGoods, setUseFinishedGoods] = useState<boolean>(false);
-  const [isLoadingFinishedGoods, setIsLoadingFinishedGoods] = useState<boolean>(true);
+  const [isLoadingFinishedGoods, setIsLoadingFinishedGoods] =
+    useState<boolean>(true);
 
   // 🔥 NEW: Fetch machines on component mount
   useEffect(() => {
@@ -129,9 +129,9 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
     try {
       // Try multiple ways to get the job number
       const jobNo = po.jobNrcJobNo || po.job?.nrcJobNo || (po as any).nrcJobNo;
-      
+
       console.log("🔍 Fetching finished goods for job:", jobNo, "PO:", po);
-      
+
       if (!jobNo) {
         console.log("⚠️ No job number found for PO:", po.poNumber);
         setAvailableFinishedGoods(0);
@@ -149,7 +149,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
       // Use the same approach as the table - fetch all finished goods and filter by job number
       const allUrl = `https://nrprod.nrcontainers.com/api/finish-quantity/`;
       console.log("📡 Fetching all finished goods from:", allUrl);
-      
+
       const response = await fetch(allUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -163,18 +163,30 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
 
       const data = await response.json();
       console.log("📦 All finished goods response:", data);
-      
+
       if (data.success && Array.isArray(data.data)) {
         // Find the job data that matches this job number
         const jobData = data.data.find((job: any) => job.nrcJobNo === jobNo);
-        
-        if (jobData && jobData.finishQuantities && Array.isArray(jobData.finishQuantities)) {
+
+        if (
+          jobData &&
+          jobData.finishQuantities &&
+          Array.isArray(jobData.finishQuantities)
+        ) {
           // Calculate total available finished goods (same logic as table)
           const totalAvailable = jobData.finishQuantities
             .filter((fq: any) => fq.status === "available")
-            .reduce((sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0), 0);
-          
-          console.log("✅ Found finished goods for job:", jobNo, "Available:", totalAvailable);
+            .reduce(
+              (sum: number, fq: any) => sum + (fq.overDispatchedQuantity || 0),
+              0
+            );
+
+          console.log(
+            "✅ Found finished goods for job:",
+            jobNo,
+            "Available:",
+            totalAvailable
+          );
           setAvailableFinishedGoods(totalAvailable);
         } else {
           console.log("⚠️ No finished goods data found for job:", jobNo);
@@ -222,7 +234,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
   const handleStepsSelect = (
     steps: JobStep[],
     machines: Machine[],
-    stepMachineMapping: Record<string, string[]>
+    stepMachineMapping: Record<string, string> // 🔥 FIXED: Changed to Record<string, string>
   ) => {
     console.log("🔍 handleStepsSelect called with:");
     console.log("📋 Steps:", steps);
@@ -297,16 +309,22 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
             : null;
 
           // Create machineDetails array (single machine)
-          const machineDetails = assignedMachine ? [{
-            id: assignedMachine.id,
-            unit: po.unit || assignedMachine.unit || "Unit 1",
-            machineCode: assignedMachine.machineCode,
-            machineType: assignedMachine.machineType,
-          }] : [{
-            unit: po.unit || "Mk",
-            machineCode: null,
-            machineType: "Not Assigned",
-          }];
+          const machineDetails = assignedMachine
+            ? [
+                {
+                  id: assignedMachine.id,
+                  unit: po.unit || assignedMachine.unit || "Unit 1",
+                  machineCode: assignedMachine.machineCode,
+                  machineType: assignedMachine.machineType,
+                },
+              ]
+            : [
+                {
+                  unit: po.unit || "Mk",
+                  machineCode: null,
+                  machineType: "Not Assigned",
+                },
+              ];
 
           return {
             jobStepId: stepIndex + 1,
@@ -330,7 +348,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
       console.log("📦 Finished Goods in payload:", {
         useFinishedGoods,
         availableFinishedGoods,
-        finishedGoodsQty: jobPlanningData.finishedGoodsQty
+        finishedGoodsQty: jobPlanningData.finishedGoodsQty,
       });
 
       // 🔥 NEW: Validate the payload before sending
@@ -379,10 +397,12 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
             Create job plan for {po.jobNrcJobNo || po.job?.nrcJobNo || "N/A"}
           </p>
           {/* Debug: Show job number and finished goods status */}
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <div className="text-xs text-gray-400 mb-2">
-              Job: {po.jobNrcJobNo || po.job?.nrcJobNo || "Not found"} | 
-              FG: {availableFinishedGoods > 0 ? `${availableFinishedGoods} available` : "None"}
+              Job: {po.jobNrcJobNo || po.job?.nrcJobNo || "Not found"} | FG:{" "}
+              {availableFinishedGoods > 0
+                ? `${availableFinishedGoods} available`
+                : "None"}
             </div>
           )}
 
@@ -578,6 +598,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
             selectedMachines={selectedMachines}
             stepMachines={stepMachines} // 🔥 NEW: Pass current step-machine mapping
             allMachines={allMachines} // 🔥 NEW: Pass fetched machines
+            jobDemand={jobDemand} // 🔥 NEW: Pass job demand to hide machine selection for urgent jobs
             onSelect={handleStepsSelect}
             onClose={() => setShowStepsModal(false)}
           />

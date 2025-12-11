@@ -73,9 +73,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
   );
   const [selectedSteps, setSelectedSteps] = useState<JobStep[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<Machine[]>([]);
-  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
-    {}
-  ); // 🔥 CHANGED: Single machine ID per step (not array)
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>({}); // 🔥 CHANGED: Single machine ID per step (not array)
   const [allMachines, setAllMachines] = useState<Machine[]>([]); // 🔥 NEW: Store all fetched machines
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,12 +195,14 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
             let machineDetails;
             if (assignedMachine) {
               // Single machine selection
-              machineDetails = [{
-                id: assignedMachine.id,
-                unit: po.unit || assignedMachine.unit || "Unit 1",
-                machineCode: assignedMachine.machineCode,
-                machineType: assignedMachine.machineType,
-              }];
+              machineDetails = [
+                {
+                  id: assignedMachine.id,
+                  unit: po.unit || assignedMachine.unit || "Unit 1",
+                  machineCode: assignedMachine.machineCode,
+                  machineType: assignedMachine.machineType,
+                },
+              ];
             } else {
               machineDetails = [
                 {
@@ -523,6 +523,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
             selectedMachines={selectedMachines}
             stepMachines={stepMachines} // 🔥 NEW: Pass current step-machine mapping
             allMachines={allMachines} // 🔥 NEW: Pass fetched machines
+            jobDemand={jobDemand} // 🔥 NEW: Pass job demand to hide machine selection for urgent jobs
             onSelect={(steps, machines, stepMachineMapping) => {
               // 🔥 FIXED: Receive third parameter
               console.log("🔍 BulkJobPlanning - onSelect received:");

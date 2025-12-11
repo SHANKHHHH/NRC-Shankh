@@ -997,7 +997,7 @@ const DispatchOverview: React.FC = () => {
 
       {/* Detail Side Panel - Updated with step information */}
       {showDetailPanel && selectedDispatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
+        <div className="fixed inset-0  bg-opacity-50 z-50 flex justify-end">
           <div className="bg-white w-full max-w-md h-full overflow-y-auto shadow-2xl">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

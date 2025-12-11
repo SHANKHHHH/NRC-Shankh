@@ -1,5 +1,5 @@
 // src/Components/Roles/Planner/AddStepsModal.tsx
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { type JobStep } from "../Types/job.ts"; // Adjust path as needed
 import { type Machine } from "../Types/job.ts";
 
@@ -13,6 +13,7 @@ interface AddStepsModalProps {
   ) => void; // 🔥 FIXED: Added third parameter
   stepMachines?: Record<string, string>; // 🔥 CHANGED: Single machine ID per step (not array)
   allMachines?: Machine[]; // 🔥 NEW: Add this prop
+  jobDemand?: "high" | "medium" | "low" | null; // 🔥 NEW: Job demand level
   onClose: () => void;
 }
 
@@ -69,14 +70,13 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
   selectedMachines,
   stepMachines: initialStepMachines = {}, // 🔥 NEW: Get initial step machines
   allMachines: externalMachines = [], // 🔥 NEW: Get external machines
+  jobDemand = null, // 🔥 NEW: Job demand level
   onSelect,
   onClose,
 }) => {
   const [selectedSteps, setSelectedSteps] = useState<JobStep[]>(currentSteps);
   // Changed to Record<string, string> to store single machine ID per step
-  const [stepMachines, setStepMachines] = useState<Record<string, string>>(
-    {}
-  );
+  const [stepMachines, setStepMachines] = useState<Record<string, string>>({});
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const isInitialized = useRef(false); // 🔥 NEW: Track if we've initialized
@@ -167,43 +167,49 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
   // Updated to handle single machine selection only - optimized with useCallback
   // Store scroll position to prevent scroll jumps
   const modalContentRef = useRef<HTMLDivElement>(null);
-  
-  const handleMachineToggle = useCallback((stepName: string, machineId: string) => {
-    // Save current scroll position
-    const scrollContainer = modalContentRef.current;
-    const scrollTop = scrollContainer?.scrollTop || 0;
 
-    setStepMachines((prev) => {
-      const currentMachine = prev[stepName];
-      const isSelected = currentMachine === machineId;
+  const handleMachineToggle = useCallback(
+    (stepName: string, machineId: string) => {
+      // Save current scroll position
+      const scrollContainer = modalContentRef.current;
+      const scrollTop = scrollContainer?.scrollTop || 0;
 
-      if (isSelected) {
-        // Deselect machine (remove selection)
-        const newMachines = { ...prev };
-        delete newMachines[stepName];
-        return newMachines;
-      } else {
-        // Select this machine (replace any existing selection for this step)
-        return {
-          ...prev,
-          [stepName]: machineId, // Single machine ID, not array
-        };
-      }
-    });
+      setStepMachines((prev) => {
+        const currentMachine = prev[stepName];
+        const isSelected = currentMachine === machineId;
 
-    // Restore scroll position after state update
-    requestAnimationFrame(() => {
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollTop;
-      }
-    });
-  }, []);
+        if (isSelected) {
+          // Deselect machine (remove selection)
+          const newMachines = { ...prev };
+          delete newMachines[stepName];
+          return newMachines;
+        } else {
+          // Select this machine (replace any existing selection for this step)
+          return {
+            ...prev,
+            [stepName]: machineId, // Single machine ID, not array
+          };
+        }
+      });
+
+      // Restore scroll position after state update
+      requestAnimationFrame(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollTop = scrollTop;
+        }
+      });
+    },
+    []
+  );
 
   // Helper function to check if a machine is selected for a step - memoized
-  const isMachineSelected = useCallback((stepName: string, machineId: string): boolean => {
-    const selectedMachineId = stepMachines[stepName];
-    return selectedMachineId === machineId;
-  }, [stepMachines]);
+  const isMachineSelected = useCallback(
+    (stepName: string, machineId: string): boolean => {
+      const selectedMachineId = stepMachines[stepName];
+      return selectedMachineId === machineId;
+    },
+    [stepMachines]
+  );
 
   // Updated step toggle to clear multiple machines - optimized with useCallback
   const handleStepToggle = useCallback((stepName: string) => {
@@ -231,16 +237,19 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
   }, []);
 
   // Memoize machine filtering to prevent unnecessary recalculations
-  const getMachinesForStep = useCallback((stepName: string) => {
-    const machineTypes = STEP_TO_MACHINE_MAPPING[stepName];
-    if (!machineTypes || machineTypes.length === 0) return [];
+  const getMachinesForStep = useCallback(
+    (stepName: string) => {
+      const machineTypes = STEP_TO_MACHINE_MAPPING[stepName];
+      if (!machineTypes || machineTypes.length === 0) return [];
 
-    return machines.filter((machine) =>
-      machineTypes.some((type) =>
-        machine.machineType.toLowerCase().includes(type.toLowerCase())
-      )
-    );
-  }, [machines]);
+      return machines.filter((machine) =>
+        machineTypes.some((type) =>
+          machine.machineType.toLowerCase().includes(type.toLowerCase())
+        )
+      );
+    },
+    [machines]
+  );
 
   const hasMachineRequirement = (stepName: string) => {
     const machineTypes = STEP_TO_MACHINE_MAPPING[stepName];
@@ -300,147 +309,176 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
     availableMachines: Machine[];
     selectedMachineId?: string;
     requiresMachine: boolean;
+    jobDemand?: "high" | "medium" | "low" | null; // 🔥 NEW: Job demand prop
     onStepToggle: (stepName: string) => void;
     onMachineToggle: (stepName: string, machineId: string) => void;
     isMachineSelected: (stepName: string, machineId: string) => boolean;
     formatStepName: (stepName: string) => string;
-  }>(({ 
-    option, 
-    isSelected, 
-    availableMachines, 
-    selectedMachineId, 
-    requiresMachine,
-    onStepToggle,
-    onMachineToggle,
-    isMachineSelected,
-    formatStepName
-  }) => {
-    const handleCardClick = useCallback((e: React.MouseEvent) => {
-      // Don't toggle if clicking on machine selection area or checkbox
-      const target = e.target as HTMLElement;
-      if (
-        target.closest('.machine-selection-area') ||
-        target.type === 'checkbox' ||
-        target.type === 'radio' ||
-        target.closest('input[type="radio"]') ||
-        target.closest('input[type="checkbox"]')
-      ) {
-        return;
-      }
-      onStepToggle(option.stepName);
-    }, [option.stepName, onStepToggle]);
+  }>(
+    ({
+      option,
+      isSelected,
+      availableMachines,
+      selectedMachineId,
+      requiresMachine,
+      jobDemand, // 🔥 NEW: Job demand prop
+      onStepToggle,
+      onMachineToggle,
+      isMachineSelected,
+      formatStepName,
+    }) => {
+      const handleCardClick = useCallback(
+        (e: React.MouseEvent) => {
+          // Don't toggle if clicking on machine selection area or checkbox
+          const target = e.target as HTMLElement;
+          const inputTarget = target as HTMLInputElement;
+          if (
+            target.closest(".machine-selection-area") ||
+            inputTarget.type === "checkbox" ||
+            inputTarget.type === "radio" ||
+            target.closest('input[type="radio"]') ||
+            target.closest('input[type="checkbox"]')
+          ) {
+            return;
+          }
+          onStepToggle(option.stepName);
+        },
+        [option.stepName, onStepToggle]
+      );
 
-    return (
-      <div 
-        className="border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition-colors"
-        onClick={handleCardClick}
-      >
-        {/* Step Checkbox */}
-        <div className="flex items-center p-2 rounded">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => onStepToggle(option.stepName)}
-            onClick={(e) => e.stopPropagation()}
-            className="form-checkbox h-5 w-5 text-[#00AEEF] border-gray-300 focus:ring-[#00AEEF] rounded"
-          />
-          <div className="ml-3 flex-1">
-            <span className="block text-base font-medium text-gray-800">
-              {formatStepName(option.stepName)}
-            </span>
-            <span className="block text-sm text-gray-500">
-              {option.description}
-            </span>
-            {!requiresMachine && (
-              <span className="block text-xs text-green-600 mt-1">
-                No machine assignment required
+      return (
+        <div
+          className="border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={handleCardClick}
+        >
+          {/* Step Checkbox */}
+          <div className="flex items-center p-2 rounded">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onStepToggle(option.stepName)}
+              onClick={(e) => e.stopPropagation()}
+              className="form-checkbox h-5 w-5 text-[#00AEEF] border-gray-300 focus:ring-[#00AEEF] rounded"
+            />
+            <div className="ml-3 flex-1">
+              <span className="block text-base font-medium text-gray-800">
+                {formatStepName(option.stepName)}
               </span>
-            )}
-          </div>
-        </div>
-
-        {/* Machine Selection - Radio List */}
-        {isSelected &&
-          requiresMachine &&
-          availableMachines.length > 0 && (
-            <div className="mt-3 pl-8 machine-selection-area" onClick={(e) => e.stopPropagation()}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Machine (
-                {STEP_TO_MACHINE_MAPPING[option.stepName]?.join(" / ")})
-              </label>
-
-              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                {availableMachines.map((machine) => (
-                  <label
-                    key={machine.id}
-                    className="flex items-center cursor-pointer hover:bg-white p-1 rounded text-sm"
-                  >
-                    <input
-                      type="radio"
-                      name={`machine-${option.stepName}`}
-                      checked={isMachineSelected(option.stepName, machine.id)}
-                      onChange={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onMachineToggle(option.stepName, machine.id);
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Prevent default scroll behavior
-                        const target = e.currentTarget;
-                        setTimeout(() => {
-                          target.blur();
-                        }, 0);
-                      }}
-                      onFocus={(e) => {
-                        // Prevent automatic scrolling to focused element
-                        e.currentTarget.blur();
-                      }}
-                      className="form-radio h-4 w-4 text-[#00AEEF] border-gray-300 focus:ring-[#00AEEF] mr-2"
-                    />
-                    <span className="text-gray-800">
-                      {machine.machineCode} - {machine.description}
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              {/* Selected machine summary */}
-              {selectedMachineId && (
-                <div className="mt-2 text-xs text-gray-600">
-                  Selected:{" "}
-                  {availableMachines.find((m) => m.id === selectedMachineId)?.machineCode || "Unknown"}
-                </div>
+              <span className="block text-sm text-gray-500">
+                {option.description}
+              </span>
+              {!requiresMachine && (
+                <span className="block text-xs text-green-600 mt-1">
+                  No machine assignment required
+                </span>
               )}
             </div>
-          )}
+          </div>
 
-        {/* Show message if step requires machine but none available */}
-        {isSelected &&
-          requiresMachine &&
-          availableMachines.length === 0 && (
-            <div className="mt-3 pl-8 text-sm text-amber-600" onClick={(e) => e.stopPropagation()}>
-              No machines available for this step
+          {/* Machine Selection - Radio List - Hidden for urgent jobs */}
+          {isSelected &&
+            requiresMachine &&
+            availableMachines.length > 0 &&
+            jobDemand !== "high" && ( // 🔥 NEW: Hide machine selection for urgent jobs
+              <div
+                className="mt-3 pl-8 machine-selection-area"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Machine (
+                  {STEP_TO_MACHINE_MAPPING[option.stepName]?.join(" / ")})
+                </label>
+
+                <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
+                  {availableMachines.map((machine) => (
+                    <label
+                      key={machine.id}
+                      className="flex items-center cursor-pointer hover:bg-white p-1 rounded text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name={`machine-${option.stepName}`}
+                        checked={isMachineSelected(option.stepName, machine.id)}
+                        onChange={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onMachineToggle(option.stepName, machine.id);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Prevent default scroll behavior
+                          const target = e.currentTarget;
+                          setTimeout(() => {
+                            target.blur();
+                          }, 0);
+                        }}
+                        onFocus={(e) => {
+                          // Prevent automatic scrolling to focused element
+                          e.currentTarget.blur();
+                        }}
+                        className="form-radio h-4 w-4 text-[#00AEEF] border-gray-300 focus:ring-[#00AEEF] mr-2"
+                      />
+                      <span className="text-gray-800">
+                        {machine.machineCode} - {machine.description}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                {/* Selected machine summary */}
+                {selectedMachineId && (
+                  <div className="mt-2 text-xs text-gray-600">
+                    Selected:{" "}
+                    {availableMachines.find((m) => m.id === selectedMachineId)
+                      ?.machineCode || "Unknown"}
+                  </div>
+                )}
+              </div>
+            )}
+
+          {/* Show message for urgent jobs - no machine selection needed */}
+          {isSelected && requiresMachine && jobDemand === "high" && (
+            <div
+              className="mt-3 pl-8 text-sm text-green-600"
+              onClick={(e) => e.stopPropagation()}
+            >
+              ✓ Machine assignment not required for urgent jobs
             </div>
           )}
-      </div>
-    );
-  }, (prevProps, nextProps) => {
-    // Custom comparison function for React.memo - only re-render if relevant props change
-    // This prevents unnecessary re-renders that could cause scroll issues
-    const propsEqual = 
-      prevProps.isSelected === nextProps.isSelected &&
-      prevProps.selectedMachineId === nextProps.selectedMachineId &&
-      prevProps.requiresMachine === nextProps.requiresMachine &&
-      prevProps.availableMachines.length === nextProps.availableMachines.length &&
-      prevProps.availableMachines.every((m, i) => 
-        nextProps.availableMachines[i]?.id === m.id
+
+          {/* Show message if step requires machine but none available */}
+          {isSelected &&
+            requiresMachine &&
+            availableMachines.length === 0 &&
+            jobDemand !== "high" && (
+              <div
+                className="mt-3 pl-8 text-sm text-amber-600"
+                onClick={(e) => e.stopPropagation()}
+              >
+                No machines available for this step
+              </div>
+            )}
+        </div>
       );
-    
-    // If props are equal, don't re-render (prevents scroll reset)
-    return propsEqual;
-  });
-  StepItem.displayName = 'StepItem';
+    },
+    (prevProps, nextProps) => {
+      // Custom comparison function for React.memo - only re-render if relevant props change
+      // This prevents unnecessary re-renders that could cause scroll issues
+      const propsEqual =
+        prevProps.isSelected === nextProps.isSelected &&
+        prevProps.selectedMachineId === nextProps.selectedMachineId &&
+        prevProps.requiresMachine === nextProps.requiresMachine &&
+        prevProps.availableMachines.length ===
+          nextProps.availableMachines.length &&
+        prevProps.availableMachines.every(
+          (m, i) => nextProps.availableMachines[i]?.id === m.id
+        );
+
+      // If props are equal, don't re-render (prevents scroll reset)
+      return propsEqual;
+    }
+  );
+  StepItem.displayName = "StepItem";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 bg-transparent bg-opacity-30 backdrop-blur-sm min-h-screen">
@@ -452,15 +490,17 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
           &times;
         </button>
 
-        <div 
+        <div
           ref={modalContentRef}
           className="w-full px-8 pt-10 pb-8 flex flex-col items-center overflow-y-auto max-h-[85vh]"
         >
           <h2 className="text-2xl font-bold mb-2 text-center text-gray-900">
-            Select Steps & Machines
+            Select Steps {jobDemand !== "high" ? "& Machines" : ""}
           </h2>
           <p className="text-gray-500 text-center mb-6">
-            Select steps and assign a machine for each step:
+            {jobDemand === "high"
+              ? "Select steps for urgent job (machine assignment not required):"
+              : "Select steps and assign a machine for each step:"}
           </p>
 
           {loading && <div className="text-center py-4">Loading...</div>}
@@ -483,6 +523,7 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
                     availableMachines={availableMachines}
                     selectedMachineId={selectedMachineId}
                     requiresMachine={requiresMachine}
+                    jobDemand={jobDemand} // 🔥 NEW: Pass job demand
                     onStepToggle={handleStepToggle}
                     onMachineToggle={handleMachineToggle}
                     isMachineSelected={isMachineSelected}

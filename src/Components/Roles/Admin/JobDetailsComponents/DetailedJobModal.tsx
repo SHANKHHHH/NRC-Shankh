@@ -412,7 +412,38 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
         // Step details in compact format
         if (stepDetails && stepDetails.length > 0) {
           const detail = stepDetails[0]; // Take first detail for compact display
-          const detailsHeight = 20; // Fixed height for consistency
+
+          // Check if QualityDept has rejection reasons breakdown
+          let additionalHeight = 0;
+          if (step.stepName === "QualityDept") {
+            const hasRejectionReasons =
+              detail.rejectionReasonAQty > 0 ||
+              detail.rejectionReasonBQty > 0 ||
+              detail.rejectionReasonCQty > 0 ||
+              detail.rejectionReasonDQty > 0 ||
+              detail.rejectionReasonEQty > 0 ||
+              detail.rejectionReasonFQty > 0 ||
+              detail.rejectionReasonOthersQty > 0;
+
+            if (hasRejectionReasons) {
+              // Calculate how many rejection reasons we have
+              let reasonCount = 0;
+              if (detail.rejectionReasonAQty > 0) reasonCount++;
+              if (detail.rejectionReasonBQty > 0) reasonCount++;
+              if (detail.rejectionReasonCQty > 0) reasonCount++;
+              if (detail.rejectionReasonDQty > 0) reasonCount++;
+              if (detail.rejectionReasonEQty > 0) reasonCount++;
+              if (detail.rejectionReasonFQty > 0) reasonCount++;
+              if (detail.rejectionReasonOthersQty > 0) reasonCount++;
+
+              // Calculate rows needed (2 columns, so divide by 2 and round up)
+              const rowsNeeded = Math.ceil(reasonCount / 2);
+              // Add height for separator line (1mm) + header (2mm) + reasons (2.5mm per row, max 4 rows = 10mm)
+              additionalHeight = 1 + 2 + Math.min(rowsNeeded * 2.5, 10);
+            }
+          }
+
+          const detailsHeight = 20 + additionalHeight; // Base height + additional for rejection reasons
 
           // Draw details box
           drawRect(
@@ -500,6 +531,110 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             displayField("Reason", detail.reasonForRejection);
             displayField("Operator", detail.operatorName);
             displayField("Shift", detail.shift);
+
+            // Add rejection reasons breakdown if available
+            const hasRejectionReasons =
+              detail.rejectionReasonAQty > 0 ||
+              detail.rejectionReasonBQty > 0 ||
+              detail.rejectionReasonCQty > 0 ||
+              detail.rejectionReasonDQty > 0 ||
+              detail.rejectionReasonEQty > 0 ||
+              detail.rejectionReasonFQty > 0 ||
+              detail.rejectionReasonOthersQty > 0;
+
+            if (hasRejectionReasons) {
+              // Add a separator line
+              pdf.setDrawColor(200, 200, 200);
+              pdf.setLineWidth(0.1);
+              pdf.line(
+                currentX + 1,
+                detailY + 9,
+                currentX + columnWidth - 1,
+                detailY + 9
+              );
+
+              // Add rejection reasons breakdown header
+              pdf.setFontSize(5.5);
+              pdf.setFont("helvetica", "bold");
+              pdf.setTextColor(
+                colors.darkGray[0],
+                colors.darkGray[1],
+                colors.darkGray[2]
+              );
+              pdf.text("Rejection Breakdown:", currentX + 2, detailY + 11.5);
+
+              // Reset font for values
+              pdf.setFontSize(5);
+              pdf.setFont("helvetica", "normal");
+              pdf.setTextColor(
+                colors.darkGray[0],
+                colors.darkGray[1],
+                colors.darkGray[2]
+              );
+
+              let reasonY = detailY + 13.5;
+              const reasonLeftX = currentX + 2;
+              const reasonRightX = currentX + columnWidth / 2 + 2;
+              let reasonRow = 0;
+
+              // Display rejection reasons in two columns
+              if (detail.rejectionReasonAQty > 0) {
+                pdf.text(
+                  `A: ${detail.rejectionReasonAQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonBQty > 0) {
+                pdf.text(
+                  `B: ${detail.rejectionReasonBQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonCQty > 0) {
+                pdf.text(
+                  `C: ${detail.rejectionReasonCQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonDQty > 0) {
+                pdf.text(
+                  `D: ${detail.rejectionReasonDQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonEQty > 0) {
+                pdf.text(
+                  `E: ${detail.rejectionReasonEQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonFQty > 0) {
+                pdf.text(
+                  `F: ${detail.rejectionReasonFQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+              if (detail.rejectionReasonOthersQty > 0) {
+                pdf.text(
+                  `Others: ${detail.rejectionReasonOthersQty}`,
+                  reasonRow % 2 === 0 ? reasonLeftX : reasonRightX,
+                  reasonY + Math.floor(reasonRow / 2) * 2.5
+                );
+                reasonRow++;
+              }
+            }
           } else if (step.stepName === "DispatchProcess") {
             displayField("Qty", detail.quantity);
             displayField("Balance", detail.balanceQty);
@@ -1956,6 +2091,113 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                               <span className="text-red-600">
                                                 {detail.reasonForRejection}
                                               </span>
+                                            </div>
+                                          )}
+                                          {/* Rejection Reasons Breakdown */}
+                                          {(detail.rejectionReasonAQty ||
+                                            detail.rejectionReasonBQty ||
+                                            detail.rejectionReasonCQty ||
+                                            detail.rejectionReasonDQty ||
+                                            detail.rejectionReasonEQty ||
+                                            detail.rejectionReasonFQty ||
+                                            detail.rejectionReasonOthersQty) && (
+                                            <div className="mt-2 pt-2 border-t border-gray-200">
+                                              <p className="text-xs font-medium text-gray-700 mb-2">
+                                                Rejection Reasons Breakdown:
+                                              </p>
+                                              <div className="space-y-1">
+                                                {detail.rejectionReasonAQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason A:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonAQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonBQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason B:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonBQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonCQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason C:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonCQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonDQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason D:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonDQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonEQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason E:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonEQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonFQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Reason F:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonFQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {detail.rejectionReasonOthersQty >
+                                                  0 && (
+                                                  <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-600">
+                                                      Others:
+                                                    </span>
+                                                    <span className="text-red-600 font-medium">
+                                                      {
+                                                        detail.rejectionReasonOthersQty
+                                                      }
+                                                    </span>
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                           )}
                                           {detail.shift && (

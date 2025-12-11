@@ -53,7 +53,9 @@ const QCDashboard: React.FC = () => {
           qcService.getAllQCData(),
           qcService.getQCStatistics(),
           fetch(
-            `https://nrprod.nrcontainers.com/api/completed-jobs?${queryParams.toString()}`,
+            `${
+              import.meta.env.VITE_API_URL || "http://localhost:3000"
+            }/api/completed-jobs?${queryParams.toString()}`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -88,29 +90,125 @@ const QCDashboard: React.FC = () => {
 
                 console.log("QC steps found:", qcSteps);
 
-                return qcSteps.map((step: any) => ({
-                  id: step.id || 0,
-                  jobNrcJobNo: step.jobNrcJobNo || job.nrcJobNo || "-",
-                  status: step.status || "stop",
-                  date:
-                    step.date || job.completedAt || new Date().toISOString(),
-                  shift: step.shift || null,
-                  operatorName: step.operatorName || "-",
-                  checkedBy: step.checkedBy || step.operatorName || "-",
-                  quantity: step.quantity || step.passQuantity || 0,
-                  rejectedQty: step.rejectedQty || step.rejectedQuantity || 0,
-                  reasonForRejection: step.reasonForRejection || "-",
-                  remarks: step.remarks || "-",
-                  qcCheckSignBy: step.qcCheckSignBy || null,
-                  jobStepId: step.jobStepId || null,
-                  stepNo: step.stepNo || 6,
-                  stepName: "QualityDept",
-                  startDate: step.startDate || step.date || null,
-                  endDate: step.endDate || step.date || null,
-                  user: step.operatorName || null,
-                  machineDetails: step.machineDetails || [],
-                  jobPlanId: job.jobPlanId || null,
-                }));
+                // Flatten: Each step can have multiple qualityDetails entries, each should be a separate row
+                const qcEntries: any[] = [];
+
+                qcSteps.forEach((step: any) => {
+                  // If qualityDetails is an array with items, create a separate entry for each
+                  if (
+                    Array.isArray(step.qualityDetails) &&
+                    step.qualityDetails.length > 0
+                  ) {
+                    step.qualityDetails.forEach((qualityDetail: any) => {
+                      // Use qualityDetail values directly - don't fall back to step values
+                      // Only use step/job values for fields that don't exist in qualityDetail
+                      qcEntries.push({
+                        id:
+                          qualityDetail.id !== undefined
+                            ? qualityDetail.id
+                            : step.id || 0,
+                        jobNrcJobNo:
+                          qualityDetail.jobNrcJobNo !== undefined
+                            ? qualityDetail.jobNrcJobNo
+                            : step.jobNrcJobNo || job.nrcJobNo || "-",
+                        status:
+                          qualityDetail.status !== undefined
+                            ? qualityDetail.status
+                            : step.status || "stop",
+                        date:
+                          qualityDetail.date !== undefined
+                            ? qualityDetail.date
+                            : step.date ||
+                              job.completedAt ||
+                              new Date().toISOString(),
+                        shift:
+                          qualityDetail.shift !== undefined
+                            ? qualityDetail.shift
+                            : step.shift || null,
+                        operatorName:
+                          qualityDetail.operatorName !== undefined
+                            ? qualityDetail.operatorName
+                            : step.operatorName || "-",
+                        checkedBy:
+                          qualityDetail.checkedBy !== undefined
+                            ? qualityDetail.checkedBy
+                            : step.checkedBy || step.operatorName || "-",
+                        quantity:
+                          qualityDetail.quantity !== undefined
+                            ? qualityDetail.quantity
+                            : step.quantity || step.passQuantity || 0,
+                        rejectedQty:
+                          qualityDetail.rejectedQty !== undefined
+                            ? qualityDetail.rejectedQty
+                            : step.rejectedQty || step.rejectedQuantity || 0,
+                        reasonForRejection:
+                          qualityDetail.reasonForRejection !== undefined
+                            ? qualityDetail.reasonForRejection
+                            : step.reasonForRejection || "-",
+                        remarks:
+                          qualityDetail.remarks !== undefined
+                            ? qualityDetail.remarks
+                            : step.remarks || "-",
+                        qcCheckSignBy:
+                          qualityDetail.qcCheckSignBy !== undefined
+                            ? qualityDetail.qcCheckSignBy
+                            : step.qcCheckSignBy || null,
+                        jobStepId:
+                          qualityDetail.jobStepId !== undefined
+                            ? qualityDetail.jobStepId
+                            : step.jobStepId || null,
+                        stepNo: step.stepNo || 6,
+                        stepName: "QualityDept",
+                        startDate:
+                          qualityDetail.startDate !== undefined
+                            ? qualityDetail.startDate
+                            : step.startDate || step.date || null,
+                        endDate:
+                          qualityDetail.endDate !== undefined
+                            ? qualityDetail.endDate
+                            : step.endDate || step.date || null,
+                        user:
+                          qualityDetail.operatorName !== undefined
+                            ? qualityDetail.operatorName
+                            : step.operatorName || null,
+                        machineDetails: step.machineDetails || [],
+                        jobPlanId: job.jobPlanId || null,
+                        qualityDetails: qualityDetail, // Include full qualityDetails for rejection reason fields
+                      });
+                    });
+                  } else {
+                    // If no qualityDetails array, use step directly
+                    qcEntries.push({
+                      id: step.id || 0,
+                      jobNrcJobNo: step.jobNrcJobNo || job.nrcJobNo || "-",
+                      status: step.status || "stop",
+                      date:
+                        step.date ||
+                        job.completedAt ||
+                        new Date().toISOString(),
+                      shift: step.shift || null,
+                      operatorName: step.operatorName || "-",
+                      checkedBy: step.checkedBy || step.operatorName || "-",
+                      quantity: step.quantity || step.passQuantity || 0,
+                      rejectedQty:
+                        step.rejectedQty || step.rejectedQuantity || 0,
+                      reasonForRejection: step.reasonForRejection || "-",
+                      remarks: step.remarks || "-",
+                      qcCheckSignBy: step.qcCheckSignBy || null,
+                      jobStepId: step.jobStepId || null,
+                      stepNo: step.stepNo || 6,
+                      stepName: "QualityDept",
+                      startDate: step.startDate || step.date || null,
+                      endDate: step.endDate || step.date || null,
+                      user: step.operatorName || null,
+                      machineDetails: step.machineDetails || [],
+                      jobPlanId: job.jobPlanId || null,
+                      qualityDetails: step,
+                    });
+                  }
+                });
+
+                return qcEntries;
               }
             );
 
@@ -134,9 +232,345 @@ const QCDashboard: React.FC = () => {
     loadData();
   }, []);
 
-  // Combine qcData with completed jobs
-  const allQCData = [...qcData, ...completedJobs];
+  // Refresh data
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        throw new Error("Authentication token not found");
+      }
+
+      // Fetch completed jobs from current month
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("startDate", startOfMonth.toISOString().split("T")[0]);
+      queryParams.append("endDate", endOfMonth.toISOString().split("T")[0]);
+
+      const [data, , completedJobsResponse] = await Promise.all([
+        qcService.getAllQCData(),
+        qcService.getQCStatistics(),
+        fetch(
+          `${
+            import.meta.env.VITE_API_URL || "http://localhost:3000"
+          }/api/completed-jobs?${queryParams.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        ),
+      ]);
+
+      setQcData(data);
+
+      // Process completed jobs data for QC
+      if (completedJobsResponse.ok) {
+        const completedJobsResult = await completedJobsResponse.json();
+        if (
+          completedJobsResult.success &&
+          Array.isArray(completedJobsResult.data)
+        ) {
+          const qcCompletedJobs = completedJobsResult.data.flatMap(
+            (job: any) => {
+              const qcSteps = job.allStepDetails?.qualityDept || [];
+              // Flatten: Each step can have multiple qualityDetails entries, each should be a separate row
+              const qcEntries: any[] = [];
+
+              qcSteps.forEach((step: any) => {
+                // If qualityDetails is an array with items, create a separate entry for each
+                if (
+                  Array.isArray(step.qualityDetails) &&
+                  step.qualityDetails.length > 0
+                ) {
+                  step.qualityDetails.forEach((qualityDetail: any) => {
+                    // Use qualityDetail values directly - don't fall back to step values
+                    // Only use step/job values for fields that don't exist in qualityDetail
+                    qcEntries.push({
+                      id:
+                        qualityDetail.id !== undefined
+                          ? qualityDetail.id
+                          : step.id || 0,
+                      jobNrcJobNo:
+                        qualityDetail.jobNrcJobNo !== undefined
+                          ? qualityDetail.jobNrcJobNo
+                          : step.jobNrcJobNo || job.nrcJobNo || "-",
+                      status:
+                        qualityDetail.status !== undefined
+                          ? qualityDetail.status
+                          : step.status || "stop",
+                      date:
+                        qualityDetail.date !== undefined
+                          ? qualityDetail.date
+                          : step.date ||
+                            job.completedAt ||
+                            new Date().toISOString(),
+                      shift:
+                        qualityDetail.shift !== undefined
+                          ? qualityDetail.shift
+                          : step.shift || null,
+                      operatorName:
+                        qualityDetail.operatorName !== undefined
+                          ? qualityDetail.operatorName
+                          : step.operatorName || "-",
+                      checkedBy:
+                        qualityDetail.checkedBy !== undefined
+                          ? qualityDetail.checkedBy
+                          : step.checkedBy || step.operatorName || "-",
+                      quantity:
+                        qualityDetail.quantity !== undefined
+                          ? qualityDetail.quantity
+                          : step.quantity || step.passQuantity || 0,
+                      rejectedQty:
+                        qualityDetail.rejectedQty !== undefined
+                          ? qualityDetail.rejectedQty
+                          : step.rejectedQty || step.rejectedQuantity || 0,
+                      reasonForRejection:
+                        qualityDetail.reasonForRejection !== undefined
+                          ? qualityDetail.reasonForRejection
+                          : step.reasonForRejection || "-",
+                      remarks:
+                        qualityDetail.remarks !== undefined
+                          ? qualityDetail.remarks
+                          : step.remarks || "-",
+                      qcCheckSignBy:
+                        qualityDetail.qcCheckSignBy !== undefined
+                          ? qualityDetail.qcCheckSignBy
+                          : step.qcCheckSignBy || null,
+                      jobStepId:
+                        qualityDetail.jobStepId !== undefined
+                          ? qualityDetail.jobStepId
+                          : step.jobStepId || null,
+                      stepNo: step.stepNo || 6,
+                      stepName: "QualityDept",
+                      startDate:
+                        qualityDetail.startDate !== undefined
+                          ? qualityDetail.startDate
+                          : step.startDate || step.date || null,
+                      endDate:
+                        qualityDetail.endDate !== undefined
+                          ? qualityDetail.endDate
+                          : step.endDate || step.date || null,
+                      user:
+                        qualityDetail.operatorName !== undefined
+                          ? qualityDetail.operatorName
+                          : step.operatorName || null,
+                      machineDetails: step.machineDetails || [],
+                      jobPlanId: job.jobPlanId || null,
+                      qualityDetails: qualityDetail, // Include full qualityDetails for rejection reason fields
+                    });
+                  });
+                } else {
+                  // If no qualityDetails array, use step directly
+                  qcEntries.push({
+                    id: step.id || 0,
+                    jobNrcJobNo: step.jobNrcJobNo || job.nrcJobNo || "-",
+                    status: step.status || "stop",
+                    date:
+                      step.date || job.completedAt || new Date().toISOString(),
+                    shift: step.shift || null,
+                    operatorName: step.operatorName || "-",
+                    checkedBy: step.checkedBy || step.operatorName || "-",
+                    quantity: step.quantity || step.passQuantity || 0,
+                    rejectedQty: step.rejectedQty || step.rejectedQuantity || 0,
+                    reasonForRejection: step.reasonForRejection || "-",
+                    remarks: step.remarks || "-",
+                    qcCheckSignBy: step.qcCheckSignBy || null,
+                    jobStepId: step.jobStepId || null,
+                    stepNo: step.stepNo || 6,
+                    stepName: "QualityDept",
+                    startDate: step.startDate || step.date || null,
+                    endDate: step.endDate || step.date || null,
+                    user: step.operatorName || null,
+                    machineDetails: step.machineDetails || [],
+                    jobPlanId: job.jobPlanId || null,
+                    qualityDetails: step,
+                  });
+                }
+              });
+
+              return qcEntries;
+            }
+          );
+          setCompletedJobs(qcCompletedJobs);
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing QC data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Process qcData: If items have qualityDetails as array, flatten them like completedJobs
+  const processedQcData = qcData.flatMap((item: any) => {
+    // If qualityDetails is an array with items, create separate entries for each
+    if (Array.isArray(item.qualityDetails) && item.qualityDetails.length > 0) {
+      return item.qualityDetails.map((qualityDetail: any) => ({
+        id: qualityDetail.id !== undefined ? qualityDetail.id : item.id || 0,
+        jobNrcJobNo:
+          qualityDetail.jobNrcJobNo !== undefined
+            ? qualityDetail.jobNrcJobNo
+            : item.jobNrcJobNo || item.nrcJobNo || "-",
+        status:
+          qualityDetail.status !== undefined
+            ? qualityDetail.status
+            : item.status || "stop",
+        date:
+          qualityDetail.date !== undefined
+            ? qualityDetail.date
+            : item.date ||
+              item.startDate ||
+              item.createdAt ||
+              new Date().toISOString(),
+        shift:
+          qualityDetail.shift !== undefined
+            ? qualityDetail.shift
+            : item.shift || null,
+        operatorName:
+          qualityDetail.operatorName !== undefined
+            ? qualityDetail.operatorName
+            : item.operatorName || item.user || "-",
+        checkedBy:
+          qualityDetail.checkedBy !== undefined
+            ? qualityDetail.checkedBy
+            : item.checkedBy || item.operatorName || item.user || "-",
+        quantity:
+          qualityDetail.quantity !== undefined
+            ? qualityDetail.quantity
+            : item.quantity || item.passQuantity || 0,
+        rejectedQty:
+          qualityDetail.rejectedQty !== undefined
+            ? qualityDetail.rejectedQty
+            : item.rejectedQty || item.rejectedQuantity || 0,
+        reasonForRejection:
+          qualityDetail.reasonForRejection !== undefined
+            ? qualityDetail.reasonForRejection
+            : item.reasonForRejection || "-",
+        remarks:
+          qualityDetail.remarks !== undefined
+            ? qualityDetail.remarks
+            : item.remarks || "-",
+        qcCheckSignBy:
+          qualityDetail.qcCheckSignBy !== undefined
+            ? qualityDetail.qcCheckSignBy
+            : item.qcCheckSignBy || null,
+        jobStepId:
+          qualityDetail.jobStepId !== undefined
+            ? qualityDetail.jobStepId
+            : item.jobStepId || item.id || null,
+        stepNo: item.stepNo || 6,
+        stepName: item.stepName || "QualityDept",
+        startDate:
+          qualityDetail.startDate !== undefined
+            ? qualityDetail.startDate
+            : item.startDate || item.date || null,
+        endDate:
+          qualityDetail.endDate !== undefined
+            ? qualityDetail.endDate
+            : item.endDate || item.date || null,
+        user:
+          qualityDetail.operatorName !== undefined
+            ? qualityDetail.operatorName
+            : item.operatorName || item.user || null,
+        machineDetails: item.machineDetails || [],
+        jobPlanId: item.jobPlanId || null,
+        qualityDetails: qualityDetail,
+      }));
+    }
+    // If qualityDetails is a single object (not array), use it directly
+    else if (
+      item.qualityDetails &&
+      typeof item.qualityDetails === "object" &&
+      !Array.isArray(item.qualityDetails)
+    ) {
+      const qualityDetail = item.qualityDetails;
+      return [
+        {
+          id: qualityDetail.id !== undefined ? qualityDetail.id : item.id || 0,
+          jobNrcJobNo:
+            qualityDetail.jobNrcJobNo !== undefined
+              ? qualityDetail.jobNrcJobNo
+              : item.jobNrcJobNo || item.nrcJobNo || "-",
+          status:
+            qualityDetail.status !== undefined
+              ? qualityDetail.status
+              : item.status || "stop",
+          date:
+            qualityDetail.date !== undefined
+              ? qualityDetail.date
+              : item.date ||
+                item.startDate ||
+                item.createdAt ||
+                new Date().toISOString(),
+          shift:
+            qualityDetail.shift !== undefined
+              ? qualityDetail.shift
+              : item.shift || null,
+          operatorName:
+            qualityDetail.operatorName !== undefined
+              ? qualityDetail.operatorName
+              : item.operatorName || item.user || "-",
+          checkedBy:
+            qualityDetail.checkedBy !== undefined
+              ? qualityDetail.checkedBy
+              : item.checkedBy || item.operatorName || item.user || "-",
+          quantity:
+            qualityDetail.quantity !== undefined
+              ? qualityDetail.quantity
+              : item.quantity || item.passQuantity || 0,
+          rejectedQty:
+            qualityDetail.rejectedQty !== undefined
+              ? qualityDetail.rejectedQty
+              : item.rejectedQty || item.rejectedQuantity || 0,
+          reasonForRejection:
+            qualityDetail.reasonForRejection !== undefined
+              ? qualityDetail.reasonForRejection
+              : item.reasonForRejection || "-",
+          remarks:
+            qualityDetail.remarks !== undefined
+              ? qualityDetail.remarks
+              : item.remarks || "-",
+          qcCheckSignBy:
+            qualityDetail.qcCheckSignBy !== undefined
+              ? qualityDetail.qcCheckSignBy
+              : item.qcCheckSignBy || null,
+          jobStepId:
+            qualityDetail.jobStepId !== undefined
+              ? qualityDetail.jobStepId
+              : item.jobStepId || item.id || null,
+          stepNo: item.stepNo || 6,
+          stepName: item.stepName || "QualityDept",
+          startDate:
+            qualityDetail.startDate !== undefined
+              ? qualityDetail.startDate
+              : item.startDate || item.date || null,
+          endDate:
+            qualityDetail.endDate !== undefined
+              ? qualityDetail.endDate
+              : item.endDate || item.date || null,
+          user:
+            qualityDetail.operatorName !== undefined
+              ? qualityDetail.operatorName
+              : item.operatorName || item.user || null,
+          machineDetails: item.machineDetails || [],
+          jobPlanId: item.jobPlanId || null,
+          qualityDetails: qualityDetail,
+        },
+      ];
+    }
+    // If no qualityDetails, skip this item (don't include entries with default/empty values)
+    return [];
+  });
+
+  // Combine processed qcData with completed jobs
+  const allQCData = [...processedQcData, ...completedJobs];
   console.log("Original QC data:", qcData);
+  console.log("Processed QC data (flattened):", processedQcData);
   console.log("Completed jobs data:", completedJobs);
   console.log("Combined QC data:", allQCData);
 
@@ -223,14 +657,28 @@ const QCDashboard: React.FC = () => {
         ? Math.round((totalRejectedQuantity / totalQuantityChecked) * 100)
         : 0;
 
-    // Find top rejection reason - use rejectedQty instead of quantity
-    const rejectionReasons = allQCData
-      .filter((item) => (item.rejectedQty || 0) > 0 && item.reasonForRejection)
-      .reduce((acc, item) => {
-        const reason = item.reasonForRejection || item.remarks || "Unknown";
-        acc[reason] = (acc[reason] || 0) + (item.rejectedQty || 0);
-        return acc;
-      }, {} as Record<string, number>);
+    // Aggregate rejection reasons based on numeric fields (A, B, C, D, E, F, Others)
+    const rejectionReasons: Record<string, number> = {
+      "Reason A": 0,
+      "Reason B": 0,
+      "Reason C": 0,
+      "Reason D": 0,
+      "Reason E": 0,
+      "Reason F": 0,
+      Others: 0,
+    };
+
+    allQCData.forEach((item) => {
+      // Access rejection reason fields from completedJobs data structure
+      const qcDetails = (item as any).qualityDetails || item;
+      rejectionReasons["Reason A"] += qcDetails.rejectionReasonAQty || 0;
+      rejectionReasons["Reason B"] += qcDetails.rejectionReasonBQty || 0;
+      rejectionReasons["Reason C"] += qcDetails.rejectionReasonCQty || 0;
+      rejectionReasons["Reason D"] += qcDetails.rejectionReasonDQty || 0;
+      rejectionReasons["Reason E"] += qcDetails.rejectionReasonEQty || 0;
+      rejectionReasons["Reason F"] += qcDetails.rejectionReasonFQty || 0;
+      rejectionReasons["Others"] += qcDetails.rejectionReasonOthersQty || 0;
+    });
 
     const topRejectionReason =
       Object.keys(rejectionReasons).length > 0
@@ -258,11 +706,33 @@ const QCDashboard: React.FC = () => {
     combinedStats.rejectionReasons || {}
   );
   const hasRejectionReasonData = rejectionReasonEntries.length > 0;
-  const sortedRejectionReasons = rejectionReasonEntries.sort(
-    (a, b) => b[1] - a[1]
-  );
+
+  // Order reasons as A, B, C, D, E, F, Others (not sorted by quantity)
+  const reasonOrder = [
+    "Reason A",
+    "Reason B",
+    "Reason C",
+    "Reason D",
+    "Reason E",
+    "Reason F",
+    "Others",
+  ];
+  const orderedRejectionReasons: [string, number][] = reasonOrder
+    .map((reason): [string, number] => {
+      const found = rejectionReasonEntries.find(([key]) => key === reason);
+      return found ? [found[0], found[1] as number] : [reason, 0];
+    })
+    .filter(([, count]) => count > 0 || hasRejectionReasonData);
+
   const maxReasonCount =
-    sortedRejectionReasons.length > 0 ? sortedRejectionReasons[0][1] : 0;
+    orderedRejectionReasons.length > 0
+      ? Math.max(...orderedRejectionReasons.map(([, count]) => count))
+      : 0;
+
+  // Calculate Y-axis max value (round up to nearest nice number)
+  const yAxisMax =
+    maxReasonCount > 0 ? Math.ceil(maxReasonCount / 15) * 15 : 15;
+  const yAxisTicks = Array.from({ length: 11 }, (_, i) => (yAxisMax / 10) * i);
 
   // Get status color and label
   const getStatusInfo = (status: string) => {
@@ -336,87 +806,6 @@ const QCDashboard: React.FC = () => {
     setSelectedQC(null);
   };
 
-  // Refresh data
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const accessToken = localStorage.getItem("accessToken");
-      if (!accessToken) {
-        throw new Error("Authentication token not found");
-      }
-
-      // Fetch completed jobs from current month
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      const queryParams = new URLSearchParams();
-      queryParams.append("startDate", startOfMonth.toISOString().split("T")[0]);
-      queryParams.append("endDate", endOfMonth.toISOString().split("T")[0]);
-
-      const [data, , completedJobsResponse] = await Promise.all([
-        qcService.getAllQCData(),
-        qcService.getQCStatistics(),
-        fetch(
-          `https://nrprod.nrcontainers.com/api/completed-jobs?${queryParams.toString()}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-          }
-        ),
-      ]);
-
-      setQcData(data);
-      // setSummaryData(summary);
-
-      // Process completed jobs data for QC
-      if (completedJobsResponse.ok) {
-        const completedJobsResult = await completedJobsResponse.json();
-        if (
-          completedJobsResult.success &&
-          Array.isArray(completedJobsResult.data)
-        ) {
-          const qcCompletedJobs = completedJobsResult.data.flatMap(
-            (job: any) => {
-              // Access QC steps from allStepDetails.qualityDept (it's an object, not an array)
-              const qcSteps = job.allStepDetails?.qualityDept || [];
-
-              return qcSteps.map((step: any) => ({
-                id: step.id || 0,
-                jobNrcJobNo: step.jobNrcJobNo || job.nrcJobNo || "-",
-                status: step.status || "stop",
-                date: step.date || job.completedAt || new Date().toISOString(),
-                shift: step.shift || null,
-                operatorName: step.operatorName || "-",
-                checkedBy: step.checkedBy || step.operatorName || "-",
-                quantity: step.quantity || step.passQuantity || 0,
-                rejectedQty: step.rejectedQty || step.rejectedQuantity || 0,
-                reasonForRejection: step.reasonForRejection || "-",
-                remarks: step.remarks || "-",
-                qcCheckSignBy: step.qcCheckSignBy || null,
-                jobStepId: step.jobStepId || null,
-                stepNo: step.stepNo || 6,
-                stepName: "QualityDept",
-                startDate: step.startDate || step.date || null,
-                endDate: step.endDate || step.date || null,
-                user: step.operatorName || null,
-                machineDetails: step.machineDetails || [],
-                jobPlanId: job.jobPlanId || null,
-              }));
-            }
-          );
-          setCompletedJobs(qcCompletedJobs);
-        }
-      }
-    } catch (error) {
-      console.error("Error refreshing QC data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -437,6 +826,7 @@ const QCDashboard: React.FC = () => {
               <ClipboardDocumentCheckIcon className="h-8 w-8 text-white" />
             </div>
             <div>
+              <h1 className="text-3xl font-bold text-gray-900">QC Dashboard</h1>
               <p className="text-gray-600 text-lg">
                 Monitor and manage quality control operations
               </p>
@@ -584,7 +974,10 @@ const QCDashboard: React.FC = () => {
           tabIndex={hasRejectionReasonData ? 0 : -1}
           onClick={() => hasRejectionReasonData && setShowReasonModal(true)}
           onKeyDown={(e) => {
-            if (hasRejectionReasonData && (e.key === "Enter" || e.key === " ")) {
+            if (
+              hasRejectionReasonData &&
+              (e.key === "Enter" || e.key === " ")
+            ) {
               e.preventDefault();
               setShowReasonModal(true);
             }
@@ -626,7 +1019,7 @@ const QCDashboard: React.FC = () => {
                 Pending Checks
               </p>
               <p className="text-2xl font-bold text-orange-700">
-                {qcData.filter((item) => item.status === "pending").length}
+                {allQCData.filter((item) => item.status === "pending").length}
               </p>
             </div>
             <div className="bg-yellow-100 p-3 rounded-lg">
@@ -677,82 +1070,110 @@ const QCDashboard: React.FC = () => {
             <div className="px-6 py-5 overflow-y-auto max-h-[calc(80vh-80px)]">
               {hasRejectionReasonData ? (
                 <div className="space-y-6">
-                  {/* Histogram Container */}
-                  <div className="flex items-end justify-between gap-4 h-80 border-b-2 border-gray-200 pb-4">
-                    {sortedRejectionReasons.map(([reason, count], index) => {
-                      const percentage =
-                        combinedStats.totalRejectedQuantity > 0
-                          ? (count / combinedStats.totalRejectedQuantity) * 100
-                          : 0;
-                      const heightPercent =
-                        maxReasonCount > 0
-                          ? Math.max((count / maxReasonCount) * 100, 5)
-                          : 0;
-                      const isMostCommon = index === 0;
-                      const placeholderLabels = ["A", "B", "C", "D", "E", "F", "G"];
-                      const displayLabel =
-                        placeholderLabels[index] || `Reason ${index + 1}`;
-                      return (
-                        <div
-                          key={reason}
-                          className="flex-1 flex flex-col items-center justify-end group"
-                        >
-                          {/* Vertical Bar */}
-                          <div className="relative w-full flex flex-col items-center">
-                            <div
-                              className={`w-full rounded-t-lg transition-all duration-300 ${
-                                isMostCommon
-                                  ? "bg-gradient-to-t from-blue-600 to-blue-400 shadow-lg"
-                                  : "bg-gradient-to-t from-blue-500 to-blue-300"
-                              }`}
-                              style={{
-                                height: `${heightPercent}%`,
-                                minHeight: "20px",
-                              }}
-                            >
-                              {/* Value on top of bar */}
-                              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                                <span
-                                  className={`text-xs font-bold ${
-                                    isMostCommon
-                                      ? "text-blue-700"
-                                      : "text-blue-600"
-                                  }`}
-                                >
-                                  {count.toLocaleString()}
-                                </span>
-                              </div>
-                              {/* Percentage inside bar (if bar is tall enough) */}
-                              {heightPercent > 15 && (
-                                <div className="h-full flex items-center justify-center">
-                                  <span className="text-xs font-semibold text-white">
-                                    {percentage.toFixed(1)}%
-                                  </span>
+                  {/* Chart Title */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-base font-semibold text-gray-900">
+                      Rejection Reasons
+                    </h4>
+                    {/* <span className="text-xs text-gray-500">
+                      Click on bars to view details
+                    </span> */}
+                  </div>
+
+                  {/* Chart Container with Axes */}
+                  <div className="relative">
+                    {/* Y-axis Label */}
+                    <div className="absolute -left-6 top-1/2 -translate-y-1/2 -rotate-90 text-xs font-medium text-gray-600 whitespace-nowrap">
+                      Count / Quantity
+                    </div>
+
+                    {/* Chart Area */}
+                    <div className="ml-20 mr-4">
+                      {/* Y-axis Ticks and Grid Lines */}
+                      <div className="relative h-64 border-b-2 border-gray-200">
+                        {/* Grid Lines */}
+                        {yAxisTicks.map((tick, index) => (
+                          <div
+                            key={index}
+                            className="absolute left-0 right-0 border-t border-gray-100"
+                            style={{
+                              bottom: `${(tick / yAxisMax) * 100}%`,
+                            }}
+                          >
+                            <span className="absolute -left-6 text-xs text-gray-500 -translate-y-1/2">
+                              {Math.round(tick)}
+                            </span>
+                          </div>
+                        ))}
+
+                        {/* Bars Container */}
+                        <div className="absolute inset-0 flex items-end justify-between gap-3 px-4">
+                          {orderedRejectionReasons.map(([reason, count]) => {
+                            const heightPercent =
+                              yAxisMax > 0 ? (count / yAxisMax) * 100 : 0;
+                            return (
+                              <div
+                                key={reason}
+                                className="flex flex-col items-center justify-end group h-full relative"
+                                style={{ width: "8%" }}
+                              >
+                                {/* Vertical Bar */}
+                                <div className="relative w-full flex flex-col items-center h-full justify-end">
+                                  <div
+                                    className="w-full bg-blue-500 rounded-t transition-all duration-300 hover:bg-blue-600 cursor-pointer"
+                                    style={{
+                                      height: `${heightPercent}%`,
+                                      minHeight: count > 0 ? "4px" : "0px",
+                                    }}
+                                    title={`${reason}: ${Math.round(
+                                      count
+                                    ).toLocaleString()}`}
+                                  />
+                                  {/* Tooltip on hover */}
+                                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                    <div className="bg-gray-900 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                      {Math.round(count).toLocaleString()}
+                                    </div>
+                                    <div className="absolute left-1/2 transform -translate-x-1/2 -bottom-1 w-2 h-2 bg-gray-900 rotate-45"></div>
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          {/* Reason Label */}
-                          <div className="mt-2 w-full text-center">
-                            <p
-                              className={`text-xs font-medium truncate ${
-                                isMostCommon
-                                  ? "text-blue-700 font-semibold"
-                                  : "text-gray-700"
-                              }`}
-                              title={reason}
-                            >
-                              {displayLabel}
-                            </p>
-                            {isMostCommon && (
-                              <span className="inline-block mt-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                                Most Common
-                              </span>
-                            )}
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+
+                      {/* X-axis Labels */}
+                      <div className="flex justify-between gap-2 px-2 mt-2">
+                        {orderedRejectionReasons.map(([reason]) => {
+                          const displayLabel =
+                            reason === "Others"
+                              ? "Others"
+                              : reason.replace("Reason ", "");
+                          return (
+                            <div key={reason} className="flex-1 text-center">
+                              <p
+                                className="text-xs font-medium text-gray-700 truncate"
+                                title={reason}
+                                // style={{
+                                //   transform: "rotate(-15deg)",
+                                //   transformOrigin: "center",
+                                // }}
+                              >
+                                {displayLabel}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* X-axis Label */}
+                      <div className="text-center mt-2">
+                        <span className="text-xs font-medium text-gray-600">
+                          Reason
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   {/* Summary Stats */}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4">
@@ -761,7 +1182,7 @@ const QCDashboard: React.FC = () => {
                         Total Reasons
                       </p>
                       <p className="text-lg font-bold text-blue-700">
-                        {sortedRejectionReasons.length}
+                        {orderedRejectionReasons.length}
                       </p>
                     </div>
                     <div className="bg-red-50 rounded-lg p-3">
@@ -777,9 +1198,9 @@ const QCDashboard: React.FC = () => {
                         Top Reason Share
                       </p>
                       <p className="text-lg font-bold text-gray-700">
-                        {sortedRejectionReasons.length > 0
+                        {orderedRejectionReasons.length > 0
                           ? (
-                              (sortedRejectionReasons[0][1] /
+                              (orderedRejectionReasons[0][1] /
                                 combinedStats.totalRejectedQuantity) *
                               100
                             ).toFixed(1)
@@ -901,15 +1322,20 @@ const QCDashboard: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                displayData.map((qc) => {
+                displayData.map((qc, index) => {
                   const statusInfo = getStatusInfo(qc.status);
                   const StatusIcon = statusInfo.icon;
                   const rejectionPercentage =
                     qc.quantity > 0 ? (qc.rejectedQty / qc.quantity) * 100 : 0;
 
+                  // Create a unique key combining jobNrcJobNo, id, and index
+                  const uniqueKey = `${qc.jobNrcJobNo}-${qc.id || 0}-${
+                    qc.jobStepId || 0
+                  }-${index}`;
+
                   return (
                     <tr
-                      key={qc.id}
+                      key={uniqueKey}
                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => handleRowClick(qc)}
                     >
@@ -1139,9 +1565,103 @@ const QCDashboard: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Reason:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {selectedQC.reasonForRejection}
+                        {selectedQC.reasonForRejection || "-"}
                       </span>
                     </div>
+                    {/* Rejection Reasons Breakdown */}
+                    {(() => {
+                      const qcDetails =
+                        (selectedQC as any).qualityDetails || selectedQC;
+                      const hasRejectionReasons =
+                        qcDetails.rejectionReasonAQty > 0 ||
+                        qcDetails.rejectionReasonBQty > 0 ||
+                        qcDetails.rejectionReasonCQty > 0 ||
+                        qcDetails.rejectionReasonDQty > 0 ||
+                        qcDetails.rejectionReasonEQty > 0 ||
+                        qcDetails.rejectionReasonFQty > 0 ||
+                        qcDetails.rejectionReasonOthersQty > 0;
+
+                      if (hasRejectionReasons) {
+                        return (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs font-medium text-gray-700 mb-2">
+                              Rejection Reasons Breakdown:
+                            </p>
+                            <div className="space-y-1.5">
+                              {qcDetails.rejectionReasonAQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason A:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonAQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonBQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason B:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonBQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonCQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason C:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonCQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonDQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason D:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonDQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonEQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason E:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonEQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonFQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Reason F:
+                                  </span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonFQty}
+                                  </span>
+                                </div>
+                              )}
+                              {qcDetails.rejectionReasonOthersQty > 0 && (
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-600">Others:</span>
+                                  <span className="text-red-600 font-medium">
+                                    {qcDetails.rejectionReasonOthersQty}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                     {selectedQC.remarks && (
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Remarks:</span>

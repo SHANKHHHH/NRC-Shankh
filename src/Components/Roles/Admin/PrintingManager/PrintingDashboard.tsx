@@ -348,7 +348,7 @@ const PrintingDashboard: React.FC = () => {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Printer Dashboard
+                Printing Dashboard
               </h1>
               <p className="text-gray-600 text-lg">
                 Monitor and manage printing operations
@@ -388,6 +388,9 @@ const PrintingDashboard: React.FC = () => {
               <PrinterIcon className="h-8 w-8 text-white" />
             </div>
             <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Printing Dashboard
+              </h1>
               <p className="text-gray-600 text-lg">
                 Monitor and manage printing operations
               </p>

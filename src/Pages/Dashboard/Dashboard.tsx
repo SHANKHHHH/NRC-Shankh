@@ -201,39 +201,19 @@ const Dashboard: React.FC<DashboardProps> = ({
           <JobAssigned />
         )}
 
-        {/* Printing Manager jobs tab - RESTORED ORIGINAL CONTENT */}
-        {role === "printing_manager" && tabValue === "jobs" && (
-          <div className="w-full flex flex-col items-center">
-            {showStopScreen ? (
-              <StopScreen onBack={() => setShowStopScreen(false)} />
-            ) : (
-              <>
-                {loading && <div>Loading jobs...</div>}
-                {error && <div className="text-red-500">{error}</div>}
-                <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4 justify-items-center">
-                  {jobs.length > 0 ? (
-                    jobs.map((job) => (
-                      <PrintingMgrJobCard // Using the renamed import
-                        key={job.id}
-                        company={job.company}
-                        jobId={job.jobId}
-                        boardSize={job.boardSize}
-                        gsm={job.gsm}
-                        artwork={job.artwork}
-                        approvalDate={job.approvalDate}
-                        dispatchDate={job.dispatchDate}
-                        onStop={() => setShowStopScreen(true)}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-center col-span-full py-8">
-                      <p className="text-gray-500">No jobs found</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+        {/* Printing Manager Dashboard - Only show PrintingDashboard */}
+        {actualUserRole === "printing_manager" && tabValue === "dashboard" && (
+          <PrintingDashboard />
+        )}
+
+        {/* QC Head Dashboard - Only show QCDashboard */}
+        {actualUserRole === "qc_head" && tabValue === "dashboard" && (
+          <QCDashboard />
+        )}
+
+        {/* Dispatch Manager Dashboard - Only show DispatchOverview */}
+        {actualUserRole === "dispatch_manager" && tabValue === "dashboard" && (
+          <DispatchOverview />
         )}
 
         {/* Dispatch Executive jobs tab - Kept as is, assuming it fetches its own data */}
@@ -249,7 +229,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           ))}
 
         {/* Production Head Dashboard */}
-        {role === "production_head" && tabValue === "dashboard" && (
+        {(actualUserRole === "production_head" || role === "production_head") && tabValue === "dashboard" && (
           <ProductionHeadDashboard />
         )}
 

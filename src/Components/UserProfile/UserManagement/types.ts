@@ -36,12 +36,15 @@ export const roleOptions = [
   { label: "Production Head", value: "production_head" },
   { label: "Dispatch Executive", value: "dispatch_executive" },
   { label: "QC Manager", value: "qc_manager" },
+  { label: "QC Head", value: "qc_head" },
   { label: "Printer", value: "printer" },
+  { label: "Printing Manager", value: "printing_manager" },
   { label: "Corrugator", value: "corrugator" },
   { label: "Flute Laminator", value: "flutelaminator" },
   { label: "Pasting Operator", value: "pasting_operator" },
   { label: "Punching Operator", value: "punching_operator" },
   { label: "Paper Store", value: "paperstore" },
+  { label: "Dispatch Manager", value: "dispatch_manager" },
 ];
 
 export const getRoleDisplayName = (roleValue: string): string => {
@@ -50,8 +53,11 @@ export const getRoleDisplayName = (roleValue: string): string => {
     planner: "Planner",
     production_head: "Production Head",
     dispatch_executive: "Dispatch Executive",
+    dispatch_manager: "Dispatch Manager",
     qc_manager: "QC Manager",
+    qc_head: "QC Head",
     printer: "Printer",
+    printing_manager: "Printing Manager",
     corrugator: "Corrugator",
     flutelaminator: "Flute Laminator",
     pasting_operator: "Pasting Operator",

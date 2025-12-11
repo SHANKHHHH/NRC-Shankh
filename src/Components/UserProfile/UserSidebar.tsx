@@ -38,15 +38,27 @@ const sidebarConfig: Record<
   },
   printing_manager: {
     displayName: "Printing Manager",
-    options: ["Dashboard", "Jobs" /* 'Notifications' */],
+    options: [], // No options - only logout available
   },
   dispatch_executive: {
     displayName: "Dispatch Executive",
-    options: ["Dashboard", "Jobs" /* 'Notifications' */],
+    options: [], // No options - only logout available
   },
   production_head: {
     displayName: "Production Head",
-    options: ["Dashboard", "Jobs" /* 'Notifications' */],
+    options: [], // No options - only logout available
+  },
+  qc_manager: {
+    displayName: "QC Manager",
+    options: [], // No options - only logout available
+  },
+  qc_head: {
+    displayName: "QC Head",
+    options: [], // No options - only logout available
+  },
+  dispatch_manager: {
+    displayName: "Dispatch Manager",
+    options: [], // No options - only logout available
   },
   planner: {
     displayName: "Planner",
@@ -112,7 +124,13 @@ const UserSidebar: React.FC<UserSidebarProps> = ({
             {manageAccessMode ? "Manage Access" : config.displayName}
           </div>
           <div className="w-full flex flex-col gap-0">
-            {manageAccessMode ? (
+            {manageAccessMode &&
+            role !== "printing_manager" &&
+            role !== "qc_head" &&
+            role !== "dispatch_manager" &&
+            role !== "production_head" &&
+            role !== "dispatch_executive" &&
+            role !== "qc_manager" ? (
               <>
                 {accessRoles.map((role) => (
                   <React.Fragment key={role}>
@@ -131,26 +149,32 @@ const UserSidebar: React.FC<UserSidebarProps> = ({
               </>
             ) : (
               <>
-                {config.options.map((option) => (
-                  <React.Fragment key={option}>
-                    <button
-                      className="w-full text-left px-6 py-3 text-base font-medium hover:bg-blue-50 focus:outline-none hover:cursor-pointer"
-                      onClick={() => {
-                        if (option === "Manage Access") {
-                          setManageAccessMode(true);
-                          return;
-                        }
-                        if (onOptionSelect) onOptionSelect(option);
-                        if (option !== "Create new ID") {
-                          onClose();
-                        }
-                      }}
-                    >
-                      {option}
-                    </button>
-                    <div className="border-b border-gray-200 mx-6" />
-                  </React.Fragment>
-                ))}
+                {config.options.length > 0 ? (
+                  config.options.map((option) => (
+                    <React.Fragment key={option}>
+                      <button
+                        className="w-full text-left px-6 py-3 text-base font-medium hover:bg-blue-50 focus:outline-none hover:cursor-pointer"
+                        onClick={() => {
+                          if (option === "Manage Access") {
+                            setManageAccessMode(true);
+                            return;
+                          }
+                          if (onOptionSelect) onOptionSelect(option);
+                          if (option !== "Create new ID") {
+                            onClose();
+                          }
+                        }}
+                      >
+                        {option}
+                      </button>
+                      <div className="border-b border-gray-200 mx-6" />
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-4 px-6">
+                    No options available
+                  </div>
+                )}
               </>
             )}
           </div>
