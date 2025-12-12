@@ -58,11 +58,35 @@ const JobPlanningCard: React.FC<JobPlanningCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center bg-purple-50 p-3 rounded-md">
-          <LuTrendingUp className="text-purple-600 text-xl mr-3" />
+        <div
+          className={`flex items-center p-3 rounded-md ${
+            jobPlan.jobDemand === "high"
+              ? "bg-red-200"
+              : jobPlan.jobDemand === "medium"
+              ? "bg-purple-50"
+              : "bg-purple-50"
+          }`}
+        >
+          <LuTrendingUp
+            className={`text-xl mr-3 ${
+              jobPlan.jobDemand === "high" ? "text-black" : "text-purple-600"
+            }`}
+          />
           <div className="flex flex-col">
-            <p className="text-sm text-gray-600">Job Demand</p>
-            <p className="font-medium text-gray-900 capitalize">
+            <p
+              className={`text-sm ${
+                jobPlan.jobDemand === "high" ? "text-black" : "text-gray-600"
+              }`}
+            >
+              Job Demand
+            </p>
+            <p
+              className={`font-medium capitalize ${
+                jobPlan.jobDemand === "high"
+                  ? "text-black font-bold"
+                  : "text-gray-900"
+              }`}
+            >
               {jobPlan.jobDemand === "high"
                 ? "Urgent"
                 : jobPlan.jobDemand === "medium"

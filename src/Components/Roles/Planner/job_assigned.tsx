@@ -215,7 +215,7 @@ const JobAssigned: React.FC = () => {
                             <span
                               className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium w-fit ${
                                 jobPlan.jobDemand === "high"
-                                  ? "bg-red-100 text-red-800"
+                                  ? "bg-red-500 text-white font-bold"
                                   : jobPlan.jobDemand === "medium"
                                   ? "bg-yellow-100 text-yellow-800"
                                   : "bg-green-100 text-green-800"
