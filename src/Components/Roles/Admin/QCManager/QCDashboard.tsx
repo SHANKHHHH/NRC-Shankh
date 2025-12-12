@@ -20,6 +20,7 @@ const QCDashboard: React.FC = () => {
   const [qcData, setQcData] = useState<QCData[]>([]);
   // const [summaryData, setSummaryData] = useState<QCSummary | null>(null);
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [pendingQCSteps, setPendingQCSteps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -49,24 +50,115 @@ const QCDashboard: React.FC = () => {
         );
         queryParams.append("endDate", endOfMonth.toISOString().split("T")[0]);
 
-        const [data, , completedJobsResponse] = await Promise.all([
-          qcService.getAllQCData(),
-          qcService.getQCStatistics(),
-          fetch(
-            `${
-              import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
-            }/api/completed-jobs?${queryParams.toString()}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          ),
-        ]);
+        const [data, , completedJobsResponse, jobPlanningResponse] =
+          await Promise.all([
+            qcService.getAllQCData(),
+            qcService.getQCStatistics(),
+            fetch(
+              `${
+                import.meta.env.VITE_API_URL ||
+                "https://nrprod.nrcontainers.com"
+              }/api/completed-jobs?${queryParams.toString()}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              }
+            ),
+            fetch(
+              `${
+                import.meta.env.VITE_API_URL ||
+                "https://nrprod.nrcontainers.com"
+              }/api/job-planning`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              }
+            ),
+          ]);
 
         setQcData(data);
         // setSummaryData(summary);
+
+        // Process job-planning data to find pending QC checks (steps ready for QC but not checked yet)
+        if (jobPlanningResponse.ok) {
+          const jobPlanningResult = await jobPlanningResponse.json();
+          console.log("Job planning API response:", jobPlanningResult);
+
+          if (
+            jobPlanningResult.success &&
+            Array.isArray(jobPlanningResult.data)
+          ) {
+            console.log("Job planning data:", jobPlanningResult.data);
+
+            // Extract pending QC steps from job planning
+            // Get all job numbers that already have QC records (from qcData)
+            const existingQCJobStepIds = new Set(
+              data.flatMap((qc: any) => {
+                // Extract jobStepIds from qualityDetails array
+                if (qc.qualityDetails && Array.isArray(qc.qualityDetails)) {
+                  return qc.qualityDetails
+                    .map((qd: any) => qd.jobStepId)
+                    .filter(Boolean);
+                }
+                return qc.jobStepId ? [qc.jobStepId] : [];
+              })
+            );
+
+            const pendingSteps = jobPlanningResult.data.flatMap(
+              (jobPlan: any) => {
+                // Find QualityDept steps that don't have qualityDept records yet (pending QC)
+                const qcSteps =
+                  jobPlan.steps?.filter(
+                    (step: any) =>
+                      step.stepName === "QualityDept" &&
+                      (step.status === "stop" ||
+                        step.status === "start" ||
+                        step.status === "planned") &&
+                      !existingQCJobStepIds.has(step.id) // Only include if no QC record exists
+                  ) || [];
+
+                return qcSteps.map((step: any) => ({
+                  id: step.id || 0,
+                  jobNrcJobNo: jobPlan.nrcJobNo || "-",
+                  status:
+                    step.status === "planned"
+                      ? "pending"
+                      : step.status === "start"
+                      ? "in_progress"
+                      : "pending",
+                  date:
+                    step.startDate ||
+                    step.createdAt ||
+                    new Date().toISOString(),
+                  shift: step.shift || null,
+                  operatorName: step.user || null,
+                  checkedBy: step.user || "-",
+                  quantity: 0,
+                  rejectedQty: 0,
+                  reasonForRejection: "-",
+                  remarks: "-",
+                  qcCheckSignBy: null,
+                  jobStepId: step.id || null,
+                  stepNo: step.stepNo || 6,
+                  stepName: step.stepName || "QualityDept",
+                  startDate: step.startDate || null,
+                  endDate: step.endDate || null,
+                  user: step.user || null,
+                  machineDetails: step.machineDetails || [],
+                  jobPlanId: jobPlan.jobPlanId || null,
+                  qualityDetails: null, // No qualityDetails = pending
+                }));
+              }
+            );
+
+            console.log("Pending QC steps from job planning:", pendingSteps);
+            setPendingQCSteps(pendingSteps);
+          }
+        }
 
         // Process completed jobs data for QC
         if (completedJobsResponse.ok) {
@@ -567,11 +659,12 @@ const QCDashboard: React.FC = () => {
     return [];
   });
 
-  // Combine processed qcData with completed jobs
-  const allQCData = [...processedQcData, ...completedJobs];
+  // Combine processed qcData with completed jobs and pending steps
+  const allQCData = [...processedQcData, ...completedJobs, ...pendingQCSteps];
   console.log("Original QC data:", qcData);
   console.log("Processed QC data (flattened):", processedQcData);
   console.log("Completed jobs data:", completedJobs);
+  console.log("Pending QC steps:", pendingQCSteps);
   console.log("Combined QC data:", allQCData);
 
   // Show message when no data is available (check combined data, not just qcData)

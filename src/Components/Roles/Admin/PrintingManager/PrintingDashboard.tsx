@@ -174,14 +174,18 @@ const PrintingDashboard: React.FC = () => {
     const acceptedJobs = allPrintingData.filter(
       (item) => item.status === "accept"
     ).length;
+    // Count pending jobs (excluding those with stepStatus "start" which are in_progress)
     const pendingJobs = allPrintingData.filter(
-      (item) => item.status === "pending"
+      (item) => item.status === "pending" && item.stepStatus !== "start"
     ).length;
     const rejectedJobs = allPrintingData.filter(
       (item) => item.status === "rejected"
     ).length;
+    // Count in_progress jobs (including those with stepStatus "start" and status "pending")
     const inProgressJobs = allPrintingData.filter(
-      (item) => item.status === "in_progress"
+      (item) =>
+        item.status === "in_progress" ||
+        (item.stepStatus === "start" && item.status === "pending")
     ).length;
     const holdJobs = allPrintingData.filter(
       (item) => item.status === "hold"
@@ -217,8 +221,14 @@ const PrintingDashboard: React.FC = () => {
         item.oprName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.machine.toLowerCase().includes(searchTerm.toLowerCase());
 
+      // For filtering, check both status and stepStatus
+      // If stepStatus is "start" and status is "pending", treat it as "in_progress" for filtering
+      const effectiveStatus =
+        item.stepStatus === "start" && item.status === "pending"
+          ? "in_progress"
+          : item.status;
       const matchesStatus =
-        statusFilter === "all" || item.status === statusFilter;
+        statusFilter === "all" || effectiveStatus === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -636,7 +646,13 @@ const PrintingDashboard: React.FC = () => {
                 </tr>
               ) : (
                 displayData.map((printing) => {
-                  const statusInfo = getStatusInfo(printing.status);
+                  // If stepStatus is "start" and status is "pending", show as "in_progress"
+                  const displayStatus =
+                    printing.stepStatus === "start" &&
+                    printing.status === "pending"
+                      ? "in_progress"
+                      : printing.status;
+                  const statusInfo = getStatusInfo(displayStatus);
                   const StatusIcon = statusInfo.icon;
                   const wastagePercentage =
                     printing.quantity > 0
@@ -781,10 +797,22 @@ const PrintingDashboard: React.FC = () => {
                       <span className="text-sm text-gray-600">Status:</span>
                       <span
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          getStatusInfo(selectedPrinting.status).color
+                          getStatusInfo(
+                            selectedPrinting.stepStatus === "start" &&
+                              selectedPrinting.status === "pending"
+                              ? "in_progress"
+                              : selectedPrinting.status
+                          ).color
                         }`}
                       >
-                        {getStatusInfo(selectedPrinting.status).label}
+                        {
+                          getStatusInfo(
+                            selectedPrinting.stepStatus === "start" &&
+                              selectedPrinting.status === "pending"
+                              ? "in_progress"
+                              : selectedPrinting.status
+                          ).label
+                        }
                       </span>
                     </div>
                     <div className="flex justify-between">
