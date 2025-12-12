@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
-import { roleOptions, type CreateUserPayload } from "../UserManagement/types";
+import { roleOptions } from "../UserManagement/types";
 
 interface CreateNewIdProps {
   onClose: () => void;
