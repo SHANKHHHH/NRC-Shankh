@@ -6,7 +6,7 @@ interface JobStep {
   stepNo: number;
   stepName: string;
   machineDetails: any[];
-  status: 'planned' | 'start' | 'stop' | 'completed';
+  status: 'planned' | 'start' | 'stop' | 'major_hold';
   startDate: string | null;
   endDate: string | null;
   user: string | null;
@@ -44,7 +44,7 @@ const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
     { value: 'planned', label: 'PLANNED', color: 'bg-blue-500' },
     { value: 'start', label: 'START', color: 'bg-green-500' },
     { value: 'stop', label: 'STOP', color: 'bg-red-500' },
-    { value: 'completed', label: 'COMPLETED', color: 'bg-purple-500' }
+    { value: 'major_hold', label: 'MAJOR HOLD', color: 'bg-orange-500' }
   ];
 
  const handleSubmit = async (e: React.FormEvent) => {
@@ -53,14 +53,25 @@ const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
 
   try {
     // Prepare ONLY the step data for the step-specific endpoint
-    const stepUpdatePayload = {
+    const stepUpdatePayload: any = {
       status: selectedStatus,
       user: userId || null,
-      startDate: selectedStatus === 'start' ? new Date().toISOString() : 
-                selectedStatus === 'planned' ? null : step.startDate,
-      endDate: selectedStatus === 'start' ? null : 
-              selectedStatus === 'planned' ? null : step.endDate
     };
+
+    // Handle dates based on status
+    if (selectedStatus === 'planned') {
+      stepUpdatePayload.startDate = null;
+      stepUpdatePayload.endDate = null;
+    } else if (selectedStatus === 'start') {
+      stepUpdatePayload.startDate = new Date().toISOString();
+      stepUpdatePayload.endDate = null;
+    } else if (selectedStatus === 'stop') {
+      stepUpdatePayload.endDate = new Date().toISOString();
+      // Keep existing startDate
+    } else if (selectedStatus === 'major_hold') {
+      // Don't clear startDate or endDate for major_hold
+      // Keep existing dates
+    }
 
     console.log('🔍 Sending step update payload:', stepUpdatePayload);
 

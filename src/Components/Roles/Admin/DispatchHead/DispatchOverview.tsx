@@ -16,8 +16,10 @@ import {
   type DispatchData,
 } from "./dispatchService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
+import { useUsers } from "../../../../context/UsersContext";
 
 const DispatchOverview: React.FC = () => {
+  const { getUserName } = useUsers();
   const [dispatchData, setDispatchData] = useState<DispatchProcess[]>([]);
   const [summaryData, setSummaryData] = useState<DispatchData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -814,9 +816,6 @@ const DispatchOverview: React.FC = () => {
                   Job No
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Step Info
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -843,7 +842,7 @@ const DispatchOverview: React.FC = () => {
               {displayData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-6 py-8 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center space-y-2">
@@ -887,21 +886,6 @@ const DispatchOverview: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 font-mono">
                           {dispatch.jobNrcJobNo}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <div>
-                            Step {dispatch.stepNo}:{" "}
-                            {dispatch.stepName?.replace(
-                              /([a-z])([A-Z])/g,
-                              "$1 $2"
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {dispatch.machineDetails?.[0]?.machineCode ||
-                              "Not Assigned"}
-                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -958,7 +942,12 @@ const DispatchOverview: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {getOperatorName(dispatch)}
+                        {(() => {
+                          const operatorId = getOperatorName(dispatch);
+                          return operatorId && operatorId !== "-"
+                            ? getUserName(operatorId)
+                            : "-";
+                        })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <button className="text-blue-600 hover:text-blue-800 transition-colors">
@@ -1224,7 +1213,12 @@ const DispatchOverview: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Operator:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {getOperatorName(selectedDispatch)}
+                        {(() => {
+                          const operatorId = getOperatorName(selectedDispatch);
+                          return operatorId && operatorId !== "-"
+                            ? getUserName(operatorId)
+                            : "-";
+                        })()}
                       </span>
                     </div>
                     <div className="flex justify-between">

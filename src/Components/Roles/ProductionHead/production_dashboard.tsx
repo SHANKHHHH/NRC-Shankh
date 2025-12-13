@@ -22,8 +22,10 @@ import type {
 } from "./productionService";
 import LoadingSpinner from "../../common/LoadingSpinner";
 import ProductionDetailModal from "./ProductionDetailModal";
+import { useUsers } from "../../../context/UsersContext";
 
 const ProductionHeadDashboard: React.FC = () => {
+  const { getUserName } = useUsers();
   const [aggregatedData, setAggregatedData] =
     useState<AggregatedProductionData | null>(null);
   const [selectedJob, setSelectedJob] = useState<string>("");
@@ -956,7 +958,9 @@ const ProductionHeadDashboard: React.FC = () => {
                                   <div>
                                     <p className="text-gray-600">
                                       Operator:{" "}
-                                      {stepDetail.user || "Not assigned"}
+                                      {stepDetail.user
+                                        ? getUserName(stepDetail.user)
+                                        : "Not assigned"}
                                     </p>
                                     <p className="text-gray-600">
                                       Machine:{" "}
@@ -1265,7 +1269,10 @@ const ProductionHeadDashboard: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-gray-600">
-                              Operator: {step.user || "Not assigned"}
+                              Operator:{" "}
+                              {step.user
+                                ? getUserName(step.user)
+                                : "Not assigned"}
                             </p>
                             <p className="text-gray-600">
                               Machine:{" "}

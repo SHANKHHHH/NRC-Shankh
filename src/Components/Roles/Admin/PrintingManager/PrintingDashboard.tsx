@@ -19,8 +19,10 @@ import {
   type PrintingSummary,
 } from "./printingService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
+import { useUsers } from "../../../../context/UsersContext";
 
 const PrintingDashboard: React.FC = () => {
+  const { getUserName } = useUsers();
   const [printingData, setPrintingData] = useState<PrintingDetails[]>([]);
   const [summaryData, setSummaryData] = useState<PrintingSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -674,7 +676,7 @@ const PrintingDashboard: React.FC = () => {
                         {formatDate(printing.date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {printing.oprName}
+                        {printing.oprName ? getUserName(printing.oprName) : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {printing.machine}
@@ -832,7 +834,9 @@ const PrintingDashboard: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Operator:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {selectedPrinting.oprName}
+                        {selectedPrinting.oprName
+                          ? getUserName(selectedPrinting.oprName)
+                          : "-"}
                       </span>
                     </div>
                     <div className="flex justify-between">

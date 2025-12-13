@@ -15,8 +15,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { qcService, type QCData } from "./qcService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
+import { useUsers } from "../../../../context/UsersContext";
 
 const QCDashboard: React.FC = () => {
+  const { getUserName } = useUsers();
   const [qcData, setQcData] = useState<QCData[]>([]);
   // const [summaryData, setSummaryData] = useState<QCSummary | null>(null);
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
@@ -707,7 +709,6 @@ const QCDashboard: React.FC = () => {
   const filteredData = allQCData.filter((item) => {
     const matchesSearch =
       item.jobNrcJobNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.operatorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.checkedBy.toLowerCase().includes(searchTerm.toLowerCase());
 
     let matchesStatus = false;
@@ -1328,7 +1329,7 @@ const QCDashboard: React.FC = () => {
               <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by Job No, Operator, or Checked By..."
+                placeholder="Search by Job No or Checked By..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1378,9 +1379,6 @@ const QCDashboard: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Checked By
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Operator
-                </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Quantity
                 </th>
@@ -1402,7 +1400,7 @@ const QCDashboard: React.FC = () => {
               {displayData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={8}
                     className="px-6 py-8 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center space-y-2">
@@ -1441,10 +1439,9 @@ const QCDashboard: React.FC = () => {
                         {formatDate(qc.date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {qc.checkedBy}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {qc.operatorName}
+                        {qc.checkedBy && qc.checkedBy !== "-"
+                          ? getUserName(qc.checkedBy)
+                          : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <div className="text-sm font-medium text-gray-900">
@@ -1626,13 +1623,9 @@ const QCDashboard: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Checked By:</span>
                       <span className="text-sm font-medium text-gray-900">
-                        {selectedQC.checkedBy}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Operator:</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {selectedQC.operatorName}
+                        {selectedQC.checkedBy && selectedQC.checkedBy !== "-"
+                          ? getUserName(selectedQC.checkedBy)
+                          : "-"}
                       </span>
                     </div>
                     <div className="flex justify-between">

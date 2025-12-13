@@ -6,6 +6,7 @@ import {
   StopIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
+import { useUsers } from "../../../context/UsersContext";
 
 interface MachineDetail {
   unit: string | null;
@@ -71,6 +72,7 @@ const StepDetailsModal: React.FC<StepDetailsModalProps> = ({
   onEditMachine,
   onViewDetails,
 }) => {
+  const { getUserName } = useUsers();
   const formatStepName = (stepName: string): string => {
     return stepName
       .replace(/([a-z])([A-Z])/g, "$1 $2") // Add space before capital letters
@@ -192,7 +194,7 @@ const StepDetailsModal: React.FC<StepDetailsModalProps> = ({
                     {step.user && (
                       <div className="flex items-center space-x-2 text-sm text-gray-600">
                         <UserIcon className="h-4 w-4" />
-                        <span>Assigned to: {step.user}</span>
+                        <span>Assigned to: {getUserName(step.user)}</span>
                       </div>
                     )}
                     {step.startDate && (

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import type { JobPlan, ProductionStep } from "./productionService";
+import { useUsers } from "../../../context/UsersContext";
 
 interface JobDetailsModalProps {
   jobs: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
@@ -27,6 +28,7 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
   status,
   onClose,
 }) => {
+  const { getUserName } = useUsers();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const getStatusColor = (status: string) => {
@@ -379,7 +381,7 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
                         <div className="flex justify-between">
                           <span className="text-gray-500">Operator:</span>
                           <span className="font-medium text-gray-900">
-                            {step.user}
+                            {getUserName(step.user)}
                           </span>
                         </div>
                       )}
