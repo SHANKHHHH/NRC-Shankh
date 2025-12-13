@@ -12,6 +12,7 @@ import type {
 } from "../../../services/pdaAnnouncementsService";
 import LoadingSpinner from "../../common/LoadingSpinner";
 import type { DateFilterType } from "./FilterComponents/DateFilterComponent";
+import { useUsers } from "../../../context/UsersContext";
 
 interface PDAAnnouncementsProps {
   dateFilter?: DateFilterType;
@@ -22,6 +23,7 @@ const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
   dateFilter,
   customDateRange,
 }) => {
+  const { getUserName } = useUsers();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [title, setTitle] = useState("");
@@ -31,6 +33,30 @@ const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Format date as dd/mm/yyyy, HH:mm:ss AM/PM (12-hour format)
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return "Date not available";
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+
+      // Convert to 12-hour format
+      let hours = date.getHours();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
+
+      // Format: dd/mm/yyyy, H:mm:ss AM/PM
+      return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
 
   // Fetch announcements from API
   const fetchAnnouncements = async () => {
@@ -441,13 +467,9 @@ const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
-                  <span>
-                    {announcement.createdAt
-                      ? new Date(announcement.createdAt).toLocaleString()
-                      : "Date not available"}
-                  </span>
+                  <span>{formatDateTime(announcement.createdAt)}</span>
                   {announcement.createdBy && (
-                    <span>By: {announcement.createdBy}</span>
+                    <span>By: {getUserName(announcement.createdBy)}</span>
                   )}
                 </div>
               </div>

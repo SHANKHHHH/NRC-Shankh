@@ -8,6 +8,7 @@ import {
   X,
   ChevronRight,
 } from "lucide-react";
+import { useUsers } from "../../../../context/UsersContext";
 
 interface JobPlanStep {
   id: number;
@@ -127,6 +128,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
   jobPlans,
   className = "",
 }) => {
+  const { getUserName } = useUsers();
   const [searchTerm, setSearchTerm] = useState("");
   const [demandFilter, setDemandFilter] = useState<
     "all" | "low" | "medium" | "high"
@@ -363,7 +365,22 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "-";
-    return new Date(dateString).toLocaleString();
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
   };
 
   const formatStepName = (stepName: string): string => {
@@ -519,7 +536,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                   </td>
 
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(jobPlan.createdAt).toLocaleDateString()}
+                    {formatDate(jobPlan.createdAt)}
                   </td>
 
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -589,7 +606,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                 },
                 {
                   label: "Created",
-                  value: new Date(selectedJobPlan.createdAt).toLocaleString(),
+                  value: formatDateTime(selectedJobPlan.createdAt),
                   color: "orange",
                 },
               ].map((item, i) => (
@@ -683,7 +700,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                         {formatDate(step.endDate)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {step.user || "-"}
+                        {getUserName(step.user)}
                       </td>
                     </tr>
                   ))}
@@ -767,9 +784,50 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                       <span>
                         Purchase Orders (
                         {(() => {
-                          // Calculate filtered count using same logic as display
+                          // Calculate filtered count using same logic as display (matching selectedJobPlan.jobPlanId)
                           let filteredCount = 0;
-                          if (jobDetailsWithPO?.poJobPlannings?.length > 0) {
+                          if (
+                            selectedJobPlan &&
+                            selectedJobPlan.jobPlanId &&
+                            jobDetailsWithPO?.poJobPlannings?.length > 0
+                          ) {
+                            const matchingPoJobPlanning =
+                              jobDetailsWithPO.poJobPlannings.find(
+                                (po) =>
+                                  po.jobPlanId === selectedJobPlan.jobPlanId
+                              );
+                            if (
+                              matchingPoJobPlanning &&
+                              matchingPoJobPlanning.poId
+                            ) {
+                              filteredCount =
+                                jobDetailsWithPO.purchaseOrderDetails.filter(
+                                  (po) => po.id === matchingPoJobPlanning.poId
+                                ).length;
+                            } else {
+                              const hasJobPlanningEntry =
+                                jobDetailsWithPO.poJobPlannings.find(
+                                  (po) => po.hasJobPlanning === true
+                                );
+                              if (hasJobPlanningEntry) {
+                                filteredCount =
+                                  jobDetailsWithPO.purchaseOrderDetails.filter(
+                                    (po) => po.id === hasJobPlanningEntry.poId
+                                  ).length;
+                              } else {
+                                const poIds =
+                                  jobDetailsWithPO.poJobPlannings.map(
+                                    (po) => po.poId
+                                  );
+                                filteredCount =
+                                  jobDetailsWithPO.purchaseOrderDetails.filter(
+                                    (po) => poIds.includes(po.id)
+                                  ).length;
+                              }
+                            }
+                          } else if (
+                            jobDetailsWithPO?.poJobPlannings?.length > 0
+                          ) {
                             const hasJobPlanningEntry =
                               jobDetailsWithPO.poJobPlannings.find(
                                 (po) => po.hasJobPlanning === true
@@ -928,23 +986,23 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                       <div className="space-y-2 text-sm">
                         <div>
                           <span className="font-medium">Artwork Received:</span>{" "}
-                          {new Date(
+                          {formatDate(
                             jobDetailsWithPO.jobDetails.artworkReceivedDate
-                          ).toLocaleDateString()}
+                          )}
                         </div>
                         <div>
                           <span className="font-medium">Artwork Approved:</span>{" "}
-                          {new Date(
+                          {formatDate(
                             jobDetailsWithPO.jobDetails.artworkApprovedDate
-                          ).toLocaleDateString()}
+                          )}
                         </div>
                         <div>
                           <span className="font-medium">
                             Shade Card Approval:
                           </span>{" "}
-                          {new Date(
+                          {formatDate(
                             jobDetailsWithPO.jobDetails.shadeCardApprovalDate
-                          ).toLocaleDateString()}
+                          )}
                         </div>
                       </div>
                     </div>
@@ -958,24 +1016,62 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
               !loadingJobDetails && (
                 <div className="space-y-6">
                   {(() => {
-                    // Filter purchase orders based on hasJobPlanning logic
+                    // Filter purchase orders based on selectedJobPlan.jobPlanId
                     let filteredPOs = [];
 
-                    if (jobDetailsWithPO.poJobPlannings.length > 0) {
-                      // Check if any poJobPlannings has hasJobPlanning = true
+                    if (
+                      selectedJobPlan &&
+                      selectedJobPlan.jobPlanId &&
+                      jobDetailsWithPO.poJobPlannings.length > 0
+                    ) {
+                      // Find the poJobPlanning entry that matches the selectedJobPlan.jobPlanId
+                      const matchingPoJobPlanning =
+                        jobDetailsWithPO.poJobPlannings.find(
+                          (po) => po.jobPlanId === selectedJobPlan.jobPlanId
+                        );
+
+                      if (matchingPoJobPlanning && matchingPoJobPlanning.poId) {
+                        // Filter purchase orders to show only the one matching the selected job plan's PO
+                        filteredPOs =
+                          jobDetailsWithPO.purchaseOrderDetails.filter(
+                            (po) => po.id === matchingPoJobPlanning.poId
+                          );
+                      } else {
+                        // If no matching jobPlanId found, fall back to hasJobPlanning logic
+                        const hasJobPlanningEntry =
+                          jobDetailsWithPO.poJobPlannings.find(
+                            (po) => po.hasJobPlanning === true
+                          );
+
+                        if (hasJobPlanningEntry) {
+                          filteredPOs =
+                            jobDetailsWithPO.purchaseOrderDetails.filter(
+                              (po) => po.id === hasJobPlanningEntry.poId
+                            );
+                        } else {
+                          // Fallback: show all POs from poJobPlannings
+                          const poIds = jobDetailsWithPO.poJobPlannings.map(
+                            (po) => po.poId
+                          );
+                          filteredPOs =
+                            jobDetailsWithPO.purchaseOrderDetails.filter((po) =>
+                              poIds.includes(po.id)
+                            );
+                        }
+                      }
+                    } else if (jobDetailsWithPO.poJobPlannings.length > 0) {
+                      // Fallback to hasJobPlanning logic if selectedJobPlan is not available
                       const hasJobPlanningEntry =
                         jobDetailsWithPO.poJobPlannings.find(
                           (po) => po.hasJobPlanning === true
                         );
 
                       if (hasJobPlanningEntry) {
-                        // If hasJobPlanning = true, use purchaseOrderId to find the PO
                         filteredPOs =
                           jobDetailsWithPO.purchaseOrderDetails.filter(
                             (po) => po.id === hasJobPlanningEntry.poId
                           );
                       } else {
-                        // If hasJobPlanning = false, use poId from poJobPlannings array
                         const poIds = jobDetailsWithPO.poJobPlannings.map(
                           (po) => po.poId
                         );
@@ -1131,18 +1227,14 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                                     <span className="font-medium">
                                       PO Date:
                                     </span>{" "}
-                                    {po.poDate
-                                      ? new Date(po.poDate).toLocaleDateString()
-                                      : "N/A"}
+                                    {po.poDate ? formatDate(po.poDate) : "N/A"}
                                   </div>
                                   <div>
                                     <span className="font-medium">
                                       Delivery Date:
                                     </span>{" "}
                                     {po.deliveryDate
-                                      ? new Date(
-                                          po.deliveryDate
-                                        ).toLocaleDateString()
+                                      ? formatDate(po.deliveryDate)
                                       : "N/A"}
                                   </div>
                                   <div>
@@ -1150,9 +1242,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                                       NRC Delivery Date:
                                     </span>{" "}
                                     {po.nrcDeliveryDate
-                                      ? new Date(
-                                          po.nrcDeliveryDate
-                                        ).toLocaleDateString()
+                                      ? formatDate(po.nrcDeliveryDate)
                                       : "N/A"}
                                   </div>
                                   <div>
@@ -1160,9 +1250,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                                       Shade Card Approval:
                                     </span>{" "}
                                     {po.shadeCardApprovalDate
-                                      ? new Date(
-                                          po.shadeCardApprovalDate
-                                        ).toLocaleDateString()
+                                      ? formatDate(po.shadeCardApprovalDate)
                                       : "N/A"}
                                   </div>
                                   <div>
@@ -1170,9 +1258,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                                       Dispatch Date:
                                     </span>{" "}
                                     {po.dispatchDate
-                                      ? new Date(
-                                          po.dispatchDate
-                                        ).toLocaleDateString()
+                                      ? formatDate(po.dispatchDate)
                                       : "Not Dispatched"}
                                   </div>
                                 </div>

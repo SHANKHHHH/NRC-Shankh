@@ -6,6 +6,7 @@ import {
   Clock,
   PauseCircle,
 } from "lucide-react";
+import { useUsers } from "../../../../context/UsersContext";
 
 interface JobPlan {
   id: number;
@@ -96,6 +97,21 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
   onJobClick,
   searchTerm,
 }) => {
+  const { getUserName } = useUsers();
+
+  // Format date as dd/mm/yyyy (date only, no time)
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
   // Helper function to get company/customer name
   const getCompanyName = (job: CompletedJob | JobPlan) => {
     if ("company" in job) {
@@ -135,15 +151,17 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
     }
 
     // Check step-specific detail fields (e.g., paperStore, printingDetails, etc.)
-    if (step.paperStore?.status === "accept" ||
-        step.printingDetails?.status === "accept" ||
-        step.corrugation?.status === "accept" ||
-        step.flutelam?.status === "accept" ||
-        step.fluteLaminateBoardConversion?.status === "accept" ||
-        step.punching?.status === "accept" ||
-        step.sideFlapPasting?.status === "accept" ||
-        step.qualityDept?.status === "accept" ||
-        step.dispatchProcess?.status === "accept") {
+    if (
+      step.paperStore?.status === "accept" ||
+      step.printingDetails?.status === "accept" ||
+      step.corrugation?.status === "accept" ||
+      step.flutelam?.status === "accept" ||
+      step.fluteLaminateBoardConversion?.status === "accept" ||
+      step.punching?.status === "accept" ||
+      step.sideFlapPasting?.status === "accept" ||
+      step.qualityDept?.status === "accept" ||
+      step.dispatchProcess?.status === "accept"
+    ) {
       return true;
     }
 
@@ -251,7 +269,7 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                 </p>
                 {"completedBy" in job && job.completedBy && (
                   <p className="text-xs opacity-75 mt-1">
-                    Completed by: {job.completedBy}
+                    Completed by: {getUserName(job.completedBy)}
                   </p>
                 )}
 
@@ -277,16 +295,9 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
 
               <div className="text-right text-xs opacity-90">
                 <div className="mb-1">
-                  {job.createdAt && (
-                    <p>
-                      Created: {new Date(job.createdAt).toLocaleDateString()}
-                    </p>
-                  )}
+                  {job.createdAt && <p>Created: {formatDate(job.createdAt)}</p>}
                   {"completedAt" in job && job.completedAt && (
-                    <p>
-                      Completed:{" "}
-                      {new Date(job.completedAt).toLocaleDateString()}
-                    </p>
+                    <p>Completed: {formatDate(job.completedAt)}</p>
                   )}
                 </div>
                 {"totalDuration" in job && (job as any).totalDuration && (

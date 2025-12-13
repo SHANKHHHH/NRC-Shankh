@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import logoImage from "../../../../assets/Login/logo.jpg";
+import { useUsers } from "../../../../context/UsersContext";
 
 interface Job {
   id: number;
@@ -59,7 +60,22 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
   onResumeJob,
   isResumingJob,
 }) => {
+  const { getUserName } = useUsers();
   const [isGeneratingPDF, setIsGeneratingPDF] = React.useState(false);
+
+  // Format date as dd/mm/yyyy (date only, no time)
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
 
   if (!isOpen || !job) return null;
 
@@ -492,7 +508,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           } else if (step.stepName === "PrintingDetails") {
             displayField("Qty", detail.quantity);
             displayField("Machine", detail.machine);
-            displayField("Operator", detail.oprName);
+            displayField("Operator", getUserName(detail.oprName));
             displayField("Inks", detail.inksUsed);
             displayField("Colors", detail.noOfColours);
             displayField("Coating", detail.coatingType);
@@ -505,7 +521,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             displayField("GSM2", detail.gsm2);
           } else if (step.stepName === "FluteLaminateBoardConversion") {
             displayField("Qty", detail.quantity);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField("Film", detail.film);
             displayField("Adhesive", detail.adhesive);
             displayField("Wastage", detail.wastage);
@@ -513,23 +529,23 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           } else if (step.stepName === "Punching") {
             displayField("Qty", detail.quantity);
             displayField("Machine", detail.machine);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField("Die", detail.die);
             displayField("Wastage", detail.wastage);
             displayField("Shift", detail.shift);
           } else if (step.stepName === "SideFlapPasting") {
             displayField("Qty", detail.quantity);
             displayField("Machine", detail.machineNo);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField("Adhesive", detail.adhesive);
             displayField("Wastage", detail.wastage);
             displayField("Shift", detail.shift);
           } else if (step.stepName === "QualityDept") {
             displayField("Qty", detail.quantity);
-            displayField("Checked By", detail.checkedBy);
+            displayField("Checked By", getUserName(detail.checkedBy));
             displayField("Rejected", detail.rejectedQty);
             displayField("Reason", detail.reasonForRejection);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField("Shift", detail.shift);
 
             // Add rejection reasons breakdown if available
@@ -639,7 +655,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             displayField("Qty", detail.quantity);
             displayField("Balance", detail.balanceQty);
             displayField("Dispatch No", detail.dispatchNo);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField(
               "Date",
               detail.dispatchDate
@@ -650,7 +666,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           } else {
             // Generic fields
             displayField("Qty", detail.quantity);
-            displayField("Operator", detail.operatorName);
+            displayField("Operator", getUserName(detail.operatorName));
             displayField("Shift", detail.shift);
             displayField("Status", detail.status);
           }
@@ -992,9 +1008,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             PO Date:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.poDate
-                              ? new Date(poDetails.poDate).toLocaleDateString()
-                              : "N/A"}
+                            {formatDate(poDetails.poDate)}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1002,11 +1016,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             Delivery Date:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.deliveryDate
-                              ? new Date(
-                                  poDetails.deliveryDate
-                                ).toLocaleDateString()
-                              : "N/A"}
+                            {formatDate(poDetails.deliveryDate)}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1014,11 +1024,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             NRC Delivery Date:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.nrcDeliveryDate
-                              ? new Date(
-                                  poDetails.nrcDeliveryDate
-                                ).toLocaleDateString()
-                              : "N/A"}
+                            {formatDate(poDetails.nrcDeliveryDate)}
                           </span>
                         </div>
                         {poDetails.shadeCardApprovalDate && (
@@ -1027,9 +1033,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               Shade Card Approval:
                             </span>
                             <span className="text-gray-900">
-                              {new Date(
-                                poDetails.shadeCardApprovalDate
-                              ).toLocaleDateString()}
+                              {formatDate(poDetails.shadeCardApprovalDate)}
                             </span>
                           </div>
                         )}
@@ -1070,9 +1074,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">Created:</span>
                     <span className="text-gray-900">
-                      {job.createdAt
-                        ? new Date(job.createdAt).toLocaleDateString()
-                        : "N/A"}
+                      {formatDate(job.createdAt)}
                     </span>
                   </div>
                   {job.completedAt && (
@@ -1081,7 +1083,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Completed:
                       </span>
                       <span className="text-gray-900">
-                        {new Date(job.completedAt).toLocaleDateString()}
+                        {formatDate(job.completedAt)}
                       </span>
                     </div>
                   )}
@@ -1090,7 +1092,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                       <span className="font-medium text-gray-700">
                         Completed By:
                       </span>
-                      <span className="text-gray-900">{job.completedBy}</span>
+                      <span className="text-gray-900">
+                        {getUserName(job.completedBy)}
+                      </span>
                     </div>
                   )}
                   {job.totalDuration && (
@@ -1405,21 +1409,13 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               {step.startDate && (
                                 <div className="flex justify-between">
                                   <span>Start:</span>
-                                  <span>
-                                    {new Date(
-                                      step.startDate
-                                    ).toLocaleDateString()}
-                                  </span>
+                                  <span>{formatDate(step.startDate)}</span>
                                 </div>
                               )}
                               {step.endDate && (
                                 <div className="flex justify-between">
                                   <span>End:</span>
-                                  <span>
-                                    {new Date(
-                                      step.endDate
-                                    ).toLocaleDateString()}
-                                  </span>
+                                  <span>{formatDate(step.endDate)}</span>
                                 </div>
                               )}
                             </div>
@@ -1504,9 +1500,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                             <div className="flex justify-between">
                                               <span>Issued Date:</span>
                                               <span>
-                                                {new Date(
-                                                  detail.issuedDate
-                                                ).toLocaleDateString()}
+                                                {formatDate(detail.issuedDate)}
                                               </span>
                                             </div>
                                           )}
@@ -1543,7 +1537,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.status && (
@@ -1610,7 +1608,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.oprName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.oprName}</span>
+                                              <span>
+                                                {getUserName(detail.oprName)}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.inksUsed && (
@@ -1721,7 +1721,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.oprName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.oprName}</span>
+                                              <span>
+                                                {getUserName(detail.oprName)}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.flute && (
@@ -1813,7 +1815,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.film && (
@@ -1904,7 +1910,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.die && (
@@ -1989,7 +1999,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.adhesive && (
@@ -2068,13 +2082,19 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.checkedBy && (
                                             <div className="flex justify-between">
                                               <span>Checked By:</span>
-                                              <span>{detail.checkedBy}</span>
+                                              <span>
+                                                {getUserName(detail.checkedBy)}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.rejectedQty && (
@@ -2276,16 +2296,20 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.dispatchDate && (
                                             <div className="flex justify-between">
                                               <span>Dispatch Date:</span>
                                               <span>
-                                                {new Date(
+                                                {formatDate(
                                                   detail.dispatchDate
-                                                ).toLocaleDateString()}
+                                                )}
                                               </span>
                                             </div>
                                           )}
@@ -2368,7 +2392,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                           {detail.operatorName && (
                                             <div className="flex justify-between">
                                               <span>Operator:</span>
-                                              <span>{detail.operatorName}</span>
+                                              <span>
+                                                {getUserName(
+                                                  detail.operatorName
+                                                )}
+                                              </span>
                                             </div>
                                           )}
                                           {detail.status && (

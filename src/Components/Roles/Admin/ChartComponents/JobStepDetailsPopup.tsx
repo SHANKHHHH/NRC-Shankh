@@ -41,6 +41,9 @@ interface JobStepDetailsPopupProps {
   stepInfo?: JobPlanStep;
 }
 
+import React from "react";
+import { useUsers } from "../../../../context/UsersContext";
+
 const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
   isOpen,
   onClose,
@@ -48,6 +51,32 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
   stepName,
   stepInfo,
 }) => {
+  const { getUserName } = useUsers();
+
+  // Format date as dd/mm/yyyy, HH:mm:ss AM/PM (12-hour format)
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return "Date not available";
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+
+      // Convert to 12-hour format
+      let hours = date.getHours();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
+
+      // Format: dd/mm/yyyy H:mm:ss AM/PM
+      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
+
   // Helper function to get the actual step status (same logic as AdminDashboard)
   const getStepActualStatus = (
     step: JobPlanStep
@@ -191,8 +220,7 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                   Created At:
                 </span>
                 <p className="text-sm text-gray-800">
-                  {new Date(jobData.createdAt).toLocaleDateString()}{" "}
-                  {new Date(jobData.createdAt).toLocaleTimeString()}
+                  {formatDateTime(jobData.createdAt)}
                 </p>
               </div>
             </div>
@@ -241,8 +269,7 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                       Start Date:
                     </span>
                     <p className="text-sm text-blue-800">
-                      {new Date(stepInfo.startDate).toLocaleDateString()}{" "}
-                      {new Date(stepInfo.startDate).toLocaleTimeString()}
+                      {formatDateTime(stepInfo.startDate)}
                     </p>
                   </div>
                 )}
@@ -252,8 +279,7 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                       End Date:
                     </span>
                     <p className="text-sm text-blue-800">
-                      {new Date(stepInfo.endDate).toLocaleDateString()}{" "}
-                      {new Date(stepInfo.endDate).toLocaleTimeString()}
+                      {formatDateTime(stepInfo.endDate)}
                     </p>
                   </div>
                 )}
@@ -262,7 +288,9 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                     <span className="text-sm font-medium text-blue-700">
                       Assigned User:
                     </span>
-                    <p className="text-sm text-blue-800">{stepInfo.user}</p>
+                    <p className="text-sm text-blue-800">
+                      {getUserName(stepInfo.user)}
+                    </p>
                   </div>
                 )}
               </div>
@@ -314,8 +342,7 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
 
                           if (isDateField(fieldName, fieldValue)) {
                             try {
-                              const date = new Date(fieldValue);
-                              return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+                              return formatDateTime(fieldValue);
                             } catch (error) {
                               return String(fieldValue); // Fallback to string if date parsing fails
                             }

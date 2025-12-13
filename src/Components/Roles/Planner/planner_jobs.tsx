@@ -637,8 +637,13 @@ const PlannerJobs: React.FC = () => {
   // Get unique values for a specific column
   const getUniqueColumnValues = (columnName: keyof ColumnFilters): string[] => {
     const values = new Set<string>();
+    // For date columns, store both formatted value and original date for sorting
+    const dateValueMap = new Map<string, Date | null>();
+
     purchaseOrders.forEach((po) => {
       let value: string = "";
+      let originalDate: Date | null = null;
+
       switch (columnName) {
         case "style":
           value = po.style || "";
@@ -651,9 +656,11 @@ const PlannerJobs: React.FC = () => {
           break;
         case "poDate":
           value = formatDateDisplay(po.poDate);
+          originalDate = po.poDate ? new Date(po.poDate) : null;
           break;
         case "deliveryDate":
           value = formatDateDisplay(po.deliveryDate);
+          originalDate = po.deliveryDate ? new Date(po.deliveryDate) : null;
           break;
         case "totalPOQuantity":
           value = po.totalPOQuantity ? String(po.totalPOQuantity) : "";
@@ -682,22 +689,32 @@ const PlannerJobs: React.FC = () => {
           }
           break;
       }
-      if (value) values.add(value);
+      if (value) {
+        values.add(value);
+        // Store original date for date columns to enable proper sorting
+        if (
+          (columnName === "poDate" || columnName === "deliveryDate") &&
+          originalDate
+        ) {
+          dateValueMap.set(value, originalDate);
+        }
+      }
     });
 
     const valuesArray = Array.from(values);
 
-    // Sort dates chronologically instead of alphabetically
+    // Sort dates chronologically using original date values
     if (columnName === "poDate" || columnName === "deliveryDate") {
       return valuesArray.sort((a, b) => {
-        const dateA = parseDateForSorting(a);
-        const dateB = parseDateForSorting(b);
+        const dateA = dateValueMap.get(a) || parseDateForSorting(a);
+        const dateB = dateValueMap.get(b) || parseDateForSorting(b);
 
         // Handle "N/A" or invalid dates - put them at the end
         if (!dateA && !dateB) return 0;
         if (!dateA) return 1;
         if (!dateB) return -1;
 
+        // Compare dates chronologically (earliest first)
         return dateA.getTime() - dateB.getTime();
       });
     }

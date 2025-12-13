@@ -11,6 +11,7 @@ import "./App.css";
 import Header from "./Components/Navbar/Header/Header";
 import Login from "./Pages/Login";
 import ProtectedRoute from "./Routes/ProtectedRoute";
+import { UsersProvider } from "./context/UsersContext";
 
 const Dashboard = lazy(() => import("./Pages/Dashboard/Dashboard"));
 const JobInitiationForm = lazy(
@@ -291,9 +292,11 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter basename="/">
-      <Suspense fallback={<div>Loading...</div>}>
-        <AppContent />
-      </Suspense>
+      <UsersProvider>
+        <Suspense fallback={<div>Loading...</div>}>
+          <AppContent />
+        </Suspense>
+      </UsersProvider>
     </BrowserRouter>
   );
 }

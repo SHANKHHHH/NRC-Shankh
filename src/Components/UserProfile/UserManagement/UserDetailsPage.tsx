@@ -51,9 +51,36 @@ const UserDetailsPage: React.FC<UserDetailsPageProps> = ({ onClose }) => {
       console.log("API response result:", result);
 
       if (result.success && Array.isArray(result.data)) {
-        console.log("Setting users data:", result.data);
-        setUsers(result.data);
-        setFilteredUsers(result.data);
+        // Map API response to match UserData interface
+        // API returns 'isActive' but component expects 'active'
+        // API might return 'role' as JSON string or 'roles' as array, normalize to 'roles' array
+        const mappedUsers = result.data.map((user: any) => ({
+          ...user,
+          active:
+            user.isActive !== undefined
+              ? user.isActive
+              : user.active !== undefined
+              ? user.active
+              : true,
+          // Ensure roles is always an array - prioritize roles array, fallback to parsing role string
+          roles: Array.isArray(user.roles)
+            ? user.roles
+            : typeof user.role === "string"
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(user.role);
+                  return Array.isArray(parsed)
+                    ? parsed.filter((r: any) => r !== null && r !== undefined)
+                    : [];
+                } catch {
+                  return [];
+                }
+              })()
+            : [],
+        }));
+        console.log("Setting users data:", mappedUsers);
+        setUsers(mappedUsers);
+        setFilteredUsers(mappedUsers);
       } else {
         throw new Error("Invalid API response format");
       }
@@ -262,8 +289,8 @@ const UserDetailsPage: React.FC<UserDetailsPageProps> = ({ onClose }) => {
                   <span className="font-medium">Email:</span> {user.email}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Roles:</span> [
-                  {user.roles.map(getRoleDisplayName).join(", ")}]
+                  <span className="font-medium">Roles:</span>{" "}
+                  {user.roles.map(getRoleDisplayName).join(", ")}
                 </p>
                 <p className="text-sm text-gray-600">
                   <span className="font-medium">Last Login:</span>{" "}

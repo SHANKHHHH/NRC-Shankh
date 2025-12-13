@@ -1,6 +1,7 @@
 // src/Components/Roles/Planner/JobPlanningDetailModal.tsx
 import React from "react";
 import { type JobPlan } from "../Types/job.ts"; // Adjust path as needed
+import { useUsers } from "../../../../context/UsersContext";
 
 interface JobPlanningDetailModalProps {
   jobPlan: JobPlan;
@@ -11,6 +12,7 @@ const JobPlanningDetailModal: React.FC<JobPlanningDetailModalProps> = ({
   jobPlan,
   onClose,
 }) => {
+  const { getUserName } = useUsers();
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A";
     try {
@@ -153,7 +155,8 @@ const JobPlanningDetailModal: React.FC<JobPlanningDetailModalProps> = ({
                       </div>
 
                       <p>
-                        <strong>User:</strong> {step.user || "N/A"}
+                        <strong>User:</strong>{" "}
+                        {step.user ? getUserName(step.user) : "N/A"}
                       </p>
                       <p>
                         <strong>Start Date:</strong>{" "}

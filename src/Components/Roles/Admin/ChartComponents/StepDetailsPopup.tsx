@@ -109,6 +109,30 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
     );
   };
 
+  // Format date as dd/mm/yyyy, HH:mm:ss AM/PM (12-hour format)
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return "Date not available";
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+
+      // Convert to 12-hour format
+      let hours = date.getHours();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
+
+      // Format: dd/mm/yyyy H:mm:ss AM/PM
+      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
@@ -185,7 +209,13 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
                       <span className="font-semibold text-gray-700">
                         Job Demand:
                       </span>
-                      <p className="text-gray-600 capitalize">
+                      <p
+                        className={`capitalize ${
+                          job.jobDemand === "high"
+                            ? "bg-red-500 text-white px-2 py-1 rounded inline-block mt-1"
+                            : "text-gray-600"
+                        }`}
+                      >
                         {job.jobDemand}
                       </p>
                     </div>
@@ -195,8 +225,7 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
                         Created At:
                       </span>
                       <p className="text-gray-600">
-                        {new Date(job.createdAt).toLocaleDateString()}{" "}
-                        {new Date(job.createdAt).toLocaleTimeString()}
+                        {formatDateTime(job.createdAt)}
                       </p>
                     </div>
                   </div>
