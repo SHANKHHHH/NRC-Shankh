@@ -66,23 +66,26 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
       return "Printing";
     }
 
-    // Corrugation machines - your machines use "Corrugatic"
-    if (name.includes("corrugatic")) {
+    // Corrugation machines
+    if (name.includes("corrugation")) {
       return "Corrugation";
     }
 
-    // Lamination machines - your machines use "Flute Lam"
-    if (name.includes("flute lam")) {
+    // Lamination machines
+    if (name.includes("flute laminator")) {
       return "Lamination";
     }
 
-    // Pasting machines - your machines use "Manual FI" and "Auto Flap"
-    if (name.includes("manual fi") || name.includes("auto flap")) {
+    // Pasting machines
+    if (
+      name.includes("manual flap pasting") ||
+      name.includes("auto flap pasting")
+    ) {
       return "Pasting";
     }
 
-    // Punching machines - your machines use "Manual Pu" and "Auto Pund"
-    if (name.includes("manual pu") || name.includes("auto pund")) {
+    // Punching machines
+    if (name.includes("manual punching") || name.includes("auto punching")) {
       return "Punching";
     }
 

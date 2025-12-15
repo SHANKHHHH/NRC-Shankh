@@ -53,10 +53,10 @@ const allStepsOptions: { stepName: string; description: string }[] = [
 
 const STEP_TO_MACHINE_MAPPING: Record<string, string[]> = {
   // Steps with machines
-  SideFlapPasting: ["auto flap", "manual fi"],
-  Punching: ["auto pund", "manual pu"],
-  FluteLaminateBoardConversion: ["flute lam"],
-  Corrugation: ["corrugatic"],
+  SideFlapPasting: ["auto flap pasting", "manual flap pasting"],
+  Punching: ["auto punching", "manual punching"],
+  FluteLaminateBoardConversion: ["flute laminator"],
+  Corrugation: ["corrugation"],
   PrintingDetails: ["printing"],
 
   // Steps without machines (no machine assignment needed)

@@ -51,10 +51,10 @@ interface SingleJobPlanningModalProps {
 
 // Add the same mapping as bulk modal
 const STEP_TO_MACHINE_MAPPING: Record<string, string[]> = {
-  SideFlapPasting: ["auto flap", "manual fi"],
-  Punching: ["auto pund", "manual pu"],
-  FluteLaminateBoardConversion: ["flute lam"],
-  Corrugation: ["corrugatic"],
+  SideFlapPasting: ["auto flap pasting", "manual flap pasting"],
+  Punching: ["auto punching", "manual punching"],
+  FluteLaminateBoardConversion: ["flute laminator"],
+  Corrugation: ["corrugation"],
   PrintingDetails: ["printing"],
   PaperStore: [],
   QualityDept: [],
