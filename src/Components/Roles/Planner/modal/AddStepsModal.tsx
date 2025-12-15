@@ -302,6 +302,19 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
       .trim();
   }, []);
 
+  // Helper function to extract unit tag from machine
+  const getMachineTag = useCallback((machine: Machine): string => {
+    // Extract tag from unit field (e.g., "MK", "NR", "DG", "NR1")
+    // If unit contains a dash, take the part before it, otherwise use the whole unit
+    if (machine.unit) {
+      if (machine.unit.includes("-")) {
+        return machine.unit.split("-")[0].trim();
+      }
+      return machine.unit.trim();
+    }
+    return "Other";
+  }, []);
+
   // Memoize step items to prevent unnecessary re-renders
   const StepItem = React.memo<{
     option: { stepName: string; description: string };
@@ -314,6 +327,7 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
     onMachineToggle: (stepName: string, machineId: string) => void;
     isMachineSelected: (stepName: string, machineId: string) => boolean;
     formatStepName: (stepName: string) => string;
+    getMachineTag: (machine: Machine) => string;
   }>(
     ({
       option,
@@ -326,7 +340,44 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
       onMachineToggle,
       isMachineSelected,
       formatStepName,
+      getMachineTag,
     }) => {
+      // Extract unique tags from available machines
+      const uniqueTags = React.useMemo(() => {
+        const tags = new Set<string>();
+        availableMachines.forEach((machine) => {
+          tags.add(getMachineTag(machine));
+        });
+        return Array.from(tags).sort();
+      }, [availableMachines, getMachineTag]);
+
+      // State for selected tab per step - initialize with first tag if available
+      const [selectedTag, setSelectedTag] = React.useState<string>(() => {
+        const tags = new Set<string>();
+        availableMachines.forEach((machine) => {
+          tags.add(getMachineTag(machine));
+        });
+        const sortedTags = Array.from(tags).sort();
+        return sortedTags.length > 0 ? sortedTags[0] : "";
+      });
+
+      // Update selected tag when uniqueTags change (e.g., when machines are filtered)
+      React.useEffect(() => {
+        if (uniqueTags.length > 0) {
+          // If current selected tag is not in the new tags list, select the first one
+          if (!uniqueTags.includes(selectedTag)) {
+            setSelectedTag(uniqueTags[0]);
+          }
+        }
+      }, [uniqueTags]); // Removed selectedTag from dependencies to avoid infinite loop
+
+      // Filter machines by selected tag
+      const filteredMachines = React.useMemo(() => {
+        if (!selectedTag) return availableMachines;
+        return availableMachines.filter(
+          (machine) => getMachineTag(machine) === selectedTag
+        );
+      }, [availableMachines, selectedTag, getMachineTag]);
       const handleCardClick = useCallback(
         (e: React.MouseEvent) => {
           // Don't toggle if clicking on machine selection area or checkbox
@@ -389,8 +440,32 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
                   {STEP_TO_MACHINE_MAPPING[option.stepName]?.join(" / ")})
                 </label>
 
+                {/* Tabs for machine tags */}
+                {uniqueTags.length > 1 && (
+                  <div className="flex flex-wrap gap-1 mb-2 border-b border-gray-200">
+                    {uniqueTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedTag(tag);
+                        }}
+                        className={`px-3 py-1 text-xs font-medium rounded-t-md transition-colors ${
+                          selectedTag === tag
+                            ? "bg-[#00AEEF] text-white border-b-2 border-[#00AEEF]"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                  {availableMachines.map((machine) => (
+                  {filteredMachines.map((machine) => (
                     <label
                       key={machine.id}
                       className="flex items-center cursor-pointer hover:bg-white p-1 rounded text-sm"
@@ -429,8 +504,11 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
                 {selectedMachineId && (
                   <div className="mt-2 text-xs text-gray-600">
                     Selected:{" "}
-                    {availableMachines.find((m) => m.id === selectedMachineId)
-                      ?.machineCode || "Unknown"}
+                    {filteredMachines.find((m) => m.id === selectedMachineId)
+                      ?.machineCode ||
+                      availableMachines.find((m) => m.id === selectedMachineId)
+                        ?.machineCode ||
+                      "Unknown"}
                   </div>
                 )}
               </div>
@@ -528,6 +606,7 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
                     onMachineToggle={handleMachineToggle}
                     isMachineSelected={isMachineSelected}
                     formatStepName={formatStepName}
+                    getMachineTag={getMachineTag}
                   />
                 );
               })}
