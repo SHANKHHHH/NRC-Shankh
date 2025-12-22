@@ -37,7 +37,11 @@ interface JobPlanStep {
   printingDetails?: { id?: number; status?: string; [key: string]: any };
   corrugation?: { id?: number; status?: string; [key: string]: any };
   flutelam?: { id?: number; status?: string; [key: string]: any };
-  fluteLaminateBoardConversion?: { id?: number; status?: string; [key: string]: any };
+  fluteLaminateBoardConversion?: {
+    id?: number;
+    status?: string;
+    [key: string]: any;
+  };
   punching?: { id?: number; status?: string; [key: string]: any };
   sideFlapPasting?: { id?: number; status?: string; [key: string]: any };
   qualityDept?: { id?: number; status?: string; [key: string]: any };
@@ -45,6 +49,7 @@ interface JobPlanStep {
 }
 
 interface JobPlan {
+  id : number;
   jobPlanId: number;
   nrcJobNo: string;
   jobDemand: "low" | "medium" | "high";
@@ -63,7 +68,7 @@ function isMajorHold(job: JobPlan): boolean {
     if (step.status === "major_hold") {
       return true;
     }
-    
+
     // Check step-specific properties (paperStore, printingDetails, etc.)
     if (
       step.paperStore?.status === "major_hold" ||
@@ -78,7 +83,7 @@ function isMajorHold(job: JobPlan): boolean {
     ) {
       return true;
     }
-    
+
     // Check stepDetails.data.status for "major_hold"
     if (step.stepDetails?.data?.status === "major_hold") {
       return true;
@@ -456,15 +461,10 @@ const MajorHoldJobs: React.FC = () => {
   };
 
   useEffect(() => {
-    if (
-      heldJobsData &&
-      Array.isArray(heldJobsData) &&
-      heldJobsData.length > 0
-    ) {
-      enhancePassedJobsWithDetails(heldJobsData);
-    } else {
-      fetchMajorHoldJobsWithDetails();
-    }
+    // 🔥 IMPORTANT: Always fetch ALL major hold jobs regardless of date filter
+    // Major hold jobs should be visible irrespective of the day filter
+    // This ensures that if a job is still in major hold, it will always be shown
+    fetchMajorHoldJobsWithDetails();
   }, []);
 
   const handleJobClick = (job: JobPlan | any) => {
