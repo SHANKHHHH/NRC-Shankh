@@ -220,39 +220,31 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
       return "hold";
     }
 
-    // Check if step has an endDate (indicates completion)
-    if (step.endDate !== null && step.endDate !== undefined) {
-      // If it has endDate, check if status indicates completion
-      if (step.status === "accept" || step.status === "stop") {
-        return "completed";
+    // Special handling for PaperStore: Check paperStore.status first (direct property)
+    if (step.stepName === "PaperStore") {
+      const paperStore = (step as any).paperStore;
+      if (paperStore?.status) {
+        if (paperStore.status === "accept") {
+          return "completed";
+        }
+        if (paperStore.status === "in_progress") {
+          return "in_progress";
+        }
+        if (paperStore.status === "hold") {
+          return "hold";
+        }
       }
     }
 
-    // Check if step.status is "accept" (indicates completion)
-    if (step.status === "accept") {
-      return "completed";
-    }
-
-    // Check step-specific detail fields (e.g., paperStore, printingDetails, etc.)
-    const stepSpecificDetails =
-      step.paperStore ||
-      step.printingDetails ||
-      step.corrugation ||
-      step.flutelam ||
-      step.fluteLaminateBoardConversion ||
-      step.punching ||
-      step.sideFlapPasting ||
-      step.qualityDept ||
-      step.dispatchProcess;
-    if (stepSpecificDetails && stepSpecificDetails.status === "accept") {
-      return "completed";
-    }
-
-    // Priority 1: Check stepDetails.data.status first (where the actual status is often stored)
+    // Priority 1: Check stepDetails.data.status first
     if (step.stepDetails?.data?.status) {
       if (step.stepDetails.data.status === "accept") {
-        // If stepDetails says "accept", it's completed (even if step.status is "start")
-        return "completed";
+        if (step.status === "stop") {
+          return "completed";
+        }
+        if (step.status === "start") {
+          return "in_progress";
+        }
       }
       if (step.stepDetails.data.status === "in_progress") {
         return "in_progress";
@@ -262,11 +254,15 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
       }
     }
 
-    // Priority 2: Check stepDetails.status if data.status is not available
+    // Priority 2: Check stepDetails.status
     if (step.stepDetails?.status) {
       if (step.stepDetails.status === "accept") {
-        // If stepDetails says "accept", it's completed (even if step.status is "start")
-        return "completed";
+        if (step.status === "stop") {
+          return "completed";
+        }
+        if (step.status === "start") {
+          return "in_progress";
+        }
       }
       if (step.stepDetails.status === "in_progress") {
         return "in_progress";
@@ -276,17 +272,23 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
       }
     }
 
-    // Priority 3: Use step.status ONLY if stepDetails doesn't exist at all
-    if (!step.stepDetails) {
-      if (step.status === "stop") {
-        return "completed";
-      }
-      if (step.status === "start") {
-        return "in_progress";
-      }
+    // Priority 3: Check step.status directly
+    if ((step.status as any) === "accept") {
+      return "completed";
+    }
+    if ((step.status as any) === "in_progress") {
+      return "in_progress";
     }
 
-    // Default: planned (stepDetails exists but status is not set, or step.status is "planned")
+    // Priority 4: Use step.status for legacy status values
+    if (step.status === "stop") {
+      return "completed";
+    }
+    if (step.status === "start") {
+      return "in_progress";
+    }
+
+    // Default: planned
     return "planned";
   };
 

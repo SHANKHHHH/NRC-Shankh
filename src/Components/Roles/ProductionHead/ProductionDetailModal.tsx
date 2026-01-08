@@ -89,6 +89,83 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
     }
   };
 
+  // Helper function to get the actual display status (check for accept status)
+  const getActualDisplayStatus = (step: ProductionStep, jobPlan: JobPlan): string => {
+    // Check if step has accept status using the same logic as counting
+    const hasAcceptStatus = () => {
+      // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
+      if ((step as any).stepDetails?.data) {
+        const stepDataKey =
+          step.stepName === "FluteLaminateBoardConversion"
+            ? "flutelam"
+            : step.stepName === "SideFlapPasting"
+            ? "sideFlapPasting"
+            : step.stepName.toLowerCase();
+        
+        const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+        if (stepData && stepData.status === "accept") {
+          return true;
+        }
+      }
+      
+      // SECOND: Check stepDetails.data.status (fallback)
+      if ((step as any).stepDetails?.data?.status === "accept") {
+        return true;
+      }
+      if ((step as any).stepDetails?.status === "accept") {
+        return true;
+      }
+      
+      // THIRD: Check allStepDetails
+      const allStepDetails = (jobPlan as any).allStepDetails;
+      if (allStepDetails) {
+        const stepDetailKey =
+          step.stepName === "FluteLaminateBoardConversion"
+            ? "flutelam"
+            : step.stepName === "SideFlapPasting"
+            ? "sideFlapPasting"
+            : step.stepName.toLowerCase();
+        
+        const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+        if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+          if (stepDetails.some((detail: any) => detail.status === "accept")) {
+            return true;
+          }
+        }
+      }
+      
+      // FOURTH: Check step-level details
+      const stepDetailProp =
+        step.stepName === "FluteLaminateBoardConversion"
+          ? "flutelam"
+          : step.stepName === "SideFlapPasting"
+          ? "sideFlapPasting"
+          : step.stepName.toLowerCase();
+      
+      const stepDetails = (step as any)[stepDetailProp];
+      if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+        if (stepDetails.some((detail: any) => detail.status === "accept")) {
+          return true;
+        }
+      }
+      
+      return false;
+    };
+
+    // If step.status is "stop" but has accept status, show as "completed"
+    if (step.status === "stop" && hasAcceptStatus()) {
+      return "completed";
+    }
+    
+    // If step.status is "accept", show as "completed"
+    if (step.status === "accept") {
+      return "completed";
+    }
+    
+    // Otherwise, return the original status
+    return step.status;
+  };
+
   const generatePDF = async () => {
     setIsGeneratingPDF(true);
 
@@ -203,8 +280,43 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
           20,
           yPosition + 18
         );
+        // Get actual display status (check for accept)
+        const getActualStatus = (step: ProductionStep, jobPlan: JobPlan): string => {
+          const hasAccept = () => {
+            if ((step as any).stepDetails?.data) {
+              const stepDataKey =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+              if (stepData && stepData.status === "accept") return true;
+            }
+            if ((step as any).stepDetails?.data?.status === "accept") return true;
+            if ((step as any).stepDetails?.status === "accept") return true;
+            const allStepDetails = (jobPlan as any).allStepDetails;
+            if (allStepDetails) {
+              const stepDetailKey =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+              const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+              if (Array.isArray(stepDetails) && stepDetails.some((d: any) => d.status === "accept")) return true;
+            }
+            return false;
+          };
+          if (step.status === "stop" && hasAccept()) return "completed";
+          if (step.status === "accept") return "completed";
+          return step.status;
+        };
+        const actualStatus = getActualStatus(step, jobPlan);
         const displayStatus =
-          step.status === "accepted" ? "ACCEPTED" : step.status.toUpperCase();
+          actualStatus === "completed" || actualStatus === "accepted" 
+            ? "COMPLETED" 
+            : actualStatus.toUpperCase();
         pdf.text(`Status: ${displayStatus}`, 20, yPosition + 26);
 
         // Dates
@@ -333,14 +445,23 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
                             : jobPlan.jobDemand}
                         </p>
                       </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                          step.status
-                        )}`}
-                      >
-                        {getStatusIcon(step.status)}
-                        <span className="ml-1">{step.status}</span>
-                      </span>
+                      {(() => {
+                        const actualStatus = getActualDisplayStatus(step, jobPlan);
+                        return (
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                              actualStatus
+                            )}`}
+                          >
+                            {getStatusIcon(actualStatus)}
+                            <span className="ml-1">
+                              {actualStatus === "completed" 
+                                ? "Completed" 
+                                : actualStatus.charAt(0).toUpperCase() + actualStatus.slice(1)}
+                            </span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {/* Step Information */}

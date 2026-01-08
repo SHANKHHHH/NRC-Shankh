@@ -343,8 +343,24 @@ class ProductionService {
                 ? "sideFlapPasting"
                 : step.stepName.toLowerCase();
 
-            // Check allStepDetails from completed job or jobPlan
-            if (allStepDetails) {
+            // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
+            // This is the most direct way to check accept status for each step
+            if ((step as any).stepDetails?.data) {
+              const stepDataKey =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+              
+              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+              if (stepData && stepData.status === "accept") {
+                isCompleted = true;
+              }
+            }
+
+            // SECOND: Check allStepDetails from completed job or jobPlan
+            if (!isCompleted && allStepDetails) {
               const stepDetails =
                 allStepDetails[stepDetailKey as keyof typeof allStepDetails];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -358,7 +374,7 @@ class ProductionService {
               }
             }
 
-            // Also check step-level details (for backward compatibility)
+            // THIRD: Check step-level details (for backward compatibility)
             if (!isCompleted) {
               const stepDetailProp =
                 step.stepName === "FluteLaminateBoardConversion"
@@ -375,6 +391,13 @@ class ProductionService {
                 if (hasAcceptStatus) {
                   isCompleted = true;
                 }
+              }
+            }
+            
+            // FOURTH: Check stepDetails.data.status and stepDetails.status (fallback)
+            if (!isCompleted) {
+              if ((step as any).stepDetails?.data?.status === "accept" || (step as any).stepDetails?.status === "accept") {
+                isCompleted = true;
               }
             }
           }
@@ -474,6 +497,30 @@ class ProductionService {
 
           // Helper function to check if step has "accept" status in allStepDetails
           const hasAcceptStatus = () => {
+            // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
+            // This is the most direct way to check accept status for each step
+            if ((step as any).stepDetails?.data) {
+              const stepDataKey =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+              
+              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+              if (stepData && stepData.status === "accept") {
+                return true;
+              }
+            }
+            
+            // SECOND: Check stepDetails.data.status (fallback)
+            if ((step as any).stepDetails?.data?.status === "accept") {
+              return true;
+            }
+            if ((step as any).stepDetails?.status === "accept") {
+              return true;
+            }
+
             const stepDetailKey =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
@@ -481,7 +528,7 @@ class ProductionService {
                 ? "sideFlapPasting"
                 : step.stepName.toLowerCase();
 
-            // Check allStepDetails from completed job or jobPlan
+            // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
               const stepDetails =
                 allStepDetails[stepDetailKey as keyof typeof allStepDetails];
@@ -494,7 +541,7 @@ class ProductionService {
               }
             }
 
-            // Check step-level details
+            // FOURTH: Check step-level details (direct properties on step)
             const stepDetailProp =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
@@ -637,6 +684,30 @@ class ProductionService {
 
           // Helper function to check if step has "accept" status in allStepDetails
           const hasAcceptStatus = () => {
+            // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
+            // This is the most direct way to check accept status for each step
+            if ((step as any).stepDetails?.data) {
+              const stepDataKey =
+                step.stepName === "FluteLaminateBoardConversion"
+                  ? "flutelam"
+                  : step.stepName === "SideFlapPasting"
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+              
+              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+              if (stepData && stepData.status === "accept") {
+                return true;
+              }
+            }
+            
+            // SECOND: Check stepDetails.data.status (fallback)
+            if ((step as any).stepDetails?.data?.status === "accept") {
+              return true;
+            }
+            if ((step as any).stepDetails?.status === "accept") {
+              return true;
+            }
+
             const stepDetailKey =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
@@ -644,7 +715,7 @@ class ProductionService {
                 ? "sideFlapPasting"
                 : step.stepName.toLowerCase();
 
-            // Check allStepDetails from completed job or jobPlan
+            // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
               const stepDetails =
                 allStepDetails[stepDetailKey as keyof typeof allStepDetails];
@@ -657,7 +728,7 @@ class ProductionService {
               }
             }
 
-            // Check step-level details
+            // FOURTH: Check step-level details (direct properties on step)
             const stepDetailProp =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
