@@ -29,7 +29,7 @@ interface CreateNewJobFormData {
   decalBoardX: string;
   lengthBoardY: string;
   boardSize: string;
-  noUps: number | null;
+  noUps: string;
   artworkReceivedDate: string | null;
   artworkApprovedDate: string | null;
   shadeCardApprovalDate: string | null;
@@ -96,7 +96,7 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
       decalBoardX: "",
       lengthBoardY: "",
       boardSize: prefilledData?.boardSize || "",
-      noUps: null,
+      noUps: "",
       artworkReceivedDate: "", // Use empty string for date inputs
       artworkApprovedDate: "", // Use empty string for date inputs
       shadeCardApprovalDate: "", // Use empty string for date inputs
@@ -532,7 +532,7 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
       decalBoardX: "",
       lengthBoardY: "",
       boardSize: "",
-      noUps: null,
+      noUps: "",
       artworkReceivedDate: "",
       artworkApprovedDate: "",
       shadeCardApprovalDate: "",
