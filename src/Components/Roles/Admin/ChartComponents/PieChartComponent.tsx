@@ -102,10 +102,14 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
             const datasets = chart.data.datasets[0];
             const labels = chart.data.labels;
             return labels.map((label: string, index: number) => {
-              const value = datasets.data[index];
-              const total = datasets.data.reduce((a: number, b: number) => a + b, 0);
-              const percentage = ((value / total) * 100).toFixed(1);
-              
+              const value = datasets.data[index] as number;
+              const total = datasets.data.reduce(
+                (a: number, b: number) => a + (b as number),
+                0
+              );
+              const percentage =
+                total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+
               return {
                 text: `${label} (${percentage}%)`,
                 fillStyle: datasets.backgroundColor[index],
@@ -137,14 +141,18 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
           },
           label: (context: any) => {
             const label = context.label || '';
-            const value = context.parsed;
-            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
-            
-            let result = [];
+            const value = context.parsed as number;
+            const total = context.dataset.data.reduce(
+              (a: number, b: number) => a + (b as number),
+              0
+            );
+            const percentage =
+              total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+
+            const result: string[] = [];
             if (showValues) result.push(`Value: ${value.toLocaleString()}`);
             if (showPercentage) result.push(`Percentage: ${percentage}%`);
-            
+
             return result;
           }
         }

@@ -426,12 +426,13 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
             </div>
           </div>
 
-          {/* Machine Selection - Radio List - Hidden for urgent and regular jobs */}
+          {/* Machine Selection - Radio List - Hidden for urgent/regular jobs and when all steps are selected */}
           {isSelected &&
             requiresMachine &&
             availableMachines.length > 0 &&
             jobDemand !== "high" &&
-            jobDemand !== "medium" && ( // 🔥 UPDATED: Hide machine selection for urgent and regular jobs
+            jobDemand !== "medium" &&
+            selectedSteps.length !== allStepsOptions.length && ( // 🔥 UPDATED: Hide machine selection for urgent/regular jobs and when "Select All Steps" is active
               <div
                 className="mt-3 pl-8 machine-selection-area"
                 onClick={(e) => e.stopPropagation()}
@@ -589,6 +590,40 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
 
           {!loading && (
             <div className="w-full space-y-4">
+              {/* Select All Steps */}
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-[#00AEEF] border-gray-300 focus:ring-[#00AEEF] rounded"
+                    checked={selectedSteps.length === allStepsOptions.length}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      if (checked) {
+                        // Select all steps in predefined order
+                        const allSteps: JobStep[] = allStepsOptions.map(
+                          (option, index) => ({
+                            stepNo: index + 1,
+                            stepName: option.stepName,
+                            machineDetail: "",
+                          })
+                        );
+                        setSelectedSteps(allSteps);
+                        // Note: we intentionally do not auto-assign machines here;
+                        // existing stepMachines remain untouched.
+                      } else {
+                        // Clear all selections and machine mappings
+                        setSelectedSteps([]);
+                        setStepMachines({});
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Select All Steps
+                  </span>
+                </label>
+              </div>
+
               {allStepsOptions.map((option) => {
                 const isSelected = selectedSteps.some(
                   (step) => step.stepName === option.stepName
