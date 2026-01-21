@@ -2408,6 +2408,26 @@ const PlannerJobs: React.FC = () => {
             successMessage += `- Update customer information for incomplete POs`;
           }
 
+          // Sync the sequence after bulk insert (database trigger handles this, but this is a safeguard)
+          try {
+            const syncResponse = await fetch(
+              "https://nrprod.nrcontainers.com/api/purchase-orders/sync-sequence",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              }
+            );
+            if (!syncResponse.ok) {
+              console.warn("Warning: Failed to sync sequence after bulk upload");
+            }
+          } catch (syncError) {
+            console.warn("Warning: Sequence sync failed:", syncError);
+            // Don't fail the upload if sequence sync fails - trigger should handle it
+          }
+
           // Reload POs to sync with database and trigger notification sync
           await fetchPurchaseOrders();
 

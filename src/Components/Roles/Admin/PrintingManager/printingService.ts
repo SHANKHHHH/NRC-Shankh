@@ -27,6 +27,12 @@ export interface PrintingDetails {
     machineCode: string;
     machineType: string;
   }>;
+  // Whether Production Head has already continued this step
+  productionHeadContinued?: boolean;
+  // Additional planning information
+  jobPlanCode?: string;
+  deliveryDate?: string | null;
+  purchaseOrderId?: number | null;
 }
 
 export interface PrintingSummary {
@@ -74,7 +80,7 @@ class PrintingService {
       }
 
       // Process the data correctly based on your API structure
-      return result.data.map((item: any) => {
+      const baseList: PrintingDetails[] = result.data.map((item: any) => {
         // Extract printing details from the nested structure
         const printingDetails = item.printingDetails;
 
@@ -104,6 +110,12 @@ class PrintingService {
             endDate: item.endDate,
             jobDemand: item.jobPlanning?.jobDemand || "medium",
             machineDetails: item.machineDetails || [],
+            // For planned jobs with no printing details yet, Production Head has not continued
+            productionHeadContinued: false,
+            // Planning info will be enriched in a separate step
+            jobPlanCode: undefined,
+            deliveryDate: null,
+            purchaseOrderId: undefined,
           };
         }
 
@@ -140,8 +152,17 @@ class PrintingService {
           endDate: item.endDate,
           jobDemand: item.jobPlanning?.jobDemand || "medium",
           machineDetails: item.machineDetails || [],
+          // Reflect backend flag so Production Head button can be disabled properly
+          productionHeadContinued: printingDetails.productionHeadContinued ?? false,
+          // Planning info will be enriched in a separate step
+          jobPlanCode: undefined,
+          deliveryDate: null,
+          purchaseOrderId: undefined,
         };
       });
+
+      // Enrich with job planning code and delivery date (frontend-only, no backend changes)
+      return await this.enrichWithPlanningInfo(baseList);
     } catch (error) {
       console.error("Error fetching printing details:", error);
       return [];
@@ -247,6 +268,147 @@ class PrintingService {
     } catch (error) {
       console.error(`Error fetching printing details for job ${jobNo}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Enrich printing jobs with jobPlanCode and deliveryDate using existing APIs.
+   * - Fetch job planning by nrcJobNo to get jobPlanCode and purchaseOrderId
+   * - Then fetch purchase orders by ID to get deliveryDate
+   * Backend is unchanged; this is a pure frontend enhancement.
+   */
+  private async enrichWithPlanningInfo(
+    printJobs: PrintingDetails[]
+  ): Promise<PrintingDetails[]> {
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        // If not authenticated, just return base list
+        return printJobs;
+      }
+
+      // Unique job numbers to look up
+      const jobNos = Array.from(
+        new Set(
+          printJobs
+            .map((p) => p.jobNrcJobNo)
+            .filter((n) => n && n !== "-" && typeof n === "string")
+        )
+      ) as string[];
+
+      if (jobNos.length === 0) return printJobs;
+
+      // Map: nrcJobNo -> { jobPlanCode, purchaseOrderId, deliveryDate }
+      const planningMap: Record<
+        string,
+        { jobPlanCode?: string; purchaseOrderId?: number | null; deliveryDate?: string | null }
+      > = {};
+
+      // Fetch job planning for each job number in parallel
+      await Promise.all(
+        jobNos.map(async (jobNo) => {
+          try {
+            const resp = await fetch(
+              `${this.baseUrl}/job-planning/${encodeURIComponent(jobNo)}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+
+            if (!resp.ok) return;
+            const result = await resp.json();
+            if (!result.success || !result.data) return;
+            const jp = result.data;
+
+            const jobPlanCode: string | undefined = jp.jobPlanCode || undefined;
+            const purchaseOrderId: number | null | undefined =
+              jp.purchaseOrderId ?? null;
+
+            planningMap[jobNo] = {
+              jobPlanCode,
+              purchaseOrderId:
+                typeof purchaseOrderId === "number" ? purchaseOrderId : null,
+              deliveryDate: undefined,
+            };
+          } catch (e) {
+            console.warn("Failed to fetch job planning for", jobNo, e);
+          }
+        })
+      );
+
+      // SECOND PASS: Fetch job+PO details to derive correct deliveryDate per job
+      await Promise.all(
+        jobNos.map(async (jobNo) => {
+          try {
+            const info = planningMap[jobNo];
+            if (!info) return;
+
+            const resp = await fetch(
+              `${this.baseUrl}/jobs/${encodeURIComponent(jobNo)}/with-po-details`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            if (!resp.ok) return;
+            const result = await resp.json();
+            if (!result.success || !result.data) return;
+
+            const data = result.data;
+            const poList = Array.isArray(data.purchaseOrders)
+              ? data.purchaseOrders
+              : [];
+
+            if (poList.length === 0) return;
+
+            // Prefer PO matching purchaseOrderId; fallback to first PO
+            let chosenPO: any | null = null;
+            if (
+              info.purchaseOrderId &&
+              typeof info.purchaseOrderId === "number"
+            ) {
+              chosenPO =
+                poList.find((po: any) => po.id === info.purchaseOrderId) ||
+                null;
+            }
+            if (!chosenPO) {
+              chosenPO = poList[0];
+            }
+
+            if (chosenPO) {
+              planningMap[jobNo].deliveryDate =
+                chosenPO.nrcDeliveryDate || chosenPO.deliveryDate || null;
+            }
+          } catch (e) {
+            console.warn("Failed to fetch job+PO details for", jobNo, e);
+          }
+        })
+      );
+
+      // Attach planning info to each printing job
+      return printJobs.map((job) => {
+        const info = planningMap[job.jobNrcJobNo];
+        if (info) {
+          if (info.jobPlanCode) {
+            job.jobPlanCode = info.jobPlanCode;
+          }
+          if (info.purchaseOrderId !== undefined) {
+            job.purchaseOrderId = info.purchaseOrderId;
+          }
+          if (info.deliveryDate !== undefined) {
+            job.deliveryDate = info.deliveryDate;
+          }
+        }
+        return job;
+      });
+    } catch (e) {
+      console.warn("Failed to enrich printing jobs with planning info:", e);
+      return printJobs;
     }
   }
 

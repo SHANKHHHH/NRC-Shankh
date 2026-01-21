@@ -29,6 +29,8 @@ import StatisticsGrid from "../Admin/StatisticsCards/StatisticsGrid";
 import DateFilterComponent, {
   type DateFilterType,
 } from "../Admin/FilterComponents/DateFilterComponent";
+import { printingService } from "../Admin/PrintingManager/printingService";
+import type { PrintingDetails } from "../Admin/PrintingManager/printingService";
 
 // Interface for JobPlanStep (matching AdminDashboard structure)
 interface JobPlanStep {
@@ -147,6 +149,16 @@ const ProductionHeadDashboard: React.FC = () => {
 
   // Date filter state (default to "month")
   const [dateFilter, setDateFilter] = useState<DateFilterType>("month");
+  
+  // Printing Details state
+  const [printingDetails, setPrintingDetails] = useState<PrintingDetails[]>([]);
+  // Track steps that have already been continued to production (frontend-only flag)
+  const [continuedSteps, setContinuedSteps] = useState<Record<number, boolean>>({});
+  // UI: which main table/tab is active: 'jobCards' | 'printing'
+  const [activeMainTab, setActiveMainTab] = useState<"jobCards" | "printing">("jobCards");
+  const [isLoadingPrintingDetails, setIsLoadingPrintingDetails] = useState(false);
+  const [printingDetailsError, setPrintingDetailsError] = useState<string | null>(null);
+  
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
     end: string;
@@ -204,6 +216,25 @@ const ProductionHeadDashboard: React.FC = () => {
 
     loadAggregatedData();
   }, [authStatus]);
+
+  // Load printing details
+  useEffect(() => {
+    const loadPrintingDetails = async () => {
+      try {
+        setIsLoadingPrintingDetails(true);
+        setPrintingDetailsError(null);
+        const data = await printingService.getAllPrintingDetails();
+        setPrintingDetails(data);
+      } catch (error) {
+        console.error("Error loading printing details:", error);
+        setPrintingDetailsError("Failed to load printing details");
+      } finally {
+        setIsLoadingPrintingDetails(false);
+      }
+    };
+
+    loadPrintingDetails();
+  }, []);
 
   // Helper function to get step actual status (same as AdminDashboard)
   const getStepActualStatus = (
@@ -1473,6 +1504,164 @@ const ProductionHeadDashboard: React.FC = () => {
   };
 
   // Handle View Steps button click - opens modal
+  // Handler for Continue to Production button
+  // Calls the continue-step API to mark the step as continued by Production Head
+  const handleContinueToProduction = async (printingDetail: PrintingDetails) => {
+    try {
+      if (!printingDetail.jobStepId) {
+        setError("Job step ID not found. Cannot continue to production.");
+        return;
+      }
+
+      if (!printingDetail.jobNrcJobNo) {
+        setError("Job number not found. Cannot continue to production.");
+        return;
+      }
+
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        setError("Authentication token not found");
+        return;
+      }
+
+      // PrintingDetails is always step 2 in the workflow
+      const stepNo = 2;
+
+      // Fetch specific job step (using jobStepId) to get the correct jobPlanId
+      // This handles the case where multiple job plans share the same nrcJobNo
+      const jobStepResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/${encodeURIComponent(
+          printingDetail.jobNrcJobNo
+        )}/steps/${stepNo}?jobStepId=${printingDetail.jobStepId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!jobStepResponse.ok) {
+        throw new Error("Failed to fetch job step details for this printing job");
+      }
+
+      const jobStepResult = await jobStepResponse.json();
+      if (!jobStepResult.success || !jobStepResult.data) {
+        throw new Error("Invalid job step data received for this printing job");
+      }
+
+      const jobStepData = jobStepResult.data;
+      const jobPlanId: number | undefined = jobStepData?.jobPlanning?.jobPlanId;
+
+      if (!jobPlanId) {
+        throw new Error("Job plan ID not found for this printing step");
+      }
+
+      // Call the continue-step API
+      const continueResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/continue-step`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            nrcJobNo: printingDetail.jobNrcJobNo,
+            stepNo,
+            jobPlanId,
+          }),
+        }
+      );
+
+      if (!continueResponse.ok) {
+        const errorData = await continueResponse.json();
+        throw new Error(errorData.message || "Failed to continue step");
+      }
+
+      const continueResult = await continueResponse.json();
+      if (!continueResult.success) {
+        throw new Error(continueResult.message || "Failed to continue step");
+      }
+
+      // Refresh printing details
+      const data = await printingService.getAllPrintingDetails();
+      setPrintingDetails(data);
+      
+      // Refresh aggregated data to show updated workflow status
+      try {
+        const aggregatedData = await productionService.getAggregatedProductionData();
+        setAggregatedData(aggregatedData);
+      } catch (aggError) {
+        console.warn("Failed to refresh aggregated data:", aggError);
+      }
+
+      // Refresh job plans to show updated step statuses
+      try {
+        const jobPlanningResponse = await fetch(
+          `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        
+        if (jobPlanningResponse.ok) {
+          const jobPlanningResult = await jobPlanningResponse.json();
+          if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
+            // Fetch step details for updated job plans
+            const jobPlansWithDetails = await Promise.all(
+              jobPlanningResult.data.map(async (jobPlan: JobPlanForStats) => {
+                const stepsWithDetails = await Promise.all(
+                  jobPlan.steps.map(async (step: JobPlanStep) => {
+                    let stepDetails = null;
+                    if (step.status === "start" || step.status === "stop") {
+                      stepDetails = await fetchStepDetails(
+                        step.stepName,
+                        step.id,
+                        accessToken
+                      );
+                    }
+                    return {
+                      ...step,
+                      stepDetails: stepDetails || undefined,
+                    };
+                  })
+                );
+                return {
+                  ...jobPlan,
+                  steps: stepsWithDetails,
+                };
+              })
+            );
+            setJobPlansData(jobPlansWithDetails);
+          }
+        }
+      } catch (refreshError) {
+        console.warn("Failed to refresh job plans:", refreshError);
+      }
+
+      // Mark this step as continued in local state so button is disabled
+      if (printingDetail.jobStepId) {
+        setContinuedSteps((prev) => ({
+          ...prev,
+          [printingDetail.jobStepId]: true,
+        }));
+      }
+
+      // Show success message
+      setError(null);
+      alert(continueResult.message || `Job ${printingDetail.jobNrcJobNo} has been continued to production successfully!`);
+      
+    } catch (error) {
+      console.error("Error continuing to production:", error);
+      setError(error instanceof Error ? error.message : "Failed to continue to production");
+      alert(`Error: ${error instanceof Error ? error.message : "Failed to continue to production"}`);
+    }
+  };
+
   const handleViewSteps = (jobPlan: JobPlanForStats) => {
     setSelectedJobPlanForModal(jobPlan);
     setIsJobStepsModalOpen(true);
@@ -2195,7 +2384,36 @@ const ProductionHeadDashboard: React.FC = () => {
         )}
       </div>
 
+      {/* Main Tables Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-center">
+        <div className="bg-white rounded-lg border border-gray-200 p-1 flex w-fit">
+          <button
+            onClick={() => setActiveMainTab("jobCards")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+              activeMainTab === "jobCards"
+                ? "bg-[#00AEEF] text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Job Cards Overview
+          </button>
+
+          <button
+            onClick={() => setActiveMainTab("printing")}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
+              activeMainTab === "printing"
+                ? "bg-[#00AEEF] text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Printing Details
+          </button>
+        </div>
+      </div>
+
+
       {/* Job Cards Overview */}
+      {activeMainTab === "jobCards" && (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
@@ -2353,7 +2571,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 {jobPlan.nrcJobNo}
                               </div>
                               <div className="text-sm text-gray-500">
-                                ID: {jobPlan.jobPlanId}
+                                ID: {(jobPlan as any).jobPlanCode || jobPlan.jobPlanId}
                               </div>
                             </div>
                           </td>
@@ -2437,6 +2655,212 @@ const ProductionHeadDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Printing Details Table */}
+      {activeMainTab === "printing" && (  
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                Printing Details
+              </h3>
+              <p className="text-sm text-gray-600">
+                All printing jobs - Continue completed jobs to production
+              </p>
+            </div>
+          </div>
+
+          {isLoadingPrintingDetails ? (
+            <div className="flex justify-center py-8">
+              <LoadingSpinner size="md" text="Loading printing details..." />
+            </div>
+          ) : printingDetailsError ? (
+            <div className="text-center py-8 text-red-500">
+              {printingDetailsError}
+            </div>
+          ) : (
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar">
+
+
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Job No
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Operator
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Machine
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Colours
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Quantity
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Wastage
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {printingDetails.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-8 text-center">
+                        <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">No printing details found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    printingDetails.map((printing) => {
+                      const formatDate = (dateString: string | null) => {
+                        if (!dateString) return "-";
+                        try {
+                          const date = new Date(dateString);
+                          const day = String(date.getDate()).padStart(2, "0");
+                          const month = String(date.getMonth() + 1).padStart(2, "0");
+                          const year = date.getFullYear();
+                          return `${day}/${month}/${year}`;
+                        } catch {
+                          return "-";
+                        }
+                      };
+
+                      const getStatusInfo = (status: string) => {
+                        switch (status) {
+                          case "accept":
+                            return { label: "Accepted", color: "bg-green-100 text-green-800" };
+                          case "in_progress":
+                            return { label: "In Progress", color: "bg-yellow-100 text-yellow-800" };
+                          case "pending":
+                            return { label: "Pending", color: "bg-gray-100 text-gray-800" };
+                          case "hold":
+                            return { label: "On Hold", color: "bg-orange-100 text-orange-800" };
+                          case "rejected":
+                            return { label: "Rejected", color: "bg-red-100 text-red-800" };
+                          default:
+                            return { label: status, color: "bg-gray-100 text-gray-800" };
+                        }
+                      };
+
+                      const displayStatus =
+                        printing.stepStatus === "start" && printing.status === "pending"
+                          ? "in_progress"
+                          : printing.status;
+                      const statusInfo = getStatusInfo(displayStatus);
+
+                      // Show button when:
+                      // - Printing is in progress (step status = start), OR
+                      // - Printing is accepted AND stopped (completed)
+                      const isInProgress = printing.stepStatus === "start";
+                      const isCompletedAndAccepted =
+                        (printing.status === "accept" || displayStatus === "accept") &&
+                        printing.stepStatus === "stop";
+
+                      const alreadyContinued =
+                        printing.productionHeadContinued === true ||
+                        (typeof printing.jobStepId === "number" && continuedSteps[printing.jobStepId] === true);
+
+                      const canShowContinueButton = isInProgress || isCompletedAndAccepted;
+                      const canContinue = canShowContinueButton && !alreadyContinued;
+
+                      // Use a stable, unique key: prefer jobStepId, fall back to combination
+                      const rowKey =
+                        typeof printing.jobStepId === "number" && printing.jobStepId > 0
+                          ? `step-${printing.jobStepId}`
+                          : `job-${printing.jobNrcJobNo}-${printing.id}`;
+
+                      return (
+                        <tr key={rowKey} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900 font-mono">
+                              {printing.jobNrcJobNo}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              ID: {(printing as any).jobPlanCode || "-"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDate(
+                              ((printing as any).deliveryDate as string | null) ||
+                                printing.date
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {printing.oprName ? getUserName(printing.oprName) : "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {printing.machine || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm font-medium text-gray-900">
+                              {printing.noOfColours || "-"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm font-medium text-gray-900">
+                              {printing.quantity?.toLocaleString() || "0"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="text-sm font-medium text-gray-900">
+                              {printing.wastage?.toLocaleString() || "0"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
+                            >
+                              {statusInfo.label}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            {canShowContinueButton ? (
+                              <button
+                                onClick={(e) => {
+                                  if (!canContinue) return;
+                                  e.stopPropagation();
+                                  handleContinueToProduction(printing);
+                                }}
+                                disabled={!canContinue}
+                                className={`px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium ${
+                                  canContinue
+                                    ? "bg-[#00AEEF] hover:bg-[#0099cc] text-white"
+                                    : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                                }`}
+                              >
+                                {alreadyContinued ? "Continued" : "Continue to Production"}
+                              </button>
+                            ) : printing.stepStatus === "stop" && printing.status !== "accept" ? (
+                              <span className="text-green-600 text-sm font-medium">Completed</span>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Not Ready</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+      )}
 
       {/* Job Search */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">

@@ -920,12 +920,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
           "Regular demand requires at least one production step to be selected"
         );
       }
-
-      if (jobDemand === "medium" && !completedJob.machineId) {
-        throw new Error(
-          "Regular demand requires machine assignment for all selected steps"
-        );
-    }
+      // Machine assignment is no longer required for regular jobs
 
     // 🎯 EXTENSIVE DEBUGGING FOR PO ID
       console.log("🔍 === PO ID DEBUGGING ===");
@@ -970,21 +965,16 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
             machineCode: step.machineCode || machineId,
               machineType: step.machineDetail || "Production Machine",
           }));
-        } else if (completedJob.machineId && step.machineDetail) {
-          // Backward compatibility: single machine
-            machineDetails = [
-              {
-            id: step.machineId || completedJob.machineId,
-                unit: completedJob.unit || "Mk",
-            machineCode: step.machineCode || completedJob.machineId,
-                machineType: step.machineDetail || "Production Step",
-              },
-            ];
-          } else if (jobDemand === "medium") {
-          // Regular demand requires machine assignment for all selected steps
-            throw new Error(
-              `Regular demand requires machine assignment for step: ${step.stepName}`
-            );
+        } else {
+          // No machine assigned - create empty machineDetails array
+          // For regular jobs, machine assignment is optional
+          machineDetails = [
+            {
+              unit: completedJob.unit || "Mk",
+              machineCode: null,
+              machineType: "Not Assigned",
+            },
+          ];
         }
         
           console.log(
@@ -1087,11 +1077,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
       const jobDemand = completedJob.jobDemand || "medium";
       
       // Demand-specific validation
-      if (jobDemand === "medium" && !completedJob.machineId) {
-        throw new Error(
-          "Regular demand requires machine assignment for all selected steps"
-        );
-      }
+      // Machine assignment is no longer required for regular jobs
 
       // Create a job plan with basic production steps
       console.log("🔍 === DEFAULT JOB PLAN PO ID DEBUGGING ===");

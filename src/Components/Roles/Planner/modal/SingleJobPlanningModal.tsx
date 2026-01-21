@@ -269,28 +269,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
       return;
     }
 
-    // 🔥 FIXED: Better validation for step-specific machine assignments
-    if (jobDemand === "medium") {
-      const stepsRequiringMachines = selectedSteps.filter((step) => {
-        const machineTypes = STEP_TO_MACHINE_MAPPING[step.stepName];
-        return machineTypes && machineTypes.length > 0;
-      });
-
-      const stepsWithoutMachines = stepsRequiringMachines.filter((step) => {
-        const assignedMachineId = stepMachines[step.stepName];
-        return !assignedMachineId;
-      });
-
-      if (stepsWithoutMachines.length > 0) {
-        setError(
-          `Regular demand requires machine assignment for steps: ${stepsWithoutMachines
-            .map((s) => s.stepName)
-            .join(", ")}`
-        );
-        setIsSubmitting(false);
-        return;
-      }
-    }
+    // Machine assignment is no longer required for regular jobs
 
     try {
       // 🔥 FIXED: Create job planning data in the correct format expected by the API
@@ -446,8 +425,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
               )}
               {jobDemand === "medium" && (
                 <div className="mt-2 p-2 bg-[#00AEEF]/20 border border-[#00AEEF]/30 rounded text-xs text-[#00AEEF]">
-                  <strong>Regular:</strong> Machine assignment is mandatory for
-                  all selected steps
+                  <strong>Regular:</strong> Machine assignment is not required
                 </div>
               )}
             </div>
@@ -496,8 +474,7 @@ const SingleJobPlanningModal: React.FC<SingleJobPlanningModalProps> = ({
 
               {jobDemand === "medium" && (
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                  <strong>Required:</strong> All selected steps must have
-                  machine assignments for Regular demand
+                  <strong>Info:</strong> Select production steps. Machine assignment is not required for regular jobs.
                 </div>
               )}
               {jobDemand === "high" && (

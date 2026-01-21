@@ -45,8 +45,10 @@ const JobPlanningCard: React.FC<JobPlanningCardProps> = ({
         <div className="flex items-center bg-blue-50 p-3 rounded-md">
           <LuClipboardList className="text-blue-600 text-xl mr-3" />
           <div className="flex flex-col">
-            <p className="text-sm text-gray-600">Job Plan ID</p>
-            <p className="font-medium text-gray-900">{jobPlan.jobPlanId}</p>
+            <p className="text-sm text-gray-600">Job Plan Code</p>
+            <p className="font-medium text-gray-900">
+              {jobPlan.jobPlanCode || jobPlan.jobPlanId}
+            </p>
           </div>
         </div>
 

@@ -148,28 +148,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
       return;
     }
 
-    // 🔥 FIXED: Better validation for step-specific machine assignments
-    if (jobDemand === "medium") {
-      const stepsRequiringMachines = selectedSteps.filter((step) => {
-        const machineTypes = STEP_TO_MACHINE_MAPPING[step.stepName];
-        return machineTypes && machineTypes.length > 0;
-      });
-
-      const stepsWithoutMachines = stepsRequiringMachines.filter((step) => {
-        const assignedMachineId = stepMachines[step.stepName];
-        return !assignedMachineId;
-      });
-
-      if (stepsWithoutMachines.length > 0) {
-        setError(
-          `Regular demand requires machine assignment for steps: ${stepsWithoutMachines
-            .map((s) => s.stepName)
-            .join(", ")}`
-        );
-        setIsSubmitting(false);
-        return;
-      }
-    }
+    // Machine assignment is no longer required for regular jobs
 
     try {
       // 🔥 OPTIMIZED: Process in batches to keep UI responsive
@@ -231,37 +210,31 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
 
       // Process in batches to keep UI responsive
       const processBatch = async (batch: PurchaseOrder[]): Promise<void> => {
-        // Process batch in parallel
-        const results = await Promise.allSettled(
-          batch.map(async (po) => {
+        // IMPORTANT: Process each PO in this batch SEQUENTIALLY (not in parallel)
+        // to avoid backend collisions when generating monthly jobPlanCode.
+        for (let i = 0; i < batch.length; i++) {
+          const po = batch[i];
+          try {
             const jobPlanningData = createJobPlanningData(po);
             await onSave(jobPlanningData);
-            return po.id;
-          })
-        );
-
-        // Update progress and track errors after batch completes
-        results.forEach((result, index) => {
-          completed++;
-
-          if (result.status === "rejected") {
-            const po = batch[index];
+          } catch (resultError: any) {
             errors.push(
               `PO ${po.poNumber || po.id}: ${
-                result.reason?.message || "Unknown error"
+                resultError?.message || "Unknown error"
               }`
             );
             console.error(
               `❌ Failed to create job plan for PO ${po.id}:`,
-              result.reason
+              resultError
             );
+          } finally {
+            completed++;
+            // Update progress after each PO
+            setProgress({ current: completed, total: filteredPOs.length });
           }
-        });
+        }
 
-        // Update progress once per batch to reduce re-renders
-        setProgress({ current: completed, total: filteredPOs.length });
-
-        // Yield control back to browser to keep UI responsive
+        // Yield control back to browser to keep UI responsive between batches
         await new Promise((resolve) => setTimeout(resolve, 0));
       };
 
@@ -374,8 +347,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
               )}
               {jobDemand === "medium" && (
                 <div className="mt-2 p-2 bg-[#00AEEF]/20 border border-[#00AEEF]/30 rounded text-xs text-[#00AEEF]">
-                  <strong>Regular:</strong> Machine assignment is mandatory for
-                  all selected steps
+                  <strong>Regular:</strong> Machine assignment is not required
                 </div>
               )}
             </div>
@@ -402,8 +374,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
 
               {jobDemand === "medium" && (
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                  <strong>Required:</strong> All selected steps must have
-                  machine assignments for Regular demand
+                  <strong>Info:</strong> Select production steps. Machine assignment is not required for regular jobs.
                 </div>
               )}
               {jobDemand === "high" && (

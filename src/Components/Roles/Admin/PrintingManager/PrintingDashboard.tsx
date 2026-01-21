@@ -307,8 +307,7 @@ const PrintingDashboard: React.FC = () => {
       day: "2-digit",
       month: "short",
       year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      
     });
   };
 
@@ -602,7 +601,7 @@ const PrintingDashboard: React.FC = () => {
                   Job No
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
+                   Delivery Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Operator
@@ -661,20 +660,34 @@ const PrintingDashboard: React.FC = () => {
                       ? (printing.wastage / printing.quantity) * 100
                       : 0;
 
+                  // Use a stable, unique key:
+                  // - Prefer jobStepId (unique per step)
+                  // - Fallback to combination of job number and printing id
+                  const rowKey =
+                    typeof printing.jobStepId === "number" && printing.jobStepId > 0
+                      ? `step-${printing.jobStepId}`
+                      : `job-${printing.jobNrcJobNo}-${printing.id}`;
+
                   return (
                     <tr
-                      key={printing.id}
+                      key={rowKey}
                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => handleRowClick(printing)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 font-mono">
-                          {printing.jobNrcJobNo}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(printing.date)}
-                      </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 font-mono">
+                      {printing.jobNrcJobNo}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Id: {(printing as any).jobPlanCode || "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatDate(
+                      ((printing as any).deliveryDate as string | null) ||
+                        printing.date
+                    )}
+                  </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {printing.oprName ? getUserName(printing.oprName) : "-"}
                       </td>

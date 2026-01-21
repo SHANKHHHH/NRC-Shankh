@@ -484,7 +484,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                         {jobPlan.nrcJobNo}
                       </div>
                       <div className="text-sm text-gray-500">
-                        ID: {jobPlan.jobPlanId}
+                        Id: {(jobPlan as any).jobPlanCode || jobPlan.jobPlanId}
                       </div>
                     </div>
                   </td>

@@ -426,11 +426,12 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
             </div>
           </div>
 
-          {/* Machine Selection - Radio List - Hidden for urgent jobs */}
+          {/* Machine Selection - Radio List - Hidden for urgent and regular jobs */}
           {isSelected &&
             requiresMachine &&
             availableMachines.length > 0 &&
-            jobDemand !== "high" && ( // 🔥 NEW: Hide machine selection for urgent jobs
+            jobDemand !== "high" &&
+            jobDemand !== "medium" && ( // 🔥 UPDATED: Hide machine selection for urgent and regular jobs
               <div
                 className="mt-3 pl-8 machine-selection-area"
                 onClick={(e) => e.stopPropagation()}
@@ -514,21 +515,22 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
               </div>
             )}
 
-          {/* Show message for urgent jobs - no machine selection needed */}
-          {isSelected && requiresMachine && jobDemand === "high" && (
+          {/* Show message for urgent and regular jobs - no machine selection needed */}
+          {isSelected && requiresMachine && (jobDemand === "high" || jobDemand === "medium") && (
             <div
               className="mt-3 pl-8 text-sm text-green-600"
               onClick={(e) => e.stopPropagation()}
             >
-              ✓ Machine assignment not required for urgent jobs
+              ✓ Machine assignment not required {jobDemand === "high" ? "for urgent jobs" : "for regular jobs"}
             </div>
           )}
 
-          {/* Show message if step requires machine but none available */}
+          {/* Show message if step requires machine but none available - only for low demand */}
           {isSelected &&
             requiresMachine &&
             availableMachines.length === 0 &&
-            jobDemand !== "high" && (
+            jobDemand !== "high" &&
+            jobDemand !== "medium" && (
               <div
                 className="mt-3 pl-8 text-sm text-amber-600"
                 onClick={(e) => e.stopPropagation()}
@@ -573,11 +575,13 @@ const AddStepsModal: React.FC<AddStepsModalProps> = ({
           className="w-full px-8 pt-10 pb-8 flex flex-col items-center overflow-y-auto max-h-[85vh]"
         >
           <h2 className="text-2xl font-bold mb-2 text-center text-gray-900">
-            Select Steps {jobDemand !== "high" ? "& Machines" : ""}
+            Select Steps {jobDemand !== "high" && jobDemand !== "medium" ? "& Machines" : ""}
           </h2>
           <p className="text-gray-500 text-center mb-6">
             {jobDemand === "high"
               ? "Select steps for urgent job (machine assignment not required):"
+              : jobDemand === "medium"
+              ? "Select steps for regular job (machine assignment not required):"
               : "Select steps and assign a machine for each step:"}
           </p>
 
