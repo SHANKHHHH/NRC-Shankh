@@ -1316,22 +1316,34 @@ const PlannerJobs: React.FC = () => {
     navigate("/dashboard/planner/initiate-job/new");
   };
 
-  // Handle bulk download of PO data
+  // Handle bulk download of PO data (fetch all POs from backend API - no row limit)
   const handleBulkDownload = async () => {
     try {
       setLoading(true);
 
-      // Fetch all PO data from the database
-      const { data: poData, error } = await supabase
-        .from("PurchaseOrder")
-        .select("*")
-        .order("id", { ascending: true });
-
-      if (error) {
-        throw new Error(`Failed to fetch PO data: ${error.message}`);
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        throw new Error("Authentication token not found. Please log in.");
       }
 
-      if (!poData || poData.length === 0) {
+      const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const response = await fetch(`${baseUrl}/api/purchase-orders`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to fetch PO data: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const poData = result?.data ?? result;
+
+      if (!Array.isArray(poData) || poData.length === 0) {
         alert("No PO data found to download.");
         return;
       }
