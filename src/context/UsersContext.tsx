@@ -100,8 +100,20 @@ export const UsersProvider: React.FC<UsersProviderProps> = ({ children }) => {
   const getUserName = useCallback(
     (userId: string | null): string => {
       if (!userId) return "-";
-      const user = users.find((u) => u.id === userId);
-      return user?.name || userId; // Return user ID if name not found
+      const id = String(userId).trim();
+      const user = users.find((u) => u.id === id);
+      if (user?.name) return user.name;
+      // Case-insensitive match (e.g. NRC078 vs nrc078) so in-progress/planned/completed all show name
+      const userByCase = users.find((u) => u.id.toLowerCase() === id.toLowerCase());
+      if (userByCase?.name) return userByCase.name;
+      // Try with NRC prefix (e.g. "078" or 78 -> "NRC078") so progress job cards resolve name consistently
+      if (/^\d+$/.test(id) || (id.length <= 4 && !id.toUpperCase().startsWith("NRC"))) {
+        const withPrefix = id.toUpperCase().startsWith("NRC") ? id : `NRC${id}`;
+        const withPrefixPadded = /^\d+$/.test(id) ? `NRC${id.padStart(3, "0")}` : withPrefix;
+        const u = users.find((x) => x.id === withPrefix || x.id === withPrefixPadded);
+        if (u?.name) return u.name;
+      }
+      return id; // Return user ID if name not found
     },
     [users]
   );

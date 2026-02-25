@@ -187,13 +187,13 @@ const JobAssigned: React.FC = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                          {/* Job Plan ID */}
+                          {/* Job Plan Code */}
                           <div className="flex flex-col">
                             <p className="text-sm text-gray-600 mb-1">
-                              Job Plan ID
+                              Job Plan Code
                             </p>
                             <p className="font-semibold text-gray-900 text-lg">
-                              {jobPlan.jobPlanId}
+                              {(jobPlan as { jobPlanCode?: string; jobPlanId: number }).jobPlanCode || jobPlan.jobPlanId}
                             </p>
                           </div>
 

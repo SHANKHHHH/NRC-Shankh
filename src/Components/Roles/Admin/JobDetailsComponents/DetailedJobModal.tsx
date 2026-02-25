@@ -77,6 +77,30 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
     }
   };
 
+  // Dispatch quantity for completed jobs: use for "No of Sheets" in PDF and modal
+  const getDispatchQuantityFromJob = (j: typeof job): number | null => {
+    const dispatchSteps = j?.allStepDetails?.dispatchProcess;
+    if (dispatchSteps) {
+      const arr = Array.isArray(dispatchSteps) ? dispatchSteps : [dispatchSteps];
+      const first = arr[0];
+      if (first != null) {
+        const q = first.totalDispatchedQty ?? first.quantity;
+        if (typeof q === "number" && !Number.isNaN(q)) return q;
+      }
+    }
+    const steps = j?.allSteps ?? j?.steps;
+    if (Array.isArray(steps)) {
+      const dispatchStep = steps.find((s: any) => s?.stepName === "DispatchProcess");
+      const detail = dispatchStep?.dispatchProcess ?? dispatchStep?.stepDetails?.data ?? dispatchStep?.stepDetails;
+      if (detail) {
+        const d = Array.isArray(detail) ? detail[0] : detail;
+        const q = d?.totalDispatchedQty ?? d?.quantity;
+        if (typeof q === "number" && !Number.isNaN(q)) return q;
+      }
+    }
+    return null;
+  };
+
   if (!isOpen || !job) return null;
 
   // Helper function to convert logo to base64
@@ -259,8 +283,10 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
         20,
         yPosition + 15 // Reduced spacing from 18
       );
+      const dispatchQty = getDispatchQuantityFromJob(job);
+      const noOfSheetsForPdf = dispatchQty != null ? String(dispatchQty) : String(poDetails?.noOfSheets || "N/A");
       pdf.text(
-        `No of Sheets: ${String(poDetails?.noOfSheets || "N/A")}`,
+        `No of Sheets: ${noOfSheetsForPdf}`,
         pageWidth / 2 + 20,
         yPosition + 15 // Reduced spacing from 18
       );
@@ -335,8 +361,13 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
       function getStepDetailsFromStep(step: any) {
         if (job && job.allStepDetails) {
           switch (step.stepName) {
-            case "PaperStore":
-              return job.allStepDetails.paperStore || [];
+            case "PaperStore": {
+              const fromAll = job.allStepDetails.paperStore || [];
+              if (fromAll.length > 0) return fromAll;
+              // Use full paperStore from step when API returns it (for display and PDF)
+              if (step.paperStore) return Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
+              return [];
+            }
             case "PrintingDetails":
               return job.allStepDetails.printingDetails || [];
             case "Corrugation":
@@ -354,6 +385,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             default:
               return [];
           }
+        }
+
+        // For PaperStore, use step.paperStore when present (full details from API for display and PDF)
+        if (step.stepName === "PaperStore" && step.paperStore) {
+          return Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
         }
 
         // Check if stepDetails is directly available on the step object
@@ -499,6 +535,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
 
           // Step-specific fields (most important ones only)
           if (step.stepName === "PaperStore") {
+            displayField("Operator", getUserName(step.user || detail.user));
             displayField("Size", detail.sheetSize);
             displayField("Qty", detail.quantity);
             displayField("Available", detail.available);
@@ -984,7 +1021,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             No. of Sheets:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.noOfSheets || "N/A"}
+                            {getDispatchQuantityFromJob(job) ?? poDetails.noOfSheets ?? "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1244,8 +1281,12 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           if (job.allStepDetails) {
                             // Use proper type-safe access
                             switch (stepName) {
-                              case "PaperStore":
-                                return job.allStepDetails.paperStore || [];
+                              case "PaperStore": {
+                                const fromAll = job.allStepDetails.paperStore || [];
+                                if (fromAll.length > 0) return fromAll;
+                                if (step.paperStore) return Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
+                                return [];
+                              }
                               case "PrintingDetails":
                                 return job.allStepDetails.printingDetails || [];
                               case "Corrugation":
@@ -1263,6 +1304,10 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                               default:
                                 return [];
                             }
+                          }
+                          // PaperStore: use step.paperStore when present (full details from API)
+                          if (stepName === "PaperStore" && step.paperStore) {
+                            return Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
                           }
                           // Check if stepDetails is directly available on the step object
                           if (step.stepDetails) {
@@ -1283,7 +1328,10 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           return [];
                         };
 
-                        const stepDetails = getStepDetails(step.stepName);
+                        let stepDetails = getStepDetails(step.stepName);
+                        if (step.stepName === "PaperStore" && step.paperStore && (!stepDetails || stepDetails.length === 0)) {
+                          stepDetails = Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
+                        }
 
                         // Helper function to get step status in priority order:
                         // 1. stepDetails.data.status (highest priority)
@@ -1478,6 +1526,12 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                       {/* Paper Store Details */}
                                       {step.stepName === "PaperStore" && (
                                         <>
+                                          {(step.user || detail.user || detail.operatorName) && (
+                                            <div className="flex justify-between">
+                                              <span>Operator:</span>
+                                              <span>{getUserName(step.user || detail.user || detail.operatorName)}</span>
+                                            </div>
+                                          )}
                                           {detail.sheetSize && (
                                             <div className="flex justify-between">
                                               <span>Sheet Size:</span>
@@ -1532,16 +1586,6 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                             <div className="flex justify-between">
                                               <span>Shift:</span>
                                               <span>{detail.shift}</span>
-                                            </div>
-                                          )}
-                                          {detail.operatorName && (
-                                            <div className="flex justify-between">
-                                              <span>Operator:</span>
-                                              <span>
-                                                {getUserName(
-                                                  detail.operatorName
-                                                )}
-                                              </span>
                                             </div>
                                           )}
                                           {detail.status && (

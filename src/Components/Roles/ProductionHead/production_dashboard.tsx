@@ -2442,9 +2442,8 @@ const ProductionHeadDashboard: React.FC = () => {
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
               >
                 <option value="all">All Demands</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="high">Urgent</option>
+                <option value="medium">Regular</option>
               </select>
 
               {/* Status Filter */}

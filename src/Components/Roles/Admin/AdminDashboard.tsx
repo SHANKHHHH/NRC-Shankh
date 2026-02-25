@@ -12,7 +12,7 @@ import JobPlansTable from "./DataTable/JobPlansTable";
 import { useNavigate, useLocation } from "react-router-dom";
 import CompletedJobsTable from "./CompletedJobsTable";
 import LoadingSpinner from "../../common/LoadingSpinner";
-import MachineUtilizationDashboard from "./MachineUtilization";
+// import MachineUtilizationDashboard from "./MachineUtilization"; // Machine utilization section commented out
 import ActiveUsersModal from "./Modals/ActiveUsersModal";
 import PDAAnnouncements from "./PDAAnnouncements";
 
@@ -1900,7 +1900,7 @@ const AdminDashboard: React.FC = () => {
         setCustomDateRange={setCustomDateRange}
         className="mb-4"
       /> */}
-      {/* Machine Utilization */}
+      {/* Machine Utilization - commented out for now */}
       {/* <BarChartComponent
   data={Object.entries(filteredData.machineUtilization).map(
     ([machine, stats]) => ({
@@ -1921,11 +1921,10 @@ const AdminDashboard: React.FC = () => {
   className="mb-8"
   showDateFilter={true}
 /> */}
-
-      <MachineUtilizationDashboard
+      {/* <MachineUtilizationDashboard
         machineData={filteredData.machineUtilization}
         className="mb-8"
-      />
+      /> */}
 
       {/* Step-wise Progress Chart */}
       {/* <LineChartComponent
