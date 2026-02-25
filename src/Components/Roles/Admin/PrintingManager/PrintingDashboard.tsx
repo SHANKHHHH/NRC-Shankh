@@ -292,6 +292,12 @@ const PrintingDashboard: React.FC = () => {
           label: "On Hold",
           icon: PauseCircleIcon,
         };
+      case "major_hold":
+        return {
+          color: "bg-red-100 text-red-800 border-red-200",
+          label: "Major Hold",
+          icon: ExclamationTriangleIcon,
+        };
       default:
         return {
           color: "bg-gray-100 text-gray-800 border-gray-200",
@@ -571,6 +577,7 @@ const PrintingDashboard: React.FC = () => {
                 <option value="rejected">Rejected</option>
                 <option value="in_progress">In Progress</option>
                 <option value="hold">On Hold</option>
+                <option value="major_hold">Major Hold</option>
                 <option value="planned">Planned</option>
               </select>
             </div>
@@ -593,7 +600,7 @@ const PrintingDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-96">
+        <div className="overflow-x-hidden overflow-y-auto max-h-96">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>

@@ -2748,8 +2748,12 @@ const ProductionHeadDashboard: React.FC = () => {
                             return { label: "Pending", color: "bg-gray-100 text-gray-800" };
                           case "hold":
                             return { label: "On Hold", color: "bg-orange-100 text-orange-800" };
+                          case "major_hold":
+                            return { label: "Major Hold", color: "bg-red-100 text-red-800" };
                           case "rejected":
                             return { label: "Rejected", color: "bg-red-100 text-red-800" };
+                          case "planned":
+                            return { label: "Planned", color: "bg-gray-100 text-gray-800" };
                           default:
                             return { label: status, color: "bg-gray-100 text-gray-800" };
                         }
