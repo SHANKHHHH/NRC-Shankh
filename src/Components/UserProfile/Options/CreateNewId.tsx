@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { roleOptions } from "../UserManagement/types";
+import {
+  filterMachinesByRoles,
+  getMachineCategory,
+  getRoleMachineCategories,
+} from "../UserManagement/machineRoleUtils";
 
 interface CreateNewIdProps {
   onClose: () => void;
@@ -51,140 +56,10 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
         console.log(`Role: ${role} | Allowed categories: ${categories}`);
       });
 
-      const filtered = getFilteredMachines();
+      const filtered = filterMachinesByRoles(machines, selectedRoles);
       console.log("Filtered machines count:", filtered.length);
     }
   }, [selectedRoles, machines]);
-
-  // ✅ Helper function to categorize machines
-  // ✅ Helper function to categorize machines - FIXED for your machine types
-  const getMachineCategory = (machineName: string): string => {
-    const name = machineName.toLowerCase();
-
-    // Printing machines
-    if (name.includes("printing")) {
-      return "Printing";
-    }
-
-    // Corrugation machines
-    if (name.includes("corrugation")) {
-      return "Corrugation";
-    }
-
-    // Lamination machines
-    if (name.includes("flute laminator")) {
-      return "Lamination";
-    }
-
-    // Pasting machines
-    if (
-      name.includes("manual flap pasting") ||
-      name.includes("auto flap pasting")
-    ) {
-      return "Pasting";
-    }
-
-    // Punching machines
-    if (name.includes("manual punching") || name.includes("auto punching")) {
-      return "Punching";
-    }
-
-    // Paper cutting machines
-    if (name.includes("paper cut")) {
-      return "Cutting";
-    }
-
-    // Thin blade machines
-    if (name.includes("thin blade")) {
-      return "Cutting";
-    }
-
-    // Pinning machines
-    if (name.includes("pinning")) {
-      return "Finishing";
-    }
-
-    // Foiling machines
-    if (name.includes("foiling ma")) {
-      return "Finishing";
-    }
-
-    console.log(`Machine "${machineName}" categorized as "Other"`);
-    return "Other";
-  };
-
-  // ✅ Map roles to machine categories they can access
-  // ✅ Map roles to machine categories they can access - UPDATED
-  const getRoleMachineCategories = (role: string): string[] => {
-    const roleMap: { [key: string]: string[] } = {
-      printer: ["Printing"],
-      printing_operator: ["Printing"],
-
-      corrugator: ["Corrugation"],
-      corrugation_operator: ["Corrugation"],
-
-      flutelaminator: ["Lamination"],
-      flute_laminator: ["Lamination"],
-      lamination_operator: ["Lamination"],
-
-      pasting_operator: ["Pasting"],
-      flap_pasting: ["Pasting"],
-
-      punching_operator: ["Punching"],
-      die_cutting: ["Punching"],
-
-      cutting_operator: ["Cutting"],
-      paper_cutting: ["Cutting"],
-
-      finishing_operator: ["Finishing"],
-
-      quality_controller: ["Finishing"], // Quality might use finishing machines
-
-      admin: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Other",
-      ],
-      supervisor: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Other",
-      ],
-    };
-
-    console.log(`Getting categories for role: ${role}`, roleMap[role] || []);
-    return roleMap[role] || [];
-  };
-
-  // ✅ Filter machines based on selected roles
-  const getFilteredMachines = () => {
-    if (selectedRoles.length === 0) {
-      return machines; // Show all machines if no role selected
-    }
-
-    // Get all machine categories that the selected roles can access
-    const allowedCategories = new Set<string>();
-    selectedRoles.forEach((role) => {
-      const categories = getRoleMachineCategories(role);
-      categories.forEach((category) => allowedCategories.add(category));
-    });
-
-    // Filter machines based on allowed categories
-    return machines.filter((machine) => {
-      const machineCategory = getMachineCategory(machine.machineType);
-      return allowedCategories.has(machineCategory);
-    });
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -199,7 +74,7 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
       console.log("Updated selected roles:", newRoles);
 
       // ✅ Clear selected machines when roles change to avoid invalid selections
-      const filteredMachines = getFilteredMachinesForRoles(newRoles);
+      const filteredMachines = filterMachinesByRoles(machines, newRoles);
       setSelectedMachines((prevMachines) =>
         prevMachines.filter((machineId) =>
           filteredMachines.some((machine) => machine.id === machineId)
@@ -207,24 +82,6 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
       );
 
       return newRoles;
-    });
-  };
-
-  // ✅ Helper function to get filtered machines for specific roles
-  const getFilteredMachinesForRoles = (roles: string[]) => {
-    if (roles.length === 0) {
-      return machines;
-    }
-
-    const allowedCategories = new Set<string>();
-    roles.forEach((role) => {
-      const categories = getRoleMachineCategories(role);
-      categories.forEach((category) => allowedCategories.add(category));
-    });
-
-    return machines.filter((machine) => {
-      const machineCategory = getMachineCategory(machine.machineType);
-      return allowedCategories.has(machineCategory);
     });
   };
 
@@ -342,7 +199,7 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
   };
   console.log("machines", machines);
   // ✅ Get filtered machines based on current role selection
-  const filteredMachines = getFilteredMachines();
+  const filteredMachines = filterMachinesByRoles(machines, selectedRoles);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 bg-transparent bg-opacity-50 backdrop-blur-sm">

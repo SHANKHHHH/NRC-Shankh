@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { User, X, Check } from "lucide-react";
 import { type UserData, roleOptions, type UpdateUserPayload } from "./types";
+import {
+  filterMachinesByRoles,
+  getMachineCategory,
+} from "./machineRoleUtils";
 
 interface EditUserModalProps {
   user: UserData;
@@ -50,113 +54,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
         ? prev.filter((id) => id !== machineId)
         : [...prev, machineId]
     );
-  };
-
-  // Helper function to categorize machines
-  const getMachineCategory = (machineName: string): string => {
-    const name = machineName.toLowerCase();
-
-    if (name.includes("printing")) return "Printing";
-    if (name.includes("corrugatic")) return "Corrugation";
-    if (name.includes("flute lam")) return "Lamination";
-    if (name.includes("manual fi") || name.includes("auto flap"))
-      return "Pasting";
-    if (name.includes("manual pu") || name.includes("auto pund"))
-      return "Punching";
-    if (name.includes("paper cut")) return "Cutting";
-    if (name.includes("thin blade")) return "Cutting";
-    if (name.includes("pinning")) return "Finishing";
-    if (name.includes("foiling")) return "Finishing";
-    if (name.includes("die cut")) return "Cutting";
-    if (name.includes("gluing")) return "Assembly";
-    if (name.includes("stapling")) return "Assembly";
-    if (name.includes("packaging")) return "Packaging";
-    if (name.includes("quality")) return "Quality";
-    if (name.includes("dispatch")) return "Dispatch";
-
-    return "Other";
-  };
-
-  // Helper function to get machine categories allowed for a role
-  const getRoleMachineCategories = (role: string): string[] => {
-    const roleCategoryMap: Record<string, string[]> = {
-      printer: ["Printing"],
-      corrugator: ["Corrugation"],
-      flutelaminator: ["Lamination"],
-      pasting_operator: ["Pasting"],
-      punching_operator: ["Punching"],
-      paperstore: ["Cutting", "Quality"],
-      qc_manager: ["Quality"],
-      dispatch_executive: ["Dispatch"],
-      production_head: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Assembly",
-        "Packaging",
-      ],
-      admin: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Assembly",
-        "Packaging",
-        "Quality",
-        "Dispatch",
-      ],
-      planner: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Assembly",
-        "Packaging",
-        "Quality",
-        "Dispatch",
-      ],
-      flyingsquad: [
-        "Printing",
-        "Corrugation",
-        "Lamination",
-        "Pasting",
-        "Punching",
-        "Cutting",
-        "Finishing",
-        "Assembly",
-        "Packaging",
-        "Quality",
-        "Dispatch",
-      ],
-    };
-
-    return roleCategoryMap[role] || [];
-  };
-
-  // Get filtered machines based on selected roles
-  const getFilteredMachines = () => {
-    if (selectedRoles.length === 0) return machines;
-
-    const allowedCategories = new Set<string>();
-    selectedRoles.forEach((role) => {
-      const categories = getRoleMachineCategories(role);
-      categories.forEach((category) => allowedCategories.add(category));
-    });
-
-    return machines.filter((machine) => {
-      const machineCategory = getMachineCategory(machine.machineType);
-      return allowedCategories.has(machineCategory);
-    });
   };
 
   // Fetch all machines
@@ -234,6 +131,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     fetchMachines();
     fetchUserMachines();
   }, []);
+
+  const filteredMachines = filterMachinesByRoles(machines, selectedRoles);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -519,8 +418,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 Select Machines (Multiple)
                 {selectedRoles.length > 0 && (
                   <span className="ml-2 text-xs text-blue-600">
-                    (Filtered by selected roles - {getFilteredMachines().length}{" "}
-                    of {machines.length} machines)
+                    (Filtered by selected roles - {filteredMachines.length} of{" "}
+                    {machines.length} machines)
                   </span>
                 )}
               </label>
@@ -531,14 +430,14 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                    {getFilteredMachines().length === 0 ? (
+                    {filteredMachines.length === 0 ? (
                       <div className="col-span-full text-center text-gray-500 text-sm py-4">
                         {selectedRoles.length === 0
                           ? "No machines available"
                           : "No machines available for selected roles"}
                       </div>
                     ) : (
-                      getFilteredMachines().map((machine) => (
+                      filteredMachines.map((machine) => (
                         <button
                           key={machine.id}
                           type="button"
