@@ -461,10 +461,13 @@ const MajorHoldJobs: React.FC = () => {
   };
 
   useEffect(() => {
-    // 🔥 IMPORTANT: Always fetch ALL major hold jobs regardless of date filter
-    // Major hold jobs should be visible irrespective of the day filter
-    // This ensures that if a job is still in major hold, it will always be shown
-    fetchMajorHoldJobsWithDetails();
+    // When dashboard passes pre-filtered major hold jobs, use them so the list shows correctly
+    if (heldJobsData && Array.isArray(heldJobsData) && heldJobsData.length > 0) {
+      enhancePassedJobsWithDetails(heldJobsData);
+    } else {
+      // Otherwise fetch ALL major hold jobs regardless of date filter
+      fetchMajorHoldJobsWithDetails();
+    }
   }, []);
 
   const handleJobClick = (job: JobPlan | any) => {

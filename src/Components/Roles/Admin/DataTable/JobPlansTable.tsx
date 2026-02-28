@@ -134,7 +134,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     "all" | "low" | "medium" | "high"
   >("all");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "completed" | "inProgress" | "planned"
+    "all" | "completed" | "inProgress" | "majorHold" | "planned"
   >("all");
   const [selectedJobPlan, setSelectedJobPlan] = useState<JobPlan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -212,7 +212,14 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
   const getStepActualStatus = (
     step: JobPlanStep
   ): "completed" | "in_progress" | "hold" | "planned" => {
-    // Check for hold status first (highest priority)
+    // Check for major_hold and hold first (highest priority) - major_hold must not count as in-progress
+    if (
+      step.stepDetails?.data?.status === "major_hold" ||
+      step.stepDetails?.status === "major_hold" ||
+      step.status === "major_hold"
+    ) {
+      return "hold";
+    }
     if (
       step.stepDetails?.data?.status === "hold" ||
       step.stepDetails?.status === "hold"
@@ -315,14 +322,23 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
       );
 
       if (statusFilter === "completed") matchesStatus = allCompleted;
+      else if (statusFilter === "majorHold") matchesStatus = hasMajorHold(jobPlan);
       else if (statusFilter === "inProgress")
-        matchesStatus = hasInProgress || hasHold;
+        matchesStatus = (hasInProgress || hasHold) && !hasMajorHold(jobPlan);
       else if (statusFilter === "planned")
         matchesStatus = !hasInProgress && !hasHold && !allCompleted;
     }
 
     return matchesSearch && matchesDemand && matchesStatus;
   });
+
+  const hasMajorHold = (jobPlan: JobPlan): boolean =>
+    (jobPlan.steps || []).some(
+      (step) =>
+        step.stepDetails?.data?.status === "major_hold" ||
+        step.stepDetails?.status === "major_hold" ||
+        step.status === "major_hold"
+    );
 
   const getJobStatus = (jobPlan: JobPlan) => {
     // Use helper function to check actual step statuses
@@ -336,6 +352,8 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
 
     if (allCompleted)
       return { text: "Completed", color: "bg-green-100 text-green-800" };
+    if (hasMajorHold(jobPlan))
+      return { text: "Major Hold", color: "bg-red-100 text-red-800" };
     if (hasInProgress || hasHold)
       return { text: "In Progress", color: "bg-yellow-100 text-yellow-800" };
     return { text: "Planned", color: "bg-gray-100 text-gray-800" };
@@ -360,10 +378,30 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
         return `${baseClasses} bg-blue-100 text-blue-800`;
       case "planned":
         return `${baseClasses} bg-gray-100 text-gray-600`;
+      case "major_hold":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      case "hold":
+        return `${baseClasses} bg-orange-100 text-orange-800`;
+      case "accept":
+        return `${baseClasses} bg-green-100 text-green-800`;
       default:
         return `${baseClasses} bg-gray-100 text-gray-600`;
     }
   };
+
+  const getStepDisplayStatus = (step: JobPlanStep): string => {
+    const raw =
+      step.stepDetails?.status ??
+      (step.stepDetails as any)?.data?.status ??
+      step.status ??
+      "planned";
+    return typeof raw === "string" ? raw : "planned";
+  };
+
+  const formatStepStatusLabel = (status: string): string =>
+    String(status)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "-";
@@ -439,6 +477,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
             <option value="all">All Status</option>
             <option value="completed">Completed</option>
             <option value="inProgress">In Progress</option>
+            <option value="majorHold">Major Hold</option>
             <option value="planned">Planned</option>
           </select>
         </div>
@@ -591,8 +630,8 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                   clickable: true,
                 },
                 {
-                  label: "Job Card ID",
-                  value: selectedJobPlan.jobPlanId,
+                  label: "Job Plan Code",
+                  value: (selectedJobPlan as any).jobPlanCode ?? selectedJobPlan.jobPlanId,
                   color: "green",
                 },
                 {
@@ -663,7 +702,9 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {selectedJobPlan.steps.map((step) => (
+                  {(selectedJobPlan.steps ?? []).map((step) => {
+                    const stepStatus = getStepDisplayStatus(step);
+                    return (
                     <tr
                       key={step.id}
                       className="hover:bg-indigo-50 transition-colors"
@@ -674,18 +715,13 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                       <td className="px-6 py-4 text-sm">
                         {formatStepName(step.stepName)}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 align-middle">
                         <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusStyle(
-                            step.stepDetails?.data?.status || step.status
+                          className={`inline-block px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${getStatusStyle(
+                            stepStatus
                           )}`}
                         >
-                          {(step.stepDetails?.data?.status || step.status)
-                            .charAt(0)
-                            .toUpperCase() +
-                            (step.stepDetails?.data?.status || step.status)
-                              .slice(1)
-                              .replace("-", " ")}
+                          {formatStepStatusLabel(stepStatus)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
@@ -704,7 +740,8 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
                         {getUserName(step.user)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -207,6 +207,7 @@ interface AdminDashboardData {
   heldJobs: number;
   heldJobsData: HeldJob[];
   majorHoldJobs: number;
+  majorHoldJobsData: JobPlan[];
 }
 
 interface MachineDetails {
@@ -316,11 +317,11 @@ const AdminDashboard: React.FC = () => {
 
   // Navigate to Major Hold Jobs view
   const handleMajorHoldJobsClick = () => {
-    // Pass job plans data so we can fetch step details and filter for major hold
-    const jobPlans = filteredData?.jobPlans || [];
+    // Pass pre-filtered major hold job plans so the page shows the correct list
+    const majorHoldList = filteredData?.majorHoldJobsData ?? filteredData?.jobPlans?.filter((jp) => isMajorHold(jp)) ?? [];
     navigate("/dashboard/major-hold-jobs", {
       state: {
-        heldJobsData: jobPlans, // Pass as heldJobsData for compatibility, but it's actually jobPlans
+        heldJobsData: majorHoldList,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
@@ -839,7 +840,14 @@ const AdminDashboard: React.FC = () => {
   const getStepActualStatus = (
     step: JobPlanStep
   ): "completed" | "in_progress" | "hold" | "planned" => {
-    // Check for hold status first (highest priority)
+    // Check for major_hold and hold first (highest priority) - major_hold jobs must not count as in-progress
+    if (
+      step.stepDetails?.data?.status === "major_hold" ||
+      step.stepDetails?.status === "major_hold" ||
+      step.status === "major_hold"
+    ) {
+      return "hold";
+    }
     if (
       step.stepDetails?.data?.status === "hold" ||
       step.stepDetails?.status === "hold"
@@ -1163,10 +1171,10 @@ const AdminDashboard: React.FC = () => {
         }
       });
 
-      // Determine job status
+      // Determine job status: held = regular hold only (from API or step status "hold"). Major hold is separate (majorHoldJobs).
       if (jobCompleted) {
         // This job is completed, but we're not counting it here since it comes from completed jobs API
-      } else if (jobOnHold) {
+      } else if (jobOnHold && !isMajorHold(jobPlan)) {
         heldJobs++;
       } else if (jobInProgress) {
         inProgressJobs++;
@@ -1236,6 +1244,9 @@ const AdminDashboard: React.FC = () => {
 
     const mergedStepStats = mergeStepCompletionStats(stepStats);
 
+    // Pre-filter job plans that are in major hold so Major Hold page can show them
+    const majorHoldJobsData = jobPlans.filter((jp) => isMajorHold(jp));
+
     return {
       jobPlans,
       totalJobs: totalJobs + completedJobsCount,
@@ -1254,6 +1265,7 @@ const AdminDashboard: React.FC = () => {
       heldJobs,
       heldJobsData,
       majorHoldJobs,
+      majorHoldJobsData,
     };
   };
 
@@ -1621,6 +1633,8 @@ const AdminDashboard: React.FC = () => {
     console.log("Held jobs (from API):", heldJobs);
     console.log("Total jobs:", totalJobs + completedJobs);
 
+    const majorHoldJobsData = filteredJobPlans.filter((jp) => isMajorHold(jp));
+
     return {
       ...data, // Keep machine utilization and other non-date-dependent data
       jobPlans: filteredJobPlans,
@@ -1639,6 +1653,7 @@ const AdminDashboard: React.FC = () => {
       heldJobs,
       heldJobsData: data.heldJobsData, // Keep the original held jobs data as it's not date-filtered
       majorHoldJobs,
+      majorHoldJobsData,
     };
   }, [data, dateFilter, customDateRange]);
 
