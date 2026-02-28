@@ -426,19 +426,28 @@ const ProductionHeadDashboard: React.FC = () => {
 
     const { startDate, endDate } = dateRange;
 
+    // Get step activity date from step.updatedAt, stepDetails.updatedAt, or startDate
+    const getStepActivityDate = (step: any): Date | null => {
+      const raw =
+        (step as any).updatedAt ||
+        (step.stepDetails && step.stepDetails.updatedAt) ||
+        (step as any).startDate;
+      if (!raw) return null;
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
     return jobPlansData.filter((jobPlan) => {
-      // Check if any step has been updated within the date range
       const hasRecentStepActivity = jobPlan.steps.some((step) => {
-        if ((step as any).updatedAt) {
-          const stepUpdateDate = new Date((step as any).updatedAt);
-          return isDateInRange(stepUpdateDate, startDate, endDate);
-        }
-        return false;
+        const stepUpdateDate = getStepActivityDate(step);
+        if (!stepUpdateDate) return false;
+        return isDateInRange(stepUpdateDate, startDate, endDate);
       });
 
-      // If no step activity found, fall back to job creation date
       if (!hasRecentStepActivity) {
-        const jobDate = new Date((jobPlan as any).createdAt || Date.now());
+        // Fallback: use job plan updatedAt when available, else createdAt
+        const jobTimestamp = (jobPlan as any).updatedAt ?? (jobPlan as any).createdAt ?? Date.now();
+        const jobDate = new Date(jobTimestamp);
         return isDateInRange(jobDate, startDate, endDate);
       }
 

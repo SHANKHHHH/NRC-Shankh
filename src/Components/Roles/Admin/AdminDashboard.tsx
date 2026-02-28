@@ -1387,24 +1387,33 @@ const AdminDashboard: React.FC = () => {
       endDate.toDateString()
     );
 
-    // Filter jobPlans based on step activity (updatedAt dates)
+    // Helper: get step activity date from step.updatedAt, stepDetails.updatedAt, or startDate
+    const getStepActivityDate = (step: any): Date | null => {
+      const raw =
+        step.updatedAt ||
+        (step.stepDetails && step.stepDetails.updatedAt) ||
+        step.startDate;
+      if (!raw) return null;
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    // Filter jobPlans based on step activity (updatedAt dates) or job plan updatedAt
     const filteredJobPlans = data.jobPlans.filter((jobPlan) => {
-      // Check if any step has been updated within the date range
       const hasRecentStepActivity = jobPlan.steps.some((step) => {
-        if (step.updatedAt) {
-          const stepUpdateDate = new Date(step.updatedAt);
-          return isDateInRange(
-            stepUpdateDate,
-            new Date(startDate),
-            new Date(endDate)
-          );
-        }
-        return false;
+        const stepUpdateDate = getStepActivityDate(step);
+        if (!stepUpdateDate) return false;
+        return isDateInRange(
+          stepUpdateDate,
+          new Date(startDate),
+          new Date(endDate)
+        );
       });
 
-      // If no step activity found, fall back to job creation date
       if (!hasRecentStepActivity) {
-        const jobDate = new Date(jobPlan.createdAt);
+        // Fallback: use job plan updatedAt (last plan update) when available, else createdAt
+        const jobTimestamp = (jobPlan as any).updatedAt ?? jobPlan.createdAt;
+        const jobDate = new Date(jobTimestamp);
         return isDateInRange(jobDate, new Date(startDate), new Date(endDate));
       }
 

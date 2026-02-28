@@ -229,21 +229,32 @@ const InProgressJobs: React.FC = () => {
     customDateRange,
   } = location.state || {};
 
-  // Helper function to check if a job has recent step activity
+  // Helper: get the most recent activity date for a step (step.updatedAt, stepDetails.updatedAt, or startDate)
+  const getStepActivityDate = (step: JobPlanStep): Date | null => {
+    const raw =
+      step.updatedAt ||
+      (step.stepDetails && step.stepDetails.updatedAt) ||
+      step.startDate;
+    if (!raw) return null;
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // Helper function to check if a job has recent step activity within the date range (end = end of day)
   const hasRecentStepActivity = (
     job: JobPlan,
     startDate: string,
     endDate: string
   ) => {
     const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     return job.steps.some((step) => {
-      if (step.updatedAt) {
-        const stepUpdateDate = new Date(step.updatedAt);
-        return stepUpdateDate >= start && stepUpdateDate <= end;
-      }
-      return false;
+      const stepUpdateDate = getStepActivityDate(step);
+      if (!stepUpdateDate) return false;
+      return stepUpdateDate >= start && stepUpdateDate <= end;
     });
   };
 
@@ -419,12 +430,11 @@ const InProgressJobs: React.FC = () => {
             );
             if (!hasActivity) {
               console.log(
-                `Job ${job.nrcJobNo} has no recent step activity, falling back to creation date`
+                `Job ${job.nrcJobNo} has no recent step activity, falling back to job updatedAt/createdAt`
               );
-              // Fallback to job creation date if no step activity
-              const jobDate = new Date(job.createdAt)
-                .toISOString()
-                .split("T")[0];
+              // Fallback: use job updatedAt (last plan update) when available, else createdAt
+              const jobTimestamp = (job as any).updatedAt ?? job.createdAt;
+              const jobDate = new Date(jobTimestamp).toISOString().split("T")[0];
               return jobDate >= dateRange.start && jobDate <= dateRange.end;
             }
             return hasActivity;
