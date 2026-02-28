@@ -42,6 +42,28 @@ const MajorHoldJobs = lazy(
   () => import("./Components/Roles/Admin/MajorHoldJobs")
 ); // NEW: Major Hold Jobs page
 
+// Global fetch wrapper: on 401 for authenticated requests, clear session and redirect to login (e.g. after admin force logout)
+function install401Redirect() {
+  const originalFetch = window.fetch;
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    let hadAuth = false;
+    if (typeof input === "object" && input && "headers" in input && input.headers instanceof Headers) {
+      hadAuth = input.headers.get("Authorization")?.startsWith("Bearer ") ?? false;
+    }
+    if (!hadAuth && init?.headers) {
+      const h = init.headers as Record<string, string>;
+      hadAuth = (h?.Authorization ?? (h as any)?.authorization)?.startsWith("Bearer ") ?? false;
+    }
+    const res = await originalFetch(input, init);
+    if (res.status === 401 && hadAuth) {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("userData");
+      window.location.href = "/login";
+    }
+    return res;
+  };
+}
+
 // Wrapper component to use useNavigate
 function AppContent() {
   const navigate = useNavigate();
@@ -53,6 +75,11 @@ function AppContent() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Install global 401 handler once so force-logged-out users are redirected to login
+  useEffect(() => {
+    install401Redirect();
+  }, []);
 
   // Check for existing authentication on component mount
   useEffect(() => {

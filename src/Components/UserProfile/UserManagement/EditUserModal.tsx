@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, X, Check } from "lucide-react";
+import { User, X, Check, LogOut } from "lucide-react";
 import { type UserData, roleOptions, type UpdateUserPayload } from "./types";
 import {
   filterMachinesByRoles,
@@ -35,6 +35,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [machinesLoading, setMachinesLoading] = useState(false);
   const [userMachinesLoading, setUserMachinesLoading] = useState(false);
   const [originalMachineIds, setOriginalMachineIds] = useState<string[]>([]);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -54,6 +55,38 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
         ? prev.filter((id) => id !== machineId)
         : [...prev, machineId]
     );
+  };
+
+  const handleForceLogout = async () => {
+    if (!window.confirm("Force logout this user? They will need to sign in again on their next request.")) {
+      return;
+    }
+    setForceLogoutLoading(true);
+    setError(null);
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) throw new Error("Authentication token not found.");
+      const response = await fetch(
+        `https://nrprod.nrcontainers.com/api/auth/users/${user.id}/force-logout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to force logout user");
+      }
+      setError(null);
+      window.alert("Session cleared. The user will be logged out on their next request.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to force logout user");
+    } finally {
+      setForceLogoutLoading(false);
+    }
   };
 
   // Fetch all machines
@@ -505,6 +538,31 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
               />
               <p className="text-xs text-gray-500 mt-1">
                 Leave blank to keep current password
+              </p>
+            </div>
+
+            {/* Force Logout - Admin only */}
+            <div className="pt-2 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={handleForceLogout}
+                disabled={forceLogoutLoading}
+                className="w-full py-2.5 px-4 rounded-lg font-medium text-sm border-2 border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:border-amber-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {forceLogoutLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-600 border-t-transparent" />
+                    <span>Clearing session...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut size={18} />
+                    <span>Force Logout</span>
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-gray-500 mt-1.5 text-center">
+                Clears this user&apos;s session so they must sign in again.
               </p>
             </div>
 

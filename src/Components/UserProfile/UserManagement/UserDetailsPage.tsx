@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, User, Edit3, Trash2, Eye } from "lucide-react";
+import { Search, User, Edit3, Trash2, Eye, LogOut } from "lucide-react";
 import UserDetailsModal from "./UserDetailsModal";
 import EditUserModal from "./EditUserModal";
 import DeleteWarningModal from "./DeleteWarningModal";
@@ -21,6 +21,7 @@ const UserDetailsPage: React.FC<UserDetailsPageProps> = ({ onClose }) => {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [showDeleteWarning, setShowDeleteWarning] = useState(false);
+  const [forceLogoutUserId, setForceLogoutUserId] = useState<string | null>(null);
 
   // Fetch all users
   const fetchUsers = async () => {
@@ -150,6 +151,41 @@ const UserDetailsPage: React.FC<UserDetailsPageProps> = ({ onClose }) => {
     setShowDeleteWarning(true);
   };
 
+  const handleForceLogout = async (user: UserData) => {
+    if (
+      !window.confirm(
+        `Force logout ${user.name}? They will need to sign in again on their next request.`
+      )
+    ) {
+      return;
+    }
+    setForceLogoutUserId(user.id);
+    setError(null);
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) throw new Error("Authentication token not found.");
+      const response = await fetch(
+        `https://nrprod.nrcontainers.com/api/auth/users/${user.id}/force-logout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to force logout user");
+      }
+      window.alert("Session cleared. The user will be logged out on their next request.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to force logout user");
+    } finally {
+      setForceLogoutUserId(null);
+    }
+  };
+
   const handleUserDeleted = () => {
     setShowDeleteWarning(false);
     setSelectedUser(null);
@@ -272,15 +308,29 @@ const UserDetailsPage: React.FC<UserDetailsPageProps> = ({ onClose }) => {
                     <p className="text-sm text-gray-500">{user.id}</p>
                   </div>
                 </div>
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    user.active
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {user.active ? "Active" : "Inactive"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleForceLogout(user)}
+                    disabled={forceLogoutUserId === user.id}
+                    title="Force logout this user"
+                    className="p-1.5 rounded-md text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {forceLogoutUserId === user.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-600 border-t-transparent" />
+                    ) : (
+                      <LogOut size={18} />
+                    )}
+                  </button>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.active
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {user.active ? "Active" : "Inactive"}
+                  </span>
+                </div>
               </div>
 
               {/* User Details */}
