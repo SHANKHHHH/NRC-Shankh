@@ -20,11 +20,8 @@ const AdminDashboard = lazy(
 );
 
 import EditWorkingDetails from "../../Components/Roles/Admin/EditWorkingDetails";
-import PrintingMgrJobCard from "../../Components/Roles/PrintingMgr/job"; // Renamed import to avoid conflict
-import StopScreen from "../../Components/Roles/PrintingMgr/options/stop";
 import DispatchExecutiveJobs from "../../Components/Roles/Dispatch_Executive/dispatch_jobs";
 import ReadyDispatchForm from "../../Components/Roles/Dispatch_Executive/ReadytoDispatch/readyDispatch";
-import ProductionSteps from "../../Components/Roles/ProductionHead/productionSteps/production_steps";
 import ProductionHeadDashboard from "../../Components/Roles/ProductionHead/production_dashboard";
 
 import StartNewJob from "../../Components/Roles/Planner/startNew_job";
@@ -88,7 +85,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       // Set the correct tab based on user role
       if (actualUserRole === "admin") {
         setTabValue("admin-create-new-job");
-      } else if (actualUserRole === "planner") {
+      } else if (actualUserRole === "planner" || actualUserRole === "printing_manager" || actualUserRole === "production_head") {
         setTabValue("create new job");
       }
 
@@ -111,8 +108,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     location.pathname
   );
 
-  // Re-added state for jobs, loading, error, etc.
-  const [jobs, setJobs] = useState<DummyJob[]>([
+  // State for Dispatch Executive section
+  const [jobs] = useState<DummyJob[]>([
     {
       id: "1",
       company: "Jockey India",
@@ -134,14 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       dispatchDate: "16/04/2025",
     },
   ]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showStopScreen, setShowStopScreen] = useState(false);
-  const [activeJob, setActiveJob] = useState<DummyJob | null>(null);
   const [showReadyDispatch, setShowReadyDispatch] = useState(false);
-  const [showProductionSteps, setShowProductionSteps] = useState(false);
-
-  useEffect(() => {}, [activeJob]);
 
   return (
     <div className="px-4 sm:px-8 py-8 bg-[#f7f7f7] min-h-screen">
@@ -201,9 +191,18 @@ const Dashboard: React.FC<DashboardProps> = ({
           <JobAssigned />
         )}
 
-        {/* Printing Manager Dashboard - Only show PrintingDashboard */}
+        {/* Printing Manager: Dashboard, Job Cards, Create New Job, Start New Job */}
         {actualUserRole === "printing_manager" && tabValue === "dashboard" && (
           <PrintingDashboard />
+        )}
+        {actualUserRole === "printing_manager" && tabValue === "jobs" && (
+          <PlannerJobs />
+        )}
+        {actualUserRole === "printing_manager" && tabValue === "create new job" && (
+          <CreateNewJob onBack={() => setTabValue("dashboard")} />
+        )}
+        {actualUserRole === "printing_manager" && tabValue === "start new job" && (
+          <StartNewJob />
         )}
 
         {/* QC Head Dashboard - Only show QCDashboard */}
@@ -228,45 +227,20 @@ const Dashboard: React.FC<DashboardProps> = ({
             />
           ))}
 
-        {/* Production Head Dashboard */}
+        {/* Production Head: Dashboard, Job Cards, Create New Job, Start New Job */}
         {(actualUserRole === "production_head" || role === "production_head") && tabValue === "dashboard" && (
           <ProductionHeadDashboard />
         )}
-
-        {/* Production Head jobs tab - RESTORED ORIGINAL CONTENT */}
-        {role === "production_head" && tabValue === "jobs" && (
-          <div className="w-full flex flex-col items-center">
-            {showProductionSteps ? (
-              <ProductionSteps onBack={() => setShowProductionSteps(false)} />
-            ) : (
-              <>
-                {loading && <div>Loading jobs...</div>}
-                {error && <div className="text-red-500">{error}</div>}
-                <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4 justify-items-center">
-                  {jobs.length > 0 ? (
-                    jobs.map((job) => (
-                      <PrintingMgrJobCard // Assuming ProductionHead also uses this card or a similar one
-                        key={job.id}
-                        company={job.company}
-                        jobId={job.jobId}
-                        boardSize={job.boardSize}
-                        gsm={job.gsm}
-                        artwork={job.artwork}
-                        approvalDate={job.approvalDate}
-                        dispatchDate={job.dispatchDate}
-                        onStop={() => setShowProductionSteps(true)}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-center col-span-full py-8">
-                      <p className="text-gray-500">No jobs found</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+        {(actualUserRole === "production_head" || role === "production_head") && tabValue === "jobs" && (
+          <PlannerJobs />
         )}
+        {(actualUserRole === "production_head" || role === "production_head") && tabValue === "create new job" && (
+          <CreateNewJob onBack={() => setTabValue("dashboard")} />
+        )}
+        {(actualUserRole === "production_head" || role === "production_head") && tabValue === "start new job" && (
+          <StartNewJob />
+        )}
+
       </Suspense>
     </div>
   );

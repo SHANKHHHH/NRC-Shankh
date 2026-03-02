@@ -686,7 +686,7 @@ const PrintingDashboard: React.FC = () => {
                       {printing.jobNrcJobNo}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      Id: {(printing as any).jobPlanCode || "-"}
+                      Id: {printing.jobPlanCode || "-"}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

@@ -470,15 +470,9 @@ const EditWorkingDetails: React.FC = () => {
                     {/* Job Header */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-3 sm:space-y-0">
                       <div className="flex-1">
-                        {/* Mobile-optimized title: prefer Job Plan Code, then NRC Job No */}
+                        {/* NRC Job Number in bold - full value, wraps if long */}
                         <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 break-words">
-                          {job.jobPlanCode
-                            ? job.jobPlanCode.length > 24
-                              ? `${job.jobPlanCode.substring(0, 24)}...`
-                              : job.jobPlanCode
-                            : job.nrcJobNo.length > 20
-                            ? `${job.nrcJobNo.substring(0, 20)}...`
-                            : job.nrcJobNo}
+                          {job.nrcJobNo}
                         </h3>
 
                         {/* Mobile-stacked info with better spacing */}

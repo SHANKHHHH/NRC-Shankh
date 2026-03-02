@@ -132,10 +132,10 @@ const StepDetailsModal: React.FC<StepDetailsModalProps> = ({
             className="px-6 py-4 overflow-y-auto"
             style={{ maxHeight: "calc(90vh - 120px)" }}
           >
-            {/* Job Information */}
+            {/* Job Information - NRC Job Number in bold */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <h4 className="text-xl font-bold text-gray-900 mb-2">
-                {job.jobPlanCode ?? job.nrcJobNo}
+                {job.nrcJobNo}
               </h4>
               <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                 <div>

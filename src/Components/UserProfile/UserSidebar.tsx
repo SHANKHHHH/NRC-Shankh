@@ -38,7 +38,12 @@ const sidebarConfig: Record<
   },
   printing_manager: {
     displayName: "Printing Manager",
-    options: [], // No options - only logout available
+    options: [
+      "Dashboard",
+      "Job Cards",
+      "Create New Job",
+      "Start New Job",
+    ],
   },
   dispatch_executive: {
     displayName: "Dispatch Executive",
@@ -46,7 +51,12 @@ const sidebarConfig: Record<
   },
   production_head: {
     displayName: "Production Head",
-    options: [], // No options - only logout available
+    options: [
+      "Dashboard",
+      "Job Cards",
+      "Create New Job",
+      "Start New Job",
+    ],
   },
   qc_manager: {
     displayName: "QC Manager",

@@ -160,7 +160,7 @@ const PlannerJobs: React.FC = () => {
 
   // State for finished goods
   const [finishedGoods, setFinishedGoods] = useState<Record<string, number>>(
-    {}
+    {},
   );
 
   // State for job search
@@ -194,7 +194,7 @@ const PlannerJobs: React.FC = () => {
 
   // Dropdown visibility state for column filters
   const [activeColumnFilter, setActiveColumnFilter] = useState<string | null>(
-    null
+    null,
   );
 
   // Search state for filter dropdowns
@@ -235,12 +235,12 @@ const PlannerJobs: React.FC = () => {
   // Helper function to show snackbar
   const showSnackbar = (
     message: string,
-    type: "success" | "error" | "warning" | "info" = "info"
+    type: "success" | "error" | "warning" | "info" = "info",
   ) => {
     setSnackbar({ open: true, message, type });
     setTimeout(
       () => setSnackbar({ open: false, message: "", type: "info" }),
-      4000
+      4000,
     );
   };
 
@@ -264,7 +264,7 @@ const PlannerJobs: React.FC = () => {
 
   // Helper function to check job completion status
   const checkPOCompletionStatus = (
-    po: any
+    po: any,
   ): "artwork_pending" | "po_pending" | "more_info_pending" | "completed" => {
     // Check if THIS specific PO has job planning (not just any PO with same nrcJobNo)
     const hasJobPlan =
@@ -291,7 +291,7 @@ const PlannerJobs: React.FC = () => {
   const mergePOWithJobPlanningAndJobs = (
     purchaseOrders: any[],
     jobPlannings: any[],
-    jobs: any[]
+    jobs: any[],
   ) => {
     return purchaseOrders
       .map((po) => {
@@ -309,7 +309,7 @@ const PlannerJobs: React.FC = () => {
           (job) =>
             job.nrcJobNo === po.jobNrcJobNo ||
             job.nrcJobNo === po.nrcJobNo ||
-            (job.styleItemSKU === po.style && job.nrcJobNo === po.jobNrcJobNo)
+            (job.styleItemSKU === po.style && job.nrcJobNo === po.jobNrcJobNo),
         );
 
         // Merge all the data
@@ -400,11 +400,11 @@ const PlannerJobs: React.FC = () => {
 
     setAvailableNoOfColors(
       Array.from(colors).filter(
-        (color) => color !== undefined && color !== null
-      )
+        (color) => color !== undefined && color !== null,
+      ),
     );
     setAvailableBoardSizes(
-      Array.from(boardSizes).filter((size) => size && size.trim())
+      Array.from(boardSizes).filter((size) => size && size.trim()),
     );
   };
 
@@ -521,7 +521,7 @@ const PlannerJobs: React.FC = () => {
         if (
           !poBoardSize ||
           !filters.boardSizes.some((size) =>
-            poBoardSize.toLowerCase().includes(size.toLowerCase())
+            poBoardSize.toLowerCase().includes(size.toLowerCase()),
           )
         ) {
           return false;
@@ -597,7 +597,7 @@ const PlannerJobs: React.FC = () => {
 
   // Check if any column filters are active
   const hasColumnFilters = Object.values(columnFilters).some(
-    (value) => Array.isArray(value) && value.length > 0
+    (value) => Array.isArray(value) && value.length > 0,
   );
 
   // Format date for display as dd/mm/yyyy
@@ -726,7 +726,7 @@ const PlannerJobs: React.FC = () => {
   // Handle column filter toggle
   const toggleColumnFilter = (
     columnName: keyof ColumnFilters,
-    value: string
+    value: string,
   ) => {
     setColumnFilters((prev) => {
       const currentValues = prev[columnName];
@@ -747,7 +747,7 @@ const PlannerJobs: React.FC = () => {
     const filteredValues = getUniqueColumnValues(columnName).filter(
       (value) =>
         filterSearch === "" ||
-        value.toLowerCase().includes(filterSearch.toLowerCase())
+        value.toLowerCase().includes(filterSearch.toLowerCase()),
     );
     const currentValues = columnFilters[columnName];
 
@@ -768,12 +768,12 @@ const PlannerJobs: React.FC = () => {
 
   // Check if all visible values are selected
   const areAllVisibleValuesSelected = (
-    columnName: keyof ColumnFilters
+    columnName: keyof ColumnFilters,
   ): boolean => {
     const filteredValues = getUniqueColumnValues(columnName).filter(
       (value) =>
         filterSearch === "" ||
-        value.toLowerCase().includes(filterSearch.toLowerCase())
+        value.toLowerCase().includes(filterSearch.toLowerCase()),
     );
     return (
       filteredValues.length > 0 &&
@@ -784,7 +784,7 @@ const PlannerJobs: React.FC = () => {
   // Handle opening filter dropdown with positioning
   const handleToggleFilterDropdown = (
     columnName: string,
-    event: React.MouseEvent<HTMLButtonElement>
+    event: React.MouseEvent<HTMLButtonElement>,
   ) => {
     event.stopPropagation();
     if (activeColumnFilter !== columnName) {
@@ -811,10 +811,10 @@ const PlannerJobs: React.FC = () => {
     try {
       // Check both possible localStorage keys
       const jobCreationNotifications = JSON.parse(
-        localStorage.getItem("jobCreationNotifications") || "[]"
+        localStorage.getItem("jobCreationNotifications") || "[]",
       );
       const activityLogNotifications = JSON.parse(
-        localStorage.getItem("activityLogNotifications") || "[]"
+        localStorage.getItem("activityLogNotifications") || "[]",
       );
 
       // Combine both notification arrays
@@ -849,7 +849,7 @@ const PlannerJobs: React.FC = () => {
       return;
     }
     setSelectedPOs((prev) =>
-      prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]
+      prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId],
     );
   };
 
@@ -861,13 +861,13 @@ const PlannerJobs: React.FC = () => {
       .map((po) => po.id);
 
     const allDisplayedSelected = selectablePOIds.every((id) =>
-      selectedPOs.includes(id)
+      selectedPOs.includes(id),
     );
 
     if (allDisplayedSelected) {
       // Deselect all displayed POs
       setSelectedPOs((prev) =>
-        prev.filter((id) => !selectablePOIds.includes(id))
+        prev.filter((id) => !selectablePOIds.includes(id)),
       );
     } else {
       // Select all displayed POs (excluding dispatched)
@@ -878,7 +878,7 @@ const PlannerJobs: React.FC = () => {
   // Get selected PO objects - exclude dispatched POs
   const getSelectedPOObjects = () => {
     return filteredPOs.filter(
-      (po) => selectedPOs.includes(po.id) && po.status !== "dispatched"
+      (po) => selectedPOs.includes(po.id) && po.status !== "dispatched",
     );
   };
 
@@ -889,7 +889,7 @@ const PlannerJobs: React.FC = () => {
     // If there's a searched job, filter by PO number first
     if (searchedJob) {
       basePOs = purchaseOrders.filter(
-        (po) => po.poNumber === searchedJob.poNumber
+        (po) => po.poNumber === searchedJob.poNumber,
       );
     }
 
@@ -907,7 +907,7 @@ const PlannerJobs: React.FC = () => {
   // Load more POs
   const handleLoadMore = () => {
     setDisplayedPOsCount((prev) =>
-      Math.min(prev + ITEMS_PER_PAGE, filteredPOs.length)
+      Math.min(prev + ITEMS_PER_PAGE, filteredPOs.length),
     );
   };
 
@@ -957,7 +957,7 @@ const PlannerJobs: React.FC = () => {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify(jobPlanningData),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -965,7 +965,7 @@ const PlannerJobs: React.FC = () => {
         throw new Error(
           `Failed to create job plan for ${jobPlanningData.nrcJobNo}: ${
             errorData.message || response.statusText
-          }`
+          }`,
         );
       }
 
@@ -996,7 +996,7 @@ const PlannerJobs: React.FC = () => {
                   Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({ status: "busy" }),
-              }
+              },
             );
 
             if (!response.ok) {
@@ -1037,7 +1037,7 @@ const PlannerJobs: React.FC = () => {
           `Cannot delete PO ${
             poToDelete.poNumber || poToDelete.style
           } with job planning. Please delete the job planning first.`,
-          "error"
+          "error",
         );
         setIsDeleting(false);
         setPOToDelete(null);
@@ -1052,13 +1052,13 @@ const PlannerJobs: React.FC = () => {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          errorData.message || `Failed to delete PO with ID ${poToDelete.id}`
+          errorData.message || `Failed to delete PO with ID ${poToDelete.id}`,
         );
       }
 
@@ -1066,7 +1066,7 @@ const PlannerJobs: React.FC = () => {
         `Successfully deleted purchase order ${
           poToDelete.poNumber || poToDelete.style
         }`,
-        "success"
+        "success",
       );
 
       // Clear and refresh
@@ -1130,13 +1130,13 @@ const PlannerJobs: React.FC = () => {
         const errorData = await poResponse.json();
         throw new Error(
           errorData.message ||
-            `Failed to fetch purchase orders: ${poResponse.status}`
+            `Failed to fetch purchase orders: ${poResponse.status}`,
         );
       }
 
       if (!jobPlanResponse.ok) {
         console.warn(
-          "Job planning fetch failed, continuing without job planning data"
+          "Job planning fetch failed, continuing without job planning data",
         );
       }
 
@@ -1166,7 +1166,7 @@ const PlannerJobs: React.FC = () => {
               .reduce(
                 (sum: number, fq: any) =>
                   sum + (fq.overDispatchedQuantity || 0),
-                0
+                0,
               );
             if (totalAvailable > 0) {
               finishedGoodsMap[jobData.nrcJobNo] = totalAvailable;
@@ -1181,7 +1181,7 @@ const PlannerJobs: React.FC = () => {
         const mergedData = mergePOWithJobPlanningAndJobs(
           poData.data,
           jobPlanData.data || [],
-          jobsData.data || []
+          jobsData.data || [],
         );
 
         // Debug: Log board size data for first few POs
@@ -1203,21 +1203,21 @@ const PlannerJobs: React.FC = () => {
               (j: any) =>
                 j.nrcJobNo === po.jobNrcJobNo ||
                 j.nrcJobNo === po.nrcJobNo ||
-                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo),
             ),
             jobBoardSizeFromAPI: jobsData.data?.find(
               (j: any) =>
                 j.nrcJobNo === po.jobNrcJobNo ||
                 j.nrcJobNo === po.nrcJobNo ||
-                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo),
             )?.boardSize,
             jobBoxDimensionsFromAPI: jobsData.data?.find(
               (j: any) =>
                 j.nrcJobNo === po.jobNrcJobNo ||
                 j.nrcJobNo === po.nrcJobNo ||
-                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo)
+                (j.styleItemSKU === po.style && j.nrcJobNo === po.jobNrcJobNo),
             )?.boxDimensions,
-          }))
+          })),
         );
 
         setPurchaseOrders(mergedData);
@@ -1326,7 +1326,8 @@ const PlannerJobs: React.FC = () => {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
       const response = await fetch(`${baseUrl}/api/purchase-orders`, {
         method: "GET",
         headers: {
@@ -1337,7 +1338,9 @@ const PlannerJobs: React.FC = () => {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || `Failed to fetch PO data: ${response.status}`);
+        throw new Error(
+          errData.message || `Failed to fetch PO data: ${response.status}`,
+        );
       }
 
       const result = await response.json();
@@ -1460,7 +1463,7 @@ const PlannerJobs: React.FC = () => {
       alert(
         `Download failed: ${
           err instanceof Error ? err.message : "Unknown error"
-        }`
+        }`,
       );
     } finally {
       setLoading(false);
@@ -1485,7 +1488,7 @@ const PlannerJobs: React.FC = () => {
     try {
       // Get all current POs that don't have a job
       const posWithoutJobs = purchaseOrders.filter(
-        (po) => !po.jobNrcJobNo && !po.job?.nrcJobNo && po.style && po.customer
+        (po) => !po.jobNrcJobNo && !po.job?.nrcJobNo && po.style && po.customer,
       );
 
       // If there are no POs without jobs, clear all pending notifications
@@ -1496,19 +1499,19 @@ const PlannerJobs: React.FC = () => {
 
       // Get all current styles from POs (to validate notifications)
       const currentPOStyles = new Set(
-        purchaseOrders.map((po) => po.style).filter(Boolean)
+        purchaseOrders.map((po) => po.style).filter(Boolean),
       );
 
       // Get existing notifications
       const existingNotifications = JSON.parse(
-        localStorage.getItem("jobCreationNotifications") || "[]"
+        localStorage.getItem("jobCreationNotifications") || "[]",
       );
 
       // Filter out notifications for styles that no longer exist in current POs
       const validNotifications = existingNotifications.filter((notif: any) => {
         const styleExistsInCurrentPOs = currentPOStyles.has(notif.style);
         const poStillNeedsJob = posWithoutJobs.some(
-          (po) => po.style === notif.style
+          (po) => po.style === notif.style,
         );
         return (
           notif.status === "pending" &&
@@ -1519,7 +1522,7 @@ const PlannerJobs: React.FC = () => {
 
       // Get existing notification styles
       const existingStyles = new Set(
-        validNotifications.map((notif: any) => notif.style)
+        validNotifications.map((notif: any) => notif.style),
       );
 
       // Create notifications for new POs without jobs
@@ -1551,7 +1554,7 @@ const PlannerJobs: React.FC = () => {
       // Update localStorage
       localStorage.setItem(
         "jobCreationNotifications",
-        JSON.stringify(finalNotifications)
+        JSON.stringify(finalNotifications),
       );
     } catch (error) {
       console.error("Error syncing notifications with POs:", error);
@@ -1561,7 +1564,7 @@ const PlannerJobs: React.FC = () => {
   // Debug function to manually check notifications
   const debugNotifications = () => {
     const notifications = JSON.parse(
-      localStorage.getItem("jobCreationNotifications") || "[]"
+      localStorage.getItem("jobCreationNotifications") || "[]",
     );
     return notifications;
   };
@@ -1618,7 +1621,7 @@ const PlannerJobs: React.FC = () => {
       // Excel epoch starts at 1900-01-01
       const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
       const d = new Date(
-        excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000
+        excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000,
       );
 
       if (!isNaN(d.getTime())) {
@@ -1674,7 +1677,7 @@ const PlannerJobs: React.FC = () => {
 
         if (file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) {
           setBulkUploadProgress(
-            `Reading Excel file (${(file.size / 1024 / 1024).toFixed(2)} MB)...`
+            `Reading Excel file (${(file.size / 1024 / 1024).toFixed(2)} MB)...`,
           );
 
           // Read file asynchronously
@@ -1774,8 +1777,8 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress(
             `Normalizing data... ${Math.min(
               i + BATCH_SIZE,
-              parsedData.length
-            )}/${parsedData.length} rows`
+              parsedData.length,
+            )}/${parsedData.length} rows`,
           );
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -1786,7 +1789,7 @@ const PlannerJobs: React.FC = () => {
         if (parsedData.length > 0) {
           console.log(
             "🔍 Available headers in Excel file:",
-            Object.keys(parsedData[0])
+            Object.keys(parsedData[0]),
           );
         }
 
@@ -1825,7 +1828,7 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress("");
           showSnackbar(
             "Authentication token not found. Please log in.",
-            "error"
+            "error",
           );
           return;
         }
@@ -1838,7 +1841,7 @@ const PlannerJobs: React.FC = () => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${accessToken}`,
             },
-          }
+          },
         );
 
         if (!jobsResponse.ok) {
@@ -1857,7 +1860,7 @@ const PlannerJobs: React.FC = () => {
         if (jobsData && Array.isArray(jobsData)) {
           const pkbbJobs = jobsData.filter(
             (job: any) =>
-              job.styleItemSKU && job.styleItemSKU.includes("PKBB-1302-0105")
+              job.styleItemSKU && job.styleItemSKU.includes("PKBB-1302-0105"),
           );
           // console.log("🔍 Jobs containing PKBB-1302-0105:", pkbbJobs);
         }
@@ -1948,8 +1951,8 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress(
             `Matching styles... ${Math.min(
               i + BATCH_SIZE,
-              parsedData.length
-            )}/${parsedData.length} rows`
+              parsedData.length,
+            )}/${parsedData.length} rows`,
           );
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -1974,7 +1977,7 @@ const PlannerJobs: React.FC = () => {
             console.warn(
               `Row ${
                 idx + 1
-              }: Skipping - PO Number is required to identify the purchase order`
+              }: Skipping - PO Number is required to identify the purchase order`,
             );
             return null;
           }
@@ -1987,7 +1990,7 @@ const PlannerJobs: React.FC = () => {
             console.warn(
               `Row ${
                 idx + 1
-              }: Style is missing - using placeholder. This PO will need manual completion.`
+              }: Style is missing - using placeholder. This PO will need manual completion.`,
             );
           }
 
@@ -2009,7 +2012,7 @@ const PlannerJobs: React.FC = () => {
             console.warn(
               `Row ${
                 idx + 1
-              }: Customer not found in Excel or matched job for style "${styleForProcessing}" - using placeholder. Will be added to notifications.`
+              }: Customer not found in Excel or matched job for style "${styleForProcessing}" - using placeholder. Will be added to notifications.`,
             );
           }
 
@@ -2024,50 +2027,50 @@ const PlannerJobs: React.FC = () => {
               console.warn(
                 `Row ${
                   idx + 1
-                }: No matching job, customer missing, AND style missing - will be added to database and notification created`
+                }: No matching job, customer missing, AND style missing - will be added to database and notification created`,
               );
             } else if (!matchedJobNo && isCustomerMissing) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: style "${styleForProcessing}" has no matching job AND customer is missing - will be added to database and notification created`
+                }: style "${styleForProcessing}" has no matching job AND customer is missing - will be added to database and notification created`,
               );
             } else if (!matchedJobNo && isStyleMissing) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: Style is missing AND no matching job - will be added to database and notification created`
+                }: Style is missing AND no matching job - will be added to database and notification created`,
               );
             } else if (isCustomerMissing && isStyleMissing) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: Both customer and style are missing - will be added to database and notification created`
+                }: Both customer and style are missing - will be added to database and notification created`,
               );
             } else if (!matchedJobNo) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: style "${styleForProcessing}" has no matching job - will be added to database and notification created`
+                }: style "${styleForProcessing}" has no matching job - will be added to database and notification created`,
               );
             } else if (isCustomerMissing) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: style "${styleForProcessing}" has matching job but customer is missing - will be added to database and notification created`
+                }: style "${styleForProcessing}" has matching job but customer is missing - will be added to database and notification created`,
               );
             } else if (isStyleMissing) {
               console.warn(
                 `Row ${
                   idx + 1
-                }: Style is missing but other data is present - will be added to database and notification created`
+                }: Style is missing but other data is present - will be added to database and notification created`,
               );
             }
           } else {
             console.log(
               `Row ${
                 idx + 1
-              }: style="${styleForProcessing}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`
+              }: style="${styleForProcessing}" (normalized: "${normalizedStyle}") -> jobNo="${matchedJobNo}"`,
             );
           }
 
@@ -2218,7 +2221,7 @@ const PlannerJobs: React.FC = () => {
                 console.warn(
                   `Row ${
                     idx + 1
-                  }: Customer is null or empty after formatting - applying default placeholder`
+                  }: Customer is null or empty after formatting - applying default placeholder`,
                 );
                 formattedRow.customer = "CUSTOMER NOT PROVIDED";
               }
@@ -2230,8 +2233,8 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress(
             `Formatting data... ${Math.min(
               i + BATCH_SIZE,
-              parsedData.length
-            )}/${parsedData.length} rows`
+              parsedData.length,
+            )}/${parsedData.length} rows`,
           );
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -2241,7 +2244,7 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress("");
           showSnackbar(
             "No valid rows found! Please ensure the Excel file has at least PO Number field.",
-            "warning"
+            "warning",
           );
           return;
         }
@@ -2251,7 +2254,7 @@ const PlannerJobs: React.FC = () => {
         // );
 
         setBulkUploadProgress(
-          `Checking for duplicates in ${formattedData.length} records...`
+          `Checking for duplicates in ${formattedData.length} records...`,
         );
 
         // ONLY TYPE ANNOTATION CHANGE HERE - Rest of logic EXACTLY the same
@@ -2276,7 +2279,7 @@ const PlannerJobs: React.FC = () => {
             const { data: existingPOs, error: checkError } = await supabase
               .from("PurchaseOrder")
               .select(
-                "id, poNumber, style, poDate, deliveryDate, totalPOQuantity"
+                "id, poNumber, style, poDate, deliveryDate, totalPOQuantity",
               )
               .eq("poNumber", po.poNumber)
               .eq("style", po.style)
@@ -2303,15 +2306,15 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress(
             `Checking duplicates... ${Math.min(
               i + DUPLICATE_CHECK_BATCH_SIZE,
-              formattedData.length
-            )}/${formattedData.length} records`
+              formattedData.length,
+            )}/${formattedData.length} records`,
           );
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
         // Separate duplicates from new records
         const duplicates = duplicateCheckResults.filter(
-          (result) => result.isDuplicate
+          (result) => result.isDuplicate,
         );
         const newRecords = duplicateCheckResults
           .filter((result) => !result.isDuplicate)
@@ -2338,7 +2341,7 @@ const PlannerJobs: React.FC = () => {
               deliveryDate: d.po.deliveryDate,
               totalPOQuantity: d.po.totalPOQuantity,
               existingId: d.existingPO?.id,
-            }))
+            })),
           );
         }
 
@@ -2347,13 +2350,13 @@ const PlannerJobs: React.FC = () => {
           setBulkUploadProgress("");
           showSnackbar(
             `All ${formattedData.length} records are duplicates and have been skipped. No new records uploaded.`,
-            "info"
+            "info",
           );
           return;
         }
 
         setBulkUploadProgress(
-          `Uploading ${newRecordsWithIds.length} new records...`
+          `Uploading ${newRecordsWithIds.length} new records...`,
         );
 
         // Debug: Log sample data to check date parsing
@@ -2430,10 +2433,12 @@ const PlannerJobs: React.FC = () => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${accessToken}`,
                 },
-              }
+              },
             );
             if (!syncResponse.ok) {
-              console.warn("Warning: Failed to sync sequence after bulk upload");
+              console.warn(
+                "Warning: Failed to sync sequence after bulk upload",
+              );
             }
           } catch (syncError) {
             console.warn("Warning: Sequence sync failed:", syncError);
@@ -2452,7 +2457,7 @@ const PlannerJobs: React.FC = () => {
             title: `Successfully uploaded ${newRecordsWithIds.length} new POs!`,
             details: successMessage.replace(
               `✅ Successfully uploaded ${newRecordsWithIds.length} new POs!`,
-              ""
+              "",
             ),
           });
         }
@@ -2463,7 +2468,7 @@ const PlannerJobs: React.FC = () => {
       setBulkUploadProgress("");
       showSnackbar(
         "Something went wrong during bulk upload. Please try again.",
-        "error"
+        "error",
       );
     }
   };
@@ -2566,7 +2571,7 @@ const PlannerJobs: React.FC = () => {
                       setJobOptions([]);
                       // Filter POs by the selected PO number - use exact match
                       const filtered = purchaseOrders.filter(
-                        (p) => p.poNumber === po.poNumber
+                        (p) => p.poNumber === po.poNumber,
                       );
                       // console.log("🔍 Dropdown Click Debug:", {
                       //   clickedPO: po,
@@ -2672,7 +2677,7 @@ const PlannerJobs: React.FC = () => {
             const pendingPOs = displayedPOs.filter(
               (po) =>
                 po.status !== "dispatched" &&
-                checkPOCompletionStatus(po) !== "completed"
+                checkPOCompletionStatus(po) !== "completed",
             );
             const shouldShowBulkButton =
               displayedPOs.length > 0 &&
@@ -2714,12 +2719,12 @@ const PlannerJobs: React.FC = () => {
               ? getSelectedPOObjects().filter(
                   (po) =>
                     po.status !== "dispatched" &&
-                    checkPOCompletionStatus(po) !== "completed"
+                    checkPOCompletionStatus(po) !== "completed",
                 )
               : displayedPOs.filter(
                   (po) =>
                     po.status !== "dispatched" &&
-                    checkPOCompletionStatus(po) !== "completed"
+                    checkPOCompletionStatus(po) !== "completed",
                 )
           }
           onSave={handleBulkJobPlanning}
@@ -2855,7 +2860,7 @@ const PlannerJobs: React.FC = () => {
                         onClick={handlePOClick}
                         jobCompletionStatus={completionStatus}
                         hasJobCreationNotification={hasJobCreationNotification(
-                          po
+                          po,
                         )}
                         onDelete={setPOToDelete}
                       />
@@ -2883,7 +2888,7 @@ const PlannerJobs: React.FC = () => {
                                   selectedPOs.length === displayedPOs.length &&
                                   displayedPOs.length > 0 &&
                                   displayedPOs.every((po) =>
-                                    selectedPOs.includes(po.id)
+                                    selectedPOs.includes(po.id),
                                   )
                                 }
                                 onChange={handleSelectAll}
@@ -2944,7 +2949,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "style"
+                                          "style",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -2965,8 +2970,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -2976,13 +2981,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.style.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "style",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3060,7 +3065,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "customer"
+                                          "customer",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3081,8 +3086,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3092,13 +3097,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.customer.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "customer",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3176,7 +3181,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "poNumber"
+                                          "poNumber",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3197,8 +3202,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3208,13 +3213,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.poNumber.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "poNumber",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3292,7 +3297,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "poDate"
+                                          "poDate",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3313,8 +3318,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3324,13 +3329,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.poDate.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "poDate",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3408,7 +3413,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "deliveryDate"
+                                          "deliveryDate",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3429,8 +3434,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3440,13 +3445,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.deliveryDate.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "deliveryDate",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3485,7 +3490,7 @@ const PlannerJobs: React.FC = () => {
                                 onClick={(e) =>
                                   handleToggleFilterDropdown(
                                     "totalPOQuantity",
-                                    e
+                                    e,
                                   )
                                 }
                                 className="ml-2 hover:bg-gray-200 rounded p-1"
@@ -3527,12 +3532,12 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "totalPOQuantity"
+                                          "totalPOQuantity",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
                                           handleSelectAllFilter(
-                                            "totalPOQuantity"
+                                            "totalPOQuantity",
                                           );
                                         }}
                                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3550,8 +3555,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3561,13 +3566,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.totalPOQuantity.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "totalPOQuantity",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3645,7 +3650,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "boardSize"
+                                          "boardSize",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3666,8 +3671,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3677,13 +3682,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.boardSize.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "boardSize",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3761,7 +3766,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "dieCode"
+                                          "dieCode",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3782,8 +3787,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3793,13 +3798,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.dieCode.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "dieCode",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -3877,7 +3882,7 @@ const PlannerJobs: React.FC = () => {
                                       <input
                                         type="checkbox"
                                         checked={areAllVisibleValuesSelected(
-                                          "status"
+                                          "status",
                                         )}
                                         onChange={(e) => {
                                           e.stopPropagation();
@@ -3898,8 +3903,8 @@ const PlannerJobs: React.FC = () => {
                                           value
                                             .toLowerCase()
                                             .includes(
-                                              filterSearch.toLowerCase()
-                                            )
+                                              filterSearch.toLowerCase(),
+                                            ),
                                       )
                                       .map((value) => (
                                         <label
@@ -3909,13 +3914,13 @@ const PlannerJobs: React.FC = () => {
                                           <input
                                             type="checkbox"
                                             checked={columnFilters.status.includes(
-                                              value
+                                              value,
                                             )}
                                             onChange={(e) => {
                                               e.stopPropagation();
                                               toggleColumnFilter(
                                                 "status",
-                                                value
+                                                value,
                                               );
                                             }}
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -4084,7 +4089,7 @@ const PlannerJobs: React.FC = () => {
                                         boxDimensions: po.boxDimensions,
                                         style: po.style,
                                         jobNrcJobNo: po.jobNrcJobNo,
-                                      }
+                                      },
                                     );
                                   }}
                                 >
@@ -4098,7 +4103,7 @@ const PlannerJobs: React.FC = () => {
                                           boardSize: po.boardSize,
                                           jobBoardSize: po.jobBoardSize,
                                           boxDimensions: po.boxDimensions,
-                                        }
+                                        },
                                       );
                                     }
                                     return po.boardSize || "N/A";
@@ -4113,7 +4118,7 @@ const PlannerJobs: React.FC = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
-                                    completionStatus
+                                    completionStatus,
                                   )}`}
                                 >
                                   {getStatusLabel(completionStatus)}
@@ -4283,10 +4288,10 @@ const PlannerJobs: React.FC = () => {
               snackbar.type === "success"
                 ? "bg-green-600 text-white"
                 : snackbar.type === "error"
-                ? "bg-red-600 text-white"
-                : snackbar.type === "warning"
-                ? "bg-yellow-600 text-white"
-                : "bg-blue-600 text-white"
+                  ? "bg-red-600 text-white"
+                  : snackbar.type === "warning"
+                    ? "bg-yellow-600 text-white"
+                    : "bg-blue-600 text-white"
             }`}
           >
             {snackbar.type === "success" && (

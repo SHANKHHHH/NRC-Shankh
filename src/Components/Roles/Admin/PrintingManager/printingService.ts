@@ -112,8 +112,7 @@ class PrintingService {
             machineDetails: item.machineDetails || [],
             // For planned jobs with no printing details yet, Production Head has not continued
             productionHeadContinued: false,
-            // Planning info will be enriched in a separate step
-            jobPlanCode: undefined,
+            jobPlanCode: item.jobPlanning?.jobPlanCode ?? undefined,
             deliveryDate: null,
             purchaseOrderId: undefined,
           };
@@ -154,8 +153,7 @@ class PrintingService {
           machineDetails: item.machineDetails || [],
           // Reflect backend flag so Production Head button can be disabled properly
           productionHeadContinued: printingDetails.productionHeadContinued ?? false,
-          // Planning info will be enriched in a separate step
-          jobPlanCode: undefined,
+          jobPlanCode: item.jobPlanning?.jobPlanCode ?? undefined,
           deliveryDate: null,
           purchaseOrderId: undefined,
         };
@@ -272,10 +270,10 @@ class PrintingService {
   }
 
   /**
-   * Enrich printing jobs with jobPlanCode and deliveryDate using existing APIs.
-   * - Fetch job planning by nrcJobNo to get jobPlanCode and purchaseOrderId
+   * Enrich printing jobs with deliveryDate (and purchaseOrderId). jobPlanCode comes from
+   * the printing details API response (jobPlanning.jobPlanCode) and is not overwritten here.
+   * - Fetch job planning by nrcJobNo only for purchaseOrderId (used for deliveryDate lookup)
    * - Then fetch purchase orders by ID to get deliveryDate
-   * Backend is unchanged; this is a pure frontend enhancement.
    */
   private async enrichWithPlanningInfo(
     printJobs: PrintingDetails[]
@@ -390,11 +388,11 @@ class PrintingService {
         })
       );
 
-      // Attach planning info to each printing job
+      // Attach planning info to each printing job. Prefer jobPlanCode from printing details API (already on job).
       return printJobs.map((job) => {
         const info = planningMap[job.jobNrcJobNo];
         if (info) {
-          if (info.jobPlanCode) {
+          if (info.jobPlanCode && job.jobPlanCode == null) {
             job.jobPlanCode = info.jobPlanCode;
           }
           if (info.purchaseOrderId !== undefined) {

@@ -1536,37 +1536,42 @@ const ProductionHeadDashboard: React.FC = () => {
       // PrintingDetails is always step 2 in the workflow
       const stepNo = 2;
 
-      // Fetch specific job step (using jobStepId) to get the correct jobPlanId
-      // This handles the case where multiple job plans share the same nrcJobNo
-      const jobStepResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/${encodeURIComponent(
-          printingDetail.jobNrcJobNo
-        )}/steps/${stepNo}?jobStepId=${printingDetail.jobStepId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+      // Prefer jobPlanCode from API (no extra fetch); fallback to fetching by nrcJobNo to get jobPlanId
+      let continueBody: { stepNo: number; jobPlanCode?: string; jobPlanId?: number };
+      if (printingDetail.jobPlanCode) {
+        continueBody = { stepNo, jobPlanCode: printingDetail.jobPlanCode };
+      } else {
+        const jobStepResponse = await fetch(
+          `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/${encodeURIComponent(
+            printingDetail.jobNrcJobNo
+          )}/steps/${stepNo}?jobStepId=${printingDetail.jobStepId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!jobStepResponse.ok) {
+          throw new Error("Failed to fetch job step details for this printing job");
         }
-      );
 
-      if (!jobStepResponse.ok) {
-        throw new Error("Failed to fetch job step details for this printing job");
+        const jobStepResult = await jobStepResponse.json();
+        if (!jobStepResult.success || !jobStepResult.data) {
+          throw new Error("Invalid job step data received for this printing job");
+        }
+
+        const jobStepData = jobStepResult.data;
+        const jobPlanId: number | undefined = jobStepData?.jobPlanning?.jobPlanId;
+
+        if (!jobPlanId) {
+          throw new Error("Job plan ID not found for this printing step");
+        }
+        continueBody = { stepNo, jobPlanId };
       }
 
-      const jobStepResult = await jobStepResponse.json();
-      if (!jobStepResult.success || !jobStepResult.data) {
-        throw new Error("Invalid job step data received for this printing job");
-      }
-
-      const jobStepData = jobStepResult.data;
-      const jobPlanId: number | undefined = jobStepData?.jobPlanning?.jobPlanId;
-
-      if (!jobPlanId) {
-        throw new Error("Job plan ID not found for this printing step");
-      }
-
-      // Call the continue-step API
+      // Call the continue-step API (accepts jobPlanCode or jobPlanId)
       const continueResponse = await fetch(
         `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/continue-step`,
         {
@@ -1575,11 +1580,7 @@ const ProductionHeadDashboard: React.FC = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({
-            nrcJobNo: printingDetail.jobNrcJobNo,
-            stepNo,
-            jobPlanId,
-          }),
+          body: JSON.stringify(continueBody),
         }
       );
 
@@ -2576,10 +2577,10 @@ const ProductionHeadDashboard: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
                               <div className="text-sm font-medium text-gray-900">
-                                {(jobPlan as any).jobPlanCode ?? jobPlan.nrcJobNo}
+                                {jobPlan.nrcJobNo}
                               </div>
                               <div className="text-sm text-gray-500">
-                                {(jobPlan as any).jobPlanCode ? `NRC: ${jobPlan.nrcJobNo}` : `ID: ${jobPlan.jobPlanId}`}
+                                {(jobPlan as any).jobPlanCode ? `Job Plan Code: ${(jobPlan as any).jobPlanCode}` : `ID: ${jobPlan.jobPlanId}`}
                               </div>
                             </div>
                           </td>
@@ -2802,7 +2803,7 @@ const ProductionHeadDashboard: React.FC = () => {
                               {printing.jobNrcJobNo}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              ID: {(printing as any).jobPlanCode || "-"}
+                              ID: {printing.jobPlanCode || "-"}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -3936,20 +3937,20 @@ const ProductionHeadDashboard: React.FC = () => {
 
             {/* Header */}
             <h2 className="text-xl font-semibold mb-4">
-              Job Card Steps - {(selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.nrcJobNo}
+              Job Card Steps - {selectedJobPlanForModal.nrcJobNo}
             </h2>
 
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               {[
                 {
-                  label: (selectedJobPlanForModal as any).jobPlanCode ? "Job Plan Code" : "Job Card No",
-                  value: (selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.nrcJobNo,
+                  label: "NRC Job No",
+                  value: selectedJobPlanForModal.nrcJobNo,
                   color: "blue",
                 },
                 {
-                  label: "Job Card ID",
-                  value: selectedJobPlanForModal.jobPlanId,
+                  label: "Job Plan Code",
+                  value: (selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.jobPlanId ?? "—",
                   color: "green",
                 },
                 {

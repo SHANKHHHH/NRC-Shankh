@@ -38,11 +38,21 @@ const sidebarConfig: {
   },
   printing_manager: {
     displayName: "Printing Manager",
-    options: [], // No options - only logout available
+    options: [
+      { label: "Dashboard", tab: "dashboard" },
+      { label: "Job Cards", tab: "jobs" },
+      { label: "Create New Job", tab: "create new job" },
+      { label: "Start New Job", tab: "start new job" },
+    ],
   },
   production_head: {
     displayName: "Production Head",
-    options: [], // No options - only logout available
+    options: [
+      { label: "Dashboard", tab: "dashboard" },
+      { label: "Job Cards", tab: "jobs" },
+      { label: "Create New Job", tab: "create new job" },
+      { label: "Start New Job", tab: "start new job" },
+    ],
   },
   dispatch_executive: {
     displayName: "Dispatch Executive",
@@ -86,8 +96,18 @@ const allTabSets: { [key: string]: { label: string; value: string }[] } = {
     // { label: 'Notifications', value: 'notifications' },
     // ...add any others you had
   ],
-  printing_manager: [], // No tabs - only dashboard view
-  production_head: [], // No tabs - only dashboard view
+  printing_manager: [
+    { label: "Dashboard", value: "dashboard" },
+    { label: "Job Cards", value: "jobs" },
+    { label: "Create New Job", value: "create new job" },
+    { label: "Start New Job", value: "start new job" },
+  ],
+  production_head: [
+    { label: "Dashboard", value: "dashboard" },
+    { label: "Job Cards", value: "jobs" },
+    { label: "Create New Job", value: "create new job" },
+    { label: "Start New Job", value: "start new job" },
+  ],
   dispatch_executive: [], // No tabs - only dashboard view
   qc_manager: [], // No tabs - only dashboard view
   qc_head: [], // No tabs - only dashboard view
@@ -192,6 +212,9 @@ const Header: React.FC<HeaderProps> = ({
       console.log("🚀 Planner logo click, navigating to /planner-dashboard");
       setTabValue("planner");
       navigate("/planner-dashboard");
+    } else if (role === "printing_manager" || role === "production_head") {
+      setTabValue("dashboard");
+      navigate("/dashboard");
     } else {
       console.log("🚀 Admin logo click, navigating to /dashboard");
       setTabValue("dashboard");
