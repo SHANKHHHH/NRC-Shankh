@@ -39,6 +39,7 @@ interface JobStep {
 
 interface JobPlan {
   jobPlanId: number;
+  jobPlanCode?: string;
   nrcJobNo: string;
   jobDemand: "high" | "medium" | "low" | null;
   createdAt: string;
@@ -469,9 +470,13 @@ const EditWorkingDetails: React.FC = () => {
                     {/* Job Header */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 space-y-3 sm:space-y-0">
                       <div className="flex-1">
-                        {/* Mobile-optimized title with better truncation */}
+                        {/* Mobile-optimized title: prefer Job Plan Code, then NRC Job No */}
                         <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 break-words">
-                          {job.nrcJobNo.length > 20
+                          {job.jobPlanCode
+                            ? job.jobPlanCode.length > 24
+                              ? `${job.jobPlanCode.substring(0, 24)}...`
+                              : job.jobPlanCode
+                            : job.nrcJobNo.length > 20
                             ? `${job.nrcJobNo.substring(0, 20)}...`
                             : job.nrcJobNo}
                         </h3>
@@ -479,7 +484,8 @@ const EditWorkingDetails: React.FC = () => {
                         {/* Mobile-stacked info with better spacing */}
                         <div className="space-y-1 sm:space-y-0 sm:flex sm:items-center sm:space-x-4 text-xs sm:text-sm text-gray-600">
                           <span className="block sm:inline">
-                            Plan ID: {job.jobPlanId}
+                            {job.jobPlanCode ? "Job Plan Code:" : "Plan ID:"}{" "}
+                            {job.jobPlanCode ?? job.jobPlanId}
                           </span>
                           <div className="flex items-center">
                             <ClockIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
@@ -544,10 +550,10 @@ const EditWorkingDetails: React.FC = () => {
       {/* Update Status Modal */}
       {showUpdateStatusModal && selectedStep && (
         <UpdateStatusModal
-          step={selectedStep}
-          job={selectedJob!}
+          step={selectedStep as React.ComponentProps<typeof UpdateStatusModal>["step"]}
+          job={selectedJob as React.ComponentProps<typeof UpdateStatusModal>["job"]}
           onClose={() => setShowUpdateStatusModal(false)}
-          onUpdate={refreshJobsAndSelected} // Use the new function
+          onUpdate={refreshJobsAndSelected}
         />
       )}
       {/* Edit Machine Modal */}

@@ -57,13 +57,16 @@ const JobPlanningDetailModal: React.FC<JobPlanningDetailModalProps> = ({
         </button>
         <div className="w-full px-8 pt-10 pb-8 flex flex-col items-center overflow-y-auto max-h-[85vh]">
           <h2 className="text-2xl font-bold mb-2 text-center text-gray-900">
-            Job Plan Details: {jobPlan.nrcJobNo}
+            Job Plan Details: {(jobPlan as any).jobPlanCode ?? jobPlan.nrcJobNo}
           </h2>
           <p className="text-gray-500 text-center mb-6">
-            Complete information for Job Plan ID: {jobPlan.jobPlanId}
+            Complete information for Job Plan Code:{" "}
+            {(jobPlan as any).jobPlanCode ?? jobPlan.jobPlanId}
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 w-full mb-6 border-b pb-4">
+            {(jobPlan as any).jobPlanCode &&
+              renderField("Job Plan Code", (jobPlan as any).jobPlanCode)}
             {renderField("Job Plan ID", jobPlan.jobPlanId)}
             {renderField("NRC Job No", jobPlan.nrcJobNo)}
             {renderField(

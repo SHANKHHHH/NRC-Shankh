@@ -29,6 +29,7 @@ interface JobPlanStep {
 
 interface JobPlan {
   jobPlanId: number;
+  jobPlanCode?: string;
   nrcJobNo: string;
   jobDemand: "low" | "medium" | "high";
   createdAt: string;
@@ -109,27 +110,17 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
     );
   };
 
-  // Format date as dd/mm/yyyy, HH:mm:ss AM/PM (12-hour format)
-  const formatDateTime = (dateString: string | null | undefined): string => {
-    if (!dateString) return "Date not available";
+  // Format date only (dd/mm/yyyy), no time
+  const formatDateOnly = (dateString: string | null | undefined): string => {
+    if (!dateString) return "—";
     try {
       const date = new Date(dateString);
       const day = String(date.getDate()).padStart(2, "0");
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = date.getFullYear();
-
-      // Convert to 12-hour format
-      let hours = date.getHours();
-      const ampm = hours >= 12 ? "PM" : "AM";
-      hours = hours % 12;
-      hours = hours ? hours : 12; // the hour '0' should be '12'
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const seconds = String(date.getSeconds()).padStart(2, "0");
-
-      // Format: dd/mm/yyyy H:mm:ss AM/PM
-      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+      return `${day}/${month}/${year}`;
     } catch {
-      return "Invalid date";
+      return "—";
     }
   };
 
@@ -198,7 +189,15 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
                   className="bg-gray-50 rounded-lg p-4 border border-gray-200"
                   onClick={() => handleJobClick(job)}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <span className="font-semibold text-gray-700">
+                        Job Plan Code:
+                      </span>
+                      <p className="text-gray-600 font-mono">
+                        {(job as any).jobPlanCode ?? job.jobPlanId}
+                      </p>
+                    </div>
                     <div>
                       <span className="font-semibold text-gray-700">
                         NRC Job No:
@@ -219,13 +218,12 @@ const StepDetailsPopup: React.FC<StepDetailsPopupProps> = ({
                         {job.jobDemand}
                       </p>
                     </div>
-
                     <div>
                       <span className="font-semibold text-gray-700">
                         Created At:
                       </span>
                       <p className="text-gray-600">
-                        {formatDateTime(job.createdAt)}
+                        {formatDateOnly(job.createdAt)}
                       </p>
                     </div>
                   </div>

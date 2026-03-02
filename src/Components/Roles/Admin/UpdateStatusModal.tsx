@@ -6,7 +6,7 @@ interface JobStep {
   stepNo: number;
   stepName: string;
   machineDetails: any[];
-  status: 'planned' | 'start' | 'stop' | 'major_hold';
+  status: 'planned' | 'start' | 'stop' | 'major_hold' | 'completed';
   startDate: string | null;
   endDate: string | null;
   user: string | null;
@@ -16,6 +16,7 @@ interface JobStep {
 
 interface JobPlan {
   jobPlanId: number;
+  jobPlanCode?: string;
   nrcJobNo: string;
   jobDemand: 'high' | 'medium' | 'low' | null;
   createdAt: string;

@@ -760,6 +760,9 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
 
   console.log("Rendering DetailedJobModal with job:", job);
 
+  // Held jobs: job details may be at job.jobDetails or (when API returns envelope) at job.jobDetails.jobDetails
+  const jobDetailsForDisplay = job.jobDetails?.jobDetails ?? job.jobDetails;
+
   return (
     <div className="fixed inset-0 bg-transparent bg-opacity-20 backdrop-blur-md flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[95vh] overflow-hidden">
@@ -774,7 +777,8 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                 {job.nrcJobNo || job.jobDetails?.nrcJobNo || "N/A"}
               </h2>
               <p className="text-blue-100">
-                {job.jobDetails?.customerName ||
+                {jobDetailsForDisplay?.customerName ||
+                  job.jobDetails?.customerName ||
                   job.jobDetails?.company ||
                   "N/A"}
               </p>
@@ -808,7 +812,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             {/* Left Column */}
             <div className="space-y-6">
               {/* Job Details */}
-              {job.jobDetails && (
+              {(job.jobDetails || jobDetailsForDisplay) && (
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                   <h3 className="font-semibold text-green-800 mb-3 flex items-center">
                     <CheckCircle className="h-5 w-5 mr-2" />
@@ -820,8 +824,8 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Style ID:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.styleItemSKU ||
-                          job.jobDetails.styleId ||
+                        {jobDetailsForDisplay?.styleItemSKU ||
+                          jobDetailsForDisplay?.styleId ||
                           "N/A"}
                       </span>
                     </div>
@@ -830,7 +834,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Box Dimensions:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.boxDimensions || "N/A"}
+                        {jobDetailsForDisplay?.boxDimensions || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -838,7 +842,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Board Size:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.boardSize || "N/A"}
+                        {jobDetailsForDisplay?.boardSize || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -846,7 +850,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Process Colors:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.processColors || "N/A"}
+                        {jobDetailsForDisplay?.processColors || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -854,7 +858,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Flute Type:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.fluteType || "N/A"}
+                        {jobDetailsForDisplay?.fluteType || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -862,7 +866,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         No. of Colors:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.noOfColor || "N/A"}
+                        {jobDetailsForDisplay?.noOfColor || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -870,25 +874,25 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         No. of Ups:
                       </span>
                       <span className="text-gray-900">
-                        {job.jobDetails.noUps || "N/A"}
+                        {jobDetailsForDisplay?.noUps ?? "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-700">Width:</span>
                       <span className="text-gray-900">
-                        {job.jobDetails.width || "N/A"}
+                        {jobDetailsForDisplay?.width ?? "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-700">Height:</span>
                       <span className="text-gray-900">
-                        {job.jobDetails.height || "N/A"}
+                        {jobDetailsForDisplay?.height ?? "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-700">Length:</span>
                       <span className="text-gray-900">
-                        {job.jobDetails.length || "N/A"}
+                        {jobDetailsForDisplay?.length ?? "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -896,7 +900,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Pre-Rate:
                       </span>
                       <span className="text-gray-900">
-                        ₹{job.jobDetails.preRate || "N/A"}
+                        ₹{(jobDetailsForDisplay?.preRate != null && jobDetailsForDisplay?.preRate !== "") ? jobDetailsForDisplay.preRate : "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -904,7 +908,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         Latest Rate:
                       </span>
                       <span className="text-gray-900">
-                        ₹{job.jobDetails.latestRate || "N/A"}
+                        ₹{(jobDetailsForDisplay?.latestRate != null && jobDetailsForDisplay?.latestRate !== "") ? jobDetailsForDisplay.latestRate : "N/A"}
                       </span>
                     </div>
                   </div>
@@ -920,27 +924,25 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                     Purchase Order Details
                   </h3>
                   {(() => {
-                    // Handle new data structure: jobPlanningDetails.purchaseOrderDetails (array)
-                    // or fallback to old structure: job.purchaseOrderDetails
-                    let poDetailsArray =
-                      job.jobPlanningDetails?.purchaseOrderDetails ||
-                      job.purchaseOrderDetails;
+                    // Prefer job.purchaseOrderDetails (array with full PO fields) for held jobs;
+                    // fallback to jobPlanningDetails.purchaseOrderDetails for in-progress/completed/planned
+                    let poDetailsArray: any[] = [];
+                    if (Array.isArray(job.purchaseOrderDetails) && job.purchaseOrderDetails.length > 0) {
+                      poDetailsArray = job.purchaseOrderDetails;
+                    } else if (Array.isArray(job.jobPlanningDetails?.purchaseOrderDetails)) {
+                      poDetailsArray = job.jobPlanningDetails.purchaseOrderDetails;
+                    } else if (job.jobPlanningDetails?.purchaseOrderDetails && typeof job.jobPlanningDetails.purchaseOrderDetails === "object" && !Array.isArray(job.jobPlanningDetails.purchaseOrderDetails)) {
+                      poDetailsArray = [job.jobPlanningDetails.purchaseOrderDetails];
+                    }
 
-                    // If purchaseOrderId exists, find the matching purchase order
                     let poDetails: any;
-                    if (job.purchaseOrderId && Array.isArray(poDetailsArray)) {
+                    if (job.purchaseOrderId && poDetailsArray.length > 0) {
                       poDetails = poDetailsArray.find(
                         (po: any) => po.id === job.purchaseOrderId
                       );
-                      // If not found, fall back to first item
-                      if (!poDetails) {
-                        poDetails = poDetailsArray[0];
-                      }
+                      if (!poDetails) poDetails = poDetailsArray[0];
                     } else {
-                      // Existing logic: take first item if array, or the object itself
-                      poDetails = Array.isArray(poDetailsArray)
-                        ? poDetailsArray[0]
-                        : poDetailsArray;
+                      poDetails = poDetailsArray[0];
                     }
 
                     if (!poDetails)
@@ -1029,7 +1031,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             No. of Ups:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.noOfUps || "N/A"}
+                            {(poDetails.noOfUps != null && poDetails.noOfUps !== "") ? poDetails.noOfUps : "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1037,7 +1039,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             Die Code:
                           </span>
                           <span className="text-gray-900">
-                            {poDetails.dieCode || "N/A"}
+                            {(poDetails.dieCode != null && poDetails.dieCode !== "") ? poDetails.dieCode : "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1111,7 +1113,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">Created:</span>
                     <span className="text-gray-900">
-                      {formatDate(job.createdAt)}
+                      {formatDate(job.createdAt ?? (job.jobPlanningDetails as any)?.createdAt)}
                     </span>
                   </div>
                   {job.completedAt && (
@@ -1148,14 +1150,14 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                     <span className="font-medium text-gray-700">Status:</span>
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${
-                        job.status === "completed"
+                        (job.status ?? job.jobDetails?.status ?? job.finalStatus) === "completed"
                           ? "bg-green-100 text-green-800"
-                          : job.status === "in-progress"
+                          : (job.status ?? job.jobDetails?.status) === "in-progress"
                           ? "bg-yellow-100 text-yellow-800"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      {job.status}
+                      {job.status ?? job.jobDetails?.status ?? job.finalStatus ?? "N/A"}
                     </span>
                   </div>
                 </div>
@@ -1179,6 +1181,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                       // Using same priority order: stepDetails.data.status > stepDetails.status > step-specific properties > step.status
                       const availableSteps = job.allSteps || job.steps || [];
                       const hasHoldSteps = availableSteps.some((step: any) => {
+                        // Priority 0: Held jobs API – hasHeldMachines / heldMachines
+                        if (step.hasHeldMachines && Array.isArray(step.heldMachines) && step.heldMachines.length > 0) {
+                          if (step.heldMachines.some((m: any) => m.jobStepMachineStatus === "hold")) return true;
+                        }
+
                         // Priority 1: Check stepDetails.data.status first
                         if (
                           step.stepDetails?.data?.status === "major_hold" ||
@@ -1334,11 +1341,20 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         }
 
                         // Helper function to get step status in priority order:
-                        // 1. stepDetails.data.status (highest priority)
+                        // 0. Held machines (hasHeldMachines / heldMachines[].jobStepMachineStatus)
+                        // 1. stepDetails.data.status
                         // 2. stepDetails.status
-                        // 3. Step-specific properties (paperStore.status, printingDetails.status, etc.)
-                        // 4. step.status (lowest priority)
+                        // 3. stepSpecificData.status (API format for held jobs)
+                        // 4. stepStatus (API: "start" -> in_progress, "stop" -> completed)
+                        // 5. Step-specific properties (paperStore.status, etc.)
+                        // 6. step.status (fallback)
                         const getStepStatus = (step: any): string => {
+                          // Priority 0: Held jobs API – step has machines on hold
+                          if (step.hasHeldMachines && Array.isArray(step.heldMachines) && step.heldMachines.length > 0) {
+                            const anyHold = step.heldMachines.some((m: any) => m.jobStepMachineStatus === "hold");
+                            if (anyHold) return "hold";
+                          }
+
                           // Priority 1: stepDetails.data.status
                           if (step.stepDetails?.data?.data?.status) {
                             return step.stepDetails.data.data.status;
@@ -1349,7 +1365,16 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             return step.stepDetails.status;
                           }
 
-                          // Priority 3: Step-specific properties
+                          // Priority 3: stepSpecificData.status (e.g. "in_progress" from held jobs API)
+                          if (step.stepSpecificData?.status) {
+                            return step.stepSpecificData.status;
+                          }
+
+                          // Priority 4: stepStatus from API ("start" | "stop" | "planned")
+                          if (step.stepStatus === "stop") return "completed";
+                          if (step.stepStatus === "start") return "in_progress";
+
+                          // Priority 5: Step-specific properties
                           const stepSpecificStatus =
                             step.paperStore?.status ||
                             step.printingDetails?.status ||
@@ -1365,7 +1390,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                             return stepSpecificStatus;
                           }
 
-                          // Priority 4: step.status (fallback)
+                          // Priority 6: step.status (fallback)
                           return step.status || "planned";
                         };
 
@@ -1375,9 +1400,8 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
 
                         // Format status for display
                         const getStatusDisplay = (status: string): string => {
-                          if (status === "major_hold" || status === "hold") {
-                            return "Major Hold";
-                          }
+                          if (status === "major_hold") return "Major Hold";
+                          if (status === "hold") return "On Hold";
                           if (
                             status === "completed" ||
                             status === "stop" ||
@@ -1385,10 +1409,10 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                           ) {
                             return "Completed";
                           }
-                          if (status === "in-progress" || status === "start") {
+                          if (status === "in-progress" || status === "in_progress" || status === "start") {
                             return "In Progress";
                           }
-                          return status || "Planned";
+                          return status ? status.charAt(0).toUpperCase() + status.slice(1).replace("_", " ") : "Planned";
                         };
 
                         const statusDisplay = getStatusDisplay(stepStatus);

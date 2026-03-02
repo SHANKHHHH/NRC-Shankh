@@ -389,10 +389,13 @@ const HeldJobs: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
+          const data = result.data || {};
           return {
-            jobDetails: result.data,
-            purchaseOrderDetails: result.data.purchaseOrders || [],
-            poJobPlannings: result.data.poJobPlannings || [],
+            jobDetails: data,
+            purchaseOrderDetails: data.purchaseOrders || data.purchaseOrderDetails || [],
+            poJobPlannings: data.poJobPlannings || [],
+            steps: data.steps,
+            jobPlanningDetails: data.jobPlanningDetails,
           };
         }
       }
@@ -403,6 +406,8 @@ const HeldJobs: React.FC = () => {
       jobDetails: null,
       purchaseOrderDetails: [],
       poJobPlannings: [],
+      steps: undefined,
+      jobPlanningDetails: undefined,
     };
   };
 
@@ -625,8 +630,13 @@ const HeldJobs: React.FC = () => {
           }
 
           // Fetch complete details using the new combined API
-          const { jobDetails, purchaseOrderDetails, poJobPlannings } =
+          const { jobDetails, purchaseOrderDetails, poJobPlannings, steps: apiSteps, jobPlanningDetails: apiJobPlanningDetails } =
             await fetchJobWithPODetails(jobIdentifier, accessToken);
+
+          // Prefer API steps when they include held-machines format (hasHeldMachines, stepStatus, etc.)
+          const steps = Array.isArray(apiSteps) && apiSteps.length > 0
+            ? apiSteps
+            : job.steps;
 
           return {
             ...job,
@@ -634,6 +644,8 @@ const HeldJobs: React.FC = () => {
             purchaseOrderDetails:
               purchaseOrderDetails || job.purchaseOrderDetails || [],
             poJobPlannings: poJobPlannings || job.poJobPlannings || [],
+            steps,
+            ...(apiJobPlanningDetails && { jobPlanningDetails: apiJobPlanningDetails }),
           };
         })
       );

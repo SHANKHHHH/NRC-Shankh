@@ -37,6 +37,7 @@ interface JobStep {
 
 interface JobPlan {
   jobPlanId: number;
+  jobPlanCode?: string;
   nrcJobNo: string;
   jobDemand: "high" | "medium" | "low" | null;
   createdAt: string;
@@ -134,11 +135,14 @@ const StepDetailsModal: React.FC<StepDetailsModalProps> = ({
             {/* Job Information */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <h4 className="text-xl font-bold text-gray-900 mb-2">
-                {job.nrcJobNo}
+                {job.jobPlanCode ?? job.nrcJobNo}
               </h4>
               <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                 <div>
-                  <span className="font-medium">Plan ID:</span> {job.jobPlanId}
+                  <span className="font-medium">
+                    {job.jobPlanCode ? "Job Plan Code:" : "Plan ID:"}
+                  </span>{" "}
+                  {job.jobPlanCode ?? job.jobPlanId}
                 </div>
                 <div>
                   <span className="font-medium">Priority:</span>{" "}

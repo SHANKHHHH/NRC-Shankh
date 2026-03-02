@@ -112,6 +112,11 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
       return "Invalid date";
     }
   };
+  // Helper function to get job number (NRC Job No) from job or jobDetails
+  const getJobNumber = (job: CompletedJob | JobPlan): string => {
+    return (job as any).nrcJobNo ?? (job as any).jobDetails?.nrcJobNo ?? job.id?.toString() ?? "—";
+  };
+
   // Helper function to get company/customer name
   const getCompanyName = (job: CompletedJob | JobPlan) => {
     if ("company" in job) {
@@ -132,6 +137,10 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
 
   // Helper function to check if a step is completed
   const isStepCompleted = (step: any): boolean => {
+    // API format: stepStatus "stop" or stepEndDate
+    if (step.stepStatus === "stop") return true;
+    if (step.stepEndDate != null && step.stepEndDate !== undefined) return true;
+
     // Check if status is "stop" or "accept" (both indicate completion)
     if (step.status === "stop" || step.status === "accept") {
       return true;
@@ -175,8 +184,7 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
   console.log(`🔍 JobBarsChart: Jobs data:`, jobs);
 
   const filteredJobs = jobs.filter((job) => {
-    const jobNumber =
-      job.nrcJobNo || (job as any).jobDetails?.nrcJobNo || job.id?.toString();
+    const jobNumber = getJobNumber(job);
     console.log(`🔍 JobBarsChart: Job number for filtering: ${jobNumber}`);
     return (
       jobNumber && jobNumber.toLowerCase().includes(searchTerm.toLowerCase())
@@ -263,7 +271,7 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h4 className="font-bold text-sm mb-1">{job.nrcJobNo}</h4>
+                <h4 className="font-bold text-sm mb-1">{getJobNumber(job)}</h4>
                 <p className="text-xs opacity-90">
                   {getCompanyName(job) || "N/A"}
                 </p>
@@ -277,11 +285,22 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                 {category === "held" && "steps" in job && (
                   <p className="text-xs opacity-75 mt-1">
                     {(() => {
-                      const heldStep = job.steps.find(
-                        (step) =>
-                          step.stepDetails?.data?.status === "hold" ||
-                          step.stepDetails?.status === "hold"
+                      const steps = job.steps || [];
+                      // Prefer held-machines API format: hasHeldMachines / heldMachines[].jobStepMachineStatus
+                      let heldStep = steps.find(
+                        (step: any) =>
+                          step.hasHeldMachines &&
+                          Array.isArray(step.heldMachines) &&
+                          step.heldMachines.length > 0 &&
+                          step.heldMachines.some((m: any) => m.jobStepMachineStatus === "hold")
                       );
+                      if (!heldStep) {
+                        heldStep = steps.find(
+                          (step: any) =>
+                            step.stepDetails?.data?.status === "hold" ||
+                            step.stepDetails?.status === "hold"
+                        );
+                      }
                       return heldStep
                         ? `Held at: ${heldStep.stepName.replace(
                             /([a-z])([A-Z])/g,

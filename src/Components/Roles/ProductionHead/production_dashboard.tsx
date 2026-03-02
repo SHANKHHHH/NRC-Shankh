@@ -2576,10 +2576,10 @@ const ProductionHeadDashboard: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
                               <div className="text-sm font-medium text-gray-900">
-                                {jobPlan.nrcJobNo}
+                                {(jobPlan as any).jobPlanCode ?? jobPlan.nrcJobNo}
                               </div>
                               <div className="text-sm text-gray-500">
-                                ID: {(jobPlan as any).jobPlanCode || jobPlan.jobPlanId}
+                                {(jobPlan as any).jobPlanCode ? `NRC: ${jobPlan.nrcJobNo}` : `ID: ${jobPlan.jobPlanId}`}
                               </div>
                             </div>
                           </td>
@@ -3758,9 +3758,9 @@ const ProductionHeadDashboard: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-gray-600">NRC Job No:</p>
+                      <p className="text-gray-600">{(selectedJobDetails as any).jobPlanCode ? "Job Plan Code" : "NRC Job No"}:</p>
                       <p className="font-medium text-gray-900">
-                        {selectedJobDetails.nrcJobNo}
+                        {(selectedJobDetails as any).jobPlanCode ?? selectedJobDetails.nrcJobNo}
                       </p>
                     </div>
                     <div>
@@ -3936,15 +3936,15 @@ const ProductionHeadDashboard: React.FC = () => {
 
             {/* Header */}
             <h2 className="text-xl font-semibold mb-4">
-              Job Card Steps - {selectedJobPlanForModal.nrcJobNo}
+              Job Card Steps - {(selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.nrcJobNo}
             </h2>
 
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               {[
                 {
-                  label: "Job Card No",
-                  value: selectedJobPlanForModal.nrcJobNo,
+                  label: (selectedJobPlanForModal as any).jobPlanCode ? "Job Plan Code" : "Job Card No",
+                  value: (selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.nrcJobNo,
                   color: "blue",
                 },
                 {
