@@ -12,7 +12,16 @@ export interface QCData {
   remarks: string;
   qcCheckSignBy: string | null;
   jobStepId: number | null;
-  // Add new fields from the API structure
+  // Rejection reason A–F and Others (from quality-dept API)
+  rejectionReasonAQty?: number | null;
+  rejectionReasonBQty?: number | null;
+  rejectionReasonCQty?: number | null;
+  rejectionReasonDQty?: number | null;
+  rejectionReasonEQty?: number | null;
+  rejectionReasonFQty?: number | null;
+  rejectionReasonOthersQty?: number | null;
+  startedBy?: string | null;
+  // Step and job context
   stepNo?: number;
   stepName?: string;
   startDate?: string | null;
@@ -25,7 +34,9 @@ export interface QCData {
     machineType: string;
   }>;
   jobPlanId?: number;
-  qualityDetails?: any; // For when QC details are available
+  jobDetails?: any;
+  stepDetails?: any;
+  qualityDetails?: any; // Full QC record for modal (includes rejection reason fields)
 }
 
 export interface QCSummary {
@@ -74,98 +85,79 @@ class QCService {
         throw new Error("Invalid API response format");
       }
 
-      // Process the data based on the actual API structure
-      return result.data.map((item: any) => {
-        // Extract quality details if available (similar to printing details)
-        const qualityDetails = item.qualityDetails || null;
+      // API returns { data: [ { nrcJobNo, jobDetails, qualityDetails: [ {...}, ... ] } ] }
+      // Flatten: one row per qualityDetails entry, with rejection reason fields
+      return result.data.flatMap((item: any) => {
+        const nrcJobNo = item.nrcJobNo || "-";
+        const jobDetails = item.jobDetails || null;
+        const detailsList = Array.isArray(item.qualityDetails)
+          ? item.qualityDetails
+          : item.qualityDetails
+            ? [item.qualityDetails]
+            : [];
 
-        // If qualityDetails is null (for planned jobs), create a minimal object
-        if (!qualityDetails) {
-          return {
-            id: item.id || 0,
-            jobNrcJobNo: item.nrcJobNo || "-",
-            status: item.status || "planned",
-            date: item.startDate || item.createdAt || new Date().toISOString(),
-            shift: null,
-            operatorName: item.user || null,
-            checkedBy: item.user || "-",
-            quantity: 0,
-            rejectedQty: 0,
-            reasonForRejection: "-",
-            remarks: "-",
-            qcCheckSignBy: null,
-            jobStepId: item.id || null,
-            // Add step-level information
-            stepNo: item.stepNo,
-            stepName: item.stepName,
-            startDate: item.startDate,
-            endDate: item.endDate,
-            user: item.user,
-            machineDetails: item.machineDetails || [],
-            jobPlanId: item.jobPlanId,
-            qualityDetails: null,
-          };
+        if (detailsList.length === 0) {
+          return [
+            {
+              id: 0,
+              jobNrcJobNo: nrcJobNo,
+              status: "planned" as const,
+              date: new Date().toISOString(),
+              shift: null,
+              operatorName: null,
+              checkedBy: "-",
+              quantity: 0,
+              rejectedQty: 0,
+              reasonForRejection: "-",
+              remarks: "-",
+              qcCheckSignBy: null,
+              jobStepId: null,
+              jobDetails,
+              qualityDetails: null,
+            },
+          ];
         }
 
-        // Map the actual quality details when available
-        // Use qualityDetails values directly, don't fall back to item values
-        return {
-          id:
-            qualityDetails.id !== undefined ? qualityDetails.id : item.id || 0,
-          jobNrcJobNo:
-            qualityDetails.jobNrcJobNo !== undefined
-              ? qualityDetails.jobNrcJobNo
-              : item.nrcJobNo || "-",
+        return detailsList.map((qd: any) => ({
+          id: qd.id !== undefined ? qd.id : 0,
+          jobNrcJobNo: qd.jobNrcJobNo !== undefined ? qd.jobNrcJobNo : nrcJobNo,
           status:
-            qualityDetails.status !== undefined
-              ? qualityDetails.status
-              : item.status || "pending",
+            qd.status !== undefined ? qd.status : ("pending" as const),
           date:
-            qualityDetails.date !== undefined
-              ? qualityDetails.date
-              : item.startDate || item.createdAt || new Date().toISOString(),
-          shift:
-            qualityDetails.shift !== undefined ? qualityDetails.shift : null,
-          operatorName:
-            qualityDetails.operatorName !== undefined
-              ? qualityDetails.operatorName
-              : item.user || null,
+            qd.date !== undefined
+              ? qd.date
+              : new Date().toISOString(),
+          shift: qd.shift !== undefined ? qd.shift : null,
+          operatorName: qd.operatorName !== undefined ? qd.operatorName : null,
           checkedBy:
-            qualityDetails.checkedBy !== undefined
-              ? qualityDetails.checkedBy
-              : qualityDetails.qcCheckSignBy || item.user || "-",
-          quantity:
-            qualityDetails.quantity !== undefined
-              ? qualityDetails.quantity
-              : qualityDetails.passQuantity || 0,
+            qd.checkedBy !== undefined
+              ? qd.checkedBy
+              : qd.qcCheckSignBy || "-",
+          quantity: qd.quantity !== undefined ? qd.quantity : qd.passQuantity || 0,
           rejectedQty:
-            qualityDetails.rejectedQty !== undefined
-              ? qualityDetails.rejectedQty
-              : qualityDetails.rejectedQuantity || 0,
-          reasonForRejection:
-            qualityDetails.reasonForRejection !== undefined
-              ? qualityDetails.reasonForRejection
-              : "-",
-          remarks:
-            qualityDetails.remarks !== undefined ? qualityDetails.remarks : "-",
-          qcCheckSignBy:
-            qualityDetails.qcCheckSignBy !== undefined
-              ? qualityDetails.qcCheckSignBy
-              : null,
-          jobStepId:
-            qualityDetails.jobStepId !== undefined
-              ? qualityDetails.jobStepId
-              : item.id || null,
-          // Add step-level information
-          stepNo: item.stepNo,
-          stepName: item.stepName,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          user: item.user,
-          machineDetails: item.machineDetails || [],
-          jobPlanId: item.jobPlanId,
-          qualityDetails,
-        };
+            qd.rejectedQty !== undefined ? qd.rejectedQty : qd.rejectedQuantity || 0,
+          reasonForRejection: qd.reasonForRejection !== undefined ? qd.reasonForRejection : "-",
+          remarks: qd.remarks !== undefined ? qd.remarks : "-",
+          qcCheckSignBy: qd.qcCheckSignBy !== undefined ? qd.qcCheckSignBy : null,
+          jobStepId: qd.jobStepId !== undefined ? qd.jobStepId : null,
+          rejectionReasonAQty: qd.rejectionReasonAQty ?? null,
+          rejectionReasonBQty: qd.rejectionReasonBQty ?? null,
+          rejectionReasonCQty: qd.rejectionReasonCQty ?? null,
+          rejectionReasonDQty: qd.rejectionReasonDQty ?? null,
+          rejectionReasonEQty: qd.rejectionReasonEQty ?? null,
+          rejectionReasonFQty: qd.rejectionReasonFQty ?? null,
+          rejectionReasonOthersQty: qd.rejectionReasonOthersQty ?? null,
+          startedBy: qd.startedBy ?? null,
+          stepNo: qd.stepDetails?.stepNo,
+          stepName: qd.stepDetails?.stepName ?? "QualityDept",
+          startDate: qd.stepDetails?.startDate ?? null,
+          endDate: qd.stepDetails?.endDate ?? null,
+          user: qd.operatorName ?? null,
+          machineDetails: qd.stepDetails?.machineDetails || [],
+          jobDetails,
+          stepDetails: qd.stepDetails ?? null,
+          qualityDetails: qd,
+        }));
       });
     } catch (error) {
       console.error("Error fetching QC data:", error);
@@ -206,69 +198,39 @@ class QCService {
         throw new Error("Invalid API response format");
       }
 
-      // Use the same mapping logic as getAllQCData
-      return result.data.map((item: any) => {
-        const qualityDetails = item.qualityDetails || null;
-
-        if (!qualityDetails) {
-          return {
-            id: item.id || 0,
-            jobNrcJobNo: item.nrcJobNo || jobNo,
-            status: item.status || "planned",
-            date: item.startDate || item.createdAt || new Date().toISOString(),
-            shift: null,
-            operatorName: item.user || null,
-            checkedBy: item.user || "-",
-            quantity: 0,
-            rejectedQty: 0,
-            reasonForRejection: "-",
-            remarks: "-",
-            qcCheckSignBy: null,
-            jobStepId: item.id || null,
-            stepNo: item.stepNo,
-            stepName: item.stepName,
-            startDate: item.startDate,
-            endDate: item.endDate,
-            user: item.user,
-            machineDetails: item.machineDetails || [],
-            jobPlanId: item.jobPlanId,
-            qualityDetails: null,
-          };
-        }
-
-        return {
-          id: qualityDetails.id || item.id || 0,
-          jobNrcJobNo: qualityDetails.jobNrcJobNo || jobNo,
-          status: qualityDetails.status || item.status || "pending",
-          date:
-            qualityDetails.date ||
-            item.startDate ||
-            item.createdAt ||
-            new Date().toISOString(),
-          shift: qualityDetails.shift || null,
-          operatorName: qualityDetails.operatorName || item.user || null,
-          checkedBy:
-            qualityDetails.checkedBy ||
-            qualityDetails.qcCheckSignBy ||
-            item.user ||
-            "-",
-          quantity: qualityDetails.quantity || qualityDetails.passQuantity || 0,
-          rejectedQty:
-            qualityDetails.rejectedQty || qualityDetails.rejectedQuantity || 0,
-          reasonForRejection: qualityDetails.reasonForRejection || "-",
-          remarks: qualityDetails.remarks || "-",
-          qcCheckSignBy: qualityDetails.qcCheckSignBy || null,
-          jobStepId: qualityDetails.jobStepId || item.id || null,
-          stepNo: item.stepNo,
-          stepName: item.stepName,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          user: item.user,
-          machineDetails: item.machineDetails || [],
-          jobPlanId: item.jobPlanId,
-          qualityDetails,
-        };
-      });
+      // by-job API returns { data: [ qd1, qd2, ... ] } - array of QualityDept records
+      return result.data.map((qd: any) => ({
+        id: qd.id || 0,
+        jobNrcJobNo: qd.jobNrcJobNo || jobNo,
+        status: qd.status || "pending",
+        date: qd.date || new Date().toISOString(),
+        shift: qd.shift || null,
+        operatorName: qd.operatorName || null,
+        checkedBy: qd.checkedBy || qd.qcCheckSignBy || "-",
+        quantity: qd.quantity || qd.passQuantity || 0,
+        rejectedQty: qd.rejectedQty || qd.rejectedQuantity || 0,
+        reasonForRejection: qd.reasonForRejection || "-",
+        remarks: qd.remarks || "-",
+        qcCheckSignBy: qd.qcCheckSignBy || null,
+        jobStepId: qd.jobStepId || null,
+        rejectionReasonAQty: qd.rejectionReasonAQty ?? null,
+        rejectionReasonBQty: qd.rejectionReasonBQty ?? null,
+        rejectionReasonCQty: qd.rejectionReasonCQty ?? null,
+        rejectionReasonDQty: qd.rejectionReasonDQty ?? null,
+        rejectionReasonEQty: qd.rejectionReasonEQty ?? null,
+        rejectionReasonFQty: qd.rejectionReasonFQty ?? null,
+        rejectionReasonOthersQty: qd.rejectionReasonOthersQty ?? null,
+        startedBy: qd.startedBy ?? null,
+        stepNo: qd.jobStep?.stepNo,
+        stepName: qd.jobStep?.stepName || "QualityDept",
+        startDate: qd.jobStep?.startDate ?? null,
+        endDate: qd.jobStep?.endDate ?? null,
+        user: qd.operatorName || null,
+        machineDetails: qd.jobStep?.machineDetails || [],
+        jobPlanId: qd.jobStep?.jobPlanningId ?? null,
+        stepDetails: qd.jobStep ?? null,
+        qualityDetails: qd,
+      }));
     } catch (error) {
       console.error(`Error fetching QC data for job ${jobNo}:`, error);
       throw error;
