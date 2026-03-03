@@ -158,6 +158,8 @@ const ProductionHeadDashboard: React.FC = () => {
   const [activeMainTab, setActiveMainTab] = useState<"jobCards" | "printing">("jobCards");
   const [isLoadingPrintingDetails, setIsLoadingPrintingDetails] = useState(false);
   const [printingDetailsError, setPrintingDetailsError] = useState<string | null>(null);
+  const [printingDetailsSearchTerm, setPrintingDetailsSearchTerm] = useState("");
+  const [printingDetailsStatusFilter, setPrintingDetailsStatusFilter] = useState<string>("");
   
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
@@ -2670,7 +2672,7 @@ const ProductionHeadDashboard: React.FC = () => {
       {activeMainTab === "printing" && (  
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
                 Printing Details
@@ -2678,6 +2680,40 @@ const ProductionHeadDashboard: React.FC = () => {
               <p className="text-sm text-gray-600">
                 All printing jobs - Continue completed jobs to production
               </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <div className="w-full sm:w-48">
+                <label htmlFor="printing-details-status" className="sr-only">
+                  Filter by status
+                </label>
+                <select
+                  id="printing-details-status"
+                  value={printingDetailsStatusFilter}
+                  onChange={(e) => setPrintingDetailsStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] bg-white"
+                >
+                  <option value="">All statuses</option>
+                  <option value="accept">Printed</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="planned">Planned</option>
+                  <option value="hold">On Hold</option>
+                  <option value="major_hold">Major Hold</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <div className="w-full sm:w-72">
+                <label htmlFor="printing-details-search" className="sr-only">
+                  Search by Job Plan Code or NRC Job Number
+                </label>
+                <input
+                  id="printing-details-search"
+                  type="text"
+                  placeholder="Search by Job Plan Code or NRC Job No..."
+                  value={printingDetailsSearchTerm}
+                  onChange={(e) => setPrintingDetailsSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+                />
+              </div>
             </div>
           </div>
 
@@ -2702,20 +2738,8 @@ const ProductionHeadDashboard: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Operator
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Machine
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Colours
-                    </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Quantity
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Wastage
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -2726,15 +2750,55 @@ const ProductionHeadDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {printingDetails.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-6 py-8 text-center">
-                        <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">No printing details found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    printingDetails.map((printing) => {
+                  {(() => {
+                    const searchLower = printingDetailsSearchTerm.trim().toLowerCase();
+                    const statusFilter = printingDetailsStatusFilter.trim();
+                    let filteredPrinting =
+                      searchLower === ""
+                        ? printingDetails
+                        : printingDetails.filter((p) => {
+                            const nrc = (p.jobNrcJobNo ?? "").toLowerCase();
+                            const code = (p.jobPlanCode ?? "").toLowerCase();
+                            return nrc.includes(searchLower) || code.includes(searchLower);
+                          });
+                    // Apply status filter
+                    if (statusFilter !== "") {
+                      filteredPrinting = filteredPrinting.filter((p) => {
+                        const displayStatus =
+                          p.stepStatus === "start" && p.status === "pending" ? "in_progress" : p.status;
+                        if (statusFilter === "planned") {
+                          return displayStatus === "pending" || (displayStatus as string) === "planned";
+                        }
+                        return displayStatus === statusFilter;
+                      });
+                    }
+                    // Sort: Printed (accept) first, then In Progress, then Planned
+                    const getStatusSortOrder = (p: typeof filteredPrinting[0]) => {
+                      const status = p.stepStatus === "start" && p.status === "pending" ? "in_progress" : p.status;
+                      if (status === "accept") return 0;
+                      if (status === "in_progress" || p.stepStatus === "start") return 1;
+                      if (status === "pending" || (status as string) === "planned") return 2;
+                      return 3;
+                    };
+                    const sortedPrinting = [...filteredPrinting].sort(
+                      (a, b) => getStatusSortOrder(a) - getStatusSortOrder(b)
+                    );
+
+                    if (filteredPrinting.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center">
+                            <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">
+                              {printingDetails.length === 0
+                                ? "No printing details found"
+                                : "No jobs match your search or status filter"}
+                            </p>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return sortedPrinting.map((printing) => {
                       const formatDate = (dateString: string | null) => {
                         if (!dateString) return "-";
                         try {
@@ -2751,7 +2815,7 @@ const ProductionHeadDashboard: React.FC = () => {
                       const getStatusInfo = (status: string) => {
                         switch (status) {
                           case "accept":
-                            return { label: "Accepted", color: "bg-green-100 text-green-800" };
+                            return { label: "Printed", color: "bg-green-100 text-green-800" };
                           case "in_progress":
                             return { label: "In Progress", color: "bg-yellow-100 text-yellow-800" };
                           case "pending":
@@ -2812,25 +2876,9 @@ const ProductionHeadDashboard: React.FC = () => {
                                 printing.date
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {printing.oprName ? getUserName(printing.oprName) : "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {printing.machine || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm font-medium text-gray-900">
-                              {printing.noOfColours || "-"}
-                            </div>
-                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="text-sm font-medium text-gray-900">
                               {printing.quantity?.toLocaleString() || "0"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm font-medium text-gray-900">
-                              {printing.wastage?.toLocaleString() || "0"}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -2865,8 +2913,8 @@ const ProductionHeadDashboard: React.FC = () => {
                           </td>
                         </tr>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
