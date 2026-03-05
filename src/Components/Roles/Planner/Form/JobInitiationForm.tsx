@@ -627,6 +627,25 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
+      // Sync the sequence before single PO create so next id is correct (same as after bulk upload)
+      try {
+        const syncResponse = await fetch(
+          "https://nrprod.nrcontainers.com/api/purchase-orders/sync-sequence",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+        if (!syncResponse.ok) {
+          console.warn("Warning: Failed to sync sequence before single PO create");
+        }
+      } catch (syncError) {
+        console.warn("Warning: Sequence sync failed before single PO create:", syncError);
+      }
+
     const payloadWithJobNo = { ...poDetails, jobNrcJobNo: job.nrcJobNo };
 
       const response = await fetch(
