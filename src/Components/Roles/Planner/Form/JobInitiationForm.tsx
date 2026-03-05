@@ -961,7 +961,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
           // Fallback: construct from allMachineIds if available
           machineDetails = step.allMachineIds.map((machineId: string) => ({
             id: machineId,
-              unit: completedJob.unit || "Mk",
+              unit: completedJob.unit || "NR1",
             machineCode: step.machineCode || machineId,
               machineType: step.machineDetail || "Production Machine",
           }));
@@ -970,7 +970,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
           // For regular jobs, machine assignment is optional
           machineDetails = [
             {
-              unit: completedJob.unit || "Mk",
+              unit: completedJob.unit || "NR1",
               machineCode: null,
               machineType: "Not Assigned",
             },
@@ -1124,7 +1124,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
                 ? [
                     {
               id: completedJob.machineId,
-                      unit: completedJob.unit || "Unit 1",
+                      unit: completedJob.unit || "NR1",
               machineCode: completedJob.machineId,
                       machineType: "Printing",
                     },
@@ -1146,7 +1146,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
                 ? [
                     {
               id: completedJob.machineId,
-                      unit: completedJob.unit || "Unit 1",
+                      unit: completedJob.unit || "NR1",
               machineCode: completedJob.machineId,
                       machineType: "Corrugation",
                     },
@@ -1168,7 +1168,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
                 ? [
                     {
               id: completedJob.machineId,
-                      unit: completedJob.unit || "Unit 1",
+                      unit: completedJob.unit || "NR1",
               machineCode: completedJob.machineId,
                       machineType: "Flute Lamination",
                     },
@@ -1190,7 +1190,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
                 ? [
                     {
               id: completedJob.machineId,
-                      unit: completedJob.unit || "Unit 1",
+                      unit: completedJob.unit || "NR1",
               machineCode: completedJob.machineId,
                       machineType: "Punching",
                     },
@@ -1212,7 +1212,7 @@ const handlePOSave = async (poDetails: PoDetailsPayload) => {
                 ? [
                     {
               id: completedJob.machineId,
-                      unit: completedJob.unit || "Unit 1",
+                      unit: completedJob.unit || "NR1",
               machineCode: completedJob.machineId,
                       machineType: "Side Flap Pasting",
                     },

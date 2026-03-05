@@ -177,7 +177,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
               machineDetails = [
                 {
                   id: assignedMachine.id,
-                  unit: po.unit || assignedMachine.unit || "Unit 1",
+                  unit: po.unit || assignedMachine.unit || "NR1",
                   machineCode: assignedMachine.machineCode,
                   machineType: assignedMachine.machineType,
                 },
@@ -185,7 +185,7 @@ export const BulkJobPlanningModal: React.FC<BulkJobPlanningModalProps> = ({
             } else {
               machineDetails = [
                 {
-                  unit: po.unit || "Mk",
+                  unit: po.unit || "NR1",
                   machineCode: null,
                   machineType: "Not Assigned",
                 },

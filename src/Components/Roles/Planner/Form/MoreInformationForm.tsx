@@ -171,7 +171,7 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
             : null;
 
           // 🔥 FIXED: Get unit from job, not from machine
-          const jobUnit = job.unit || "Mk"; // Fallback to "Mk" if job.unit is not available
+          const jobUnit = job.unit || "NR1"; // Fallback to "NR1" if job.unit is not available
 
           // 🔥 CHANGED: Create machineDetails array for single machine or default "Not Assigned"
           const machineDetails = assignedMachine
@@ -185,7 +185,7 @@ const MoreInformationForm: React.FC<MoreInformationFormProps> = ({
               ]
             : [
                 {
-                  unit: jobUnit, // 🔥 FIXED: Use job unit instead of hardcoded "Mk"
+                  unit: jobUnit, // 🔥 FIXED: Use job unit (default NR1)
                   machineCode: null,
                   machineType: "Not Assigned",
                 },
