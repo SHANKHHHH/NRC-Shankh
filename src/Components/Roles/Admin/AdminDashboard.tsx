@@ -785,18 +785,20 @@ const AdminDashboard: React.FC = () => {
       if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
         const jobPlans = jobPlanningResult.data;
 
-        // Fetch step details for each job plan
+        // Fetch step details for every step so overview progress/status matches the "View Steps" detail (API often returns planned until details are fetched)
         const jobPlansWithDetails = await Promise.all(
           jobPlans.map(async (jobPlan: JobPlan) => {
             const stepsWithDetails = await Promise.all(
               jobPlan.steps.map(async (step: JobPlanStep) => {
                 let stepDetails = null;
-                if (step.status === "start" || step.status === "stop") {
+                try {
                   stepDetails = await fetchStepDetails(
                     step.stepName,
                     step.id,
                     accessToken
                   );
+                } catch (e) {
+                  console.warn(`Step details failed for step ${step.id}:`, e);
                 }
 
                 return {
