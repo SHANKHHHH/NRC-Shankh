@@ -299,6 +299,22 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     return "planned";
   };
 
+  const hasMajorHold = (jobPlan: JobPlan): boolean =>
+    (jobPlan.steps || []).some(
+      (step) =>
+        step.stepDetails?.data?.status === "major_hold" ||
+        step.stepDetails?.status === "major_hold" ||
+        step.status === "major_hold"
+    );
+
+  const getProgressPercentage = (jobPlan: JobPlan) => {
+    const completedSteps = jobPlan.steps.filter(
+      (step) => getStepActualStatus(step) === "completed"
+    ).length;
+    const totalSteps = jobPlan.steps.length;
+    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+  };
+
   // Filter job plans based on search and filters
   const filteredJobPlans = jobPlans.filter((jobPlan) => {
     const matchesSearch = jobPlan.nrcJobNo
@@ -332,13 +348,10 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     return matchesSearch && matchesDemand && matchesStatus;
   });
 
-  const hasMajorHold = (jobPlan: JobPlan): boolean =>
-    (jobPlan.steps || []).some(
-      (step) =>
-        step.stepDetails?.data?.status === "major_hold" ||
-        step.stepDetails?.status === "major_hold" ||
-        step.status === "major_hold"
-    );
+  // Sort filtered rows by progress descending (highest progress first)
+  const sortedJobPlans = [...filteredJobPlans].sort(
+    (a, b) => getProgressPercentage(b) - getProgressPercentage(a)
+  );
 
   const getJobStatus = (jobPlan: JobPlan) => {
     // Use helper function to check actual step statuses
@@ -357,15 +370,6 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
     if (hasInProgress || hasHold)
       return { text: "In Progress", color: "bg-yellow-100 text-yellow-800" };
     return { text: "Planned", color: "bg-gray-100 text-gray-800" };
-  };
-
-  const getProgressPercentage = (jobPlan: JobPlan) => {
-    // Use helper function to count completed steps
-    const completedSteps = jobPlan.steps.filter(
-      (step) => getStepActualStatus(step) === "completed"
-    ).length;
-    const totalSteps = jobPlan.steps.length;
-    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
   };
 
   const getStatusStyle = (status: string) => {
@@ -510,7 +514,7 @@ const JobPlansTable: React.FC<JobPlansTableProps> = ({
           </thead>
 
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredJobPlans.map((jobPlan) => {
+            {sortedJobPlans.map((jobPlan) => {
               const status = getJobStatus(jobPlan);
               const progressPercentage = getProgressPercentage(jobPlan);
 
