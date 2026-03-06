@@ -131,7 +131,7 @@ const ProductionHeadDashboard: React.FC = () => {
     "all" | "low" | "medium" | "high"
   >("all");
   const [jobCardsStatusFilter, setJobCardsStatusFilter] = useState<
-    "all" | "completed" | "inProgress" | "planned"
+    "all" | "completed" | "inProgress" | "majorHold" | "planned"
   >("all");
   
   // Job statistics state (kept for initial loading, but filteredJobStats is used for display)
@@ -242,7 +242,15 @@ const ProductionHeadDashboard: React.FC = () => {
   const getStepActualStatus = (
     step: JobPlanStep
   ): "completed" | "in_progress" | "hold" | "planned" => {
-    // Check for hold status first (highest priority)
+    // Check for major_hold first (same as AdminDashboard) - must not count as in-progress
+    if (
+      step.stepDetails?.data?.status === "major_hold" ||
+      step.stepDetails?.status === "major_hold" ||
+      step.status === "major_hold"
+    ) {
+      return "hold";
+    }
+    // Check for hold status
     if (
       step.stepDetails?.data?.status === "hold" ||
       step.stepDetails?.status === "hold"
@@ -322,6 +330,14 @@ const ProductionHeadDashboard: React.FC = () => {
     // Default: planned (stepDetails exists but status is not set, or step.status is "planned")
     return "planned";
   };
+
+  const hasMajorHold = (jobPlan: JobPlanForStats): boolean =>
+    (jobPlan.steps || []).some(
+      (step) =>
+        step.stepDetails?.data?.status === "major_hold" ||
+        step.stepDetails?.status === "major_hold" ||
+        step.status === "major_hold"
+    );
 
   // Helper function to get date range based on filter
   const getDateRange = (
@@ -2467,6 +2483,7 @@ const ProductionHeadDashboard: React.FC = () => {
                 <option value="all">All Status</option>
                 <option value="completed">Completed</option>
                 <option value="inProgress">In Progress</option>
+                <option value="majorHold">Major Hold</option>
                 <option value="planned">Planned</option>
               </select>
             </div>
@@ -2527,14 +2544,28 @@ const ProductionHeadDashboard: React.FC = () => {
                       );
 
                       if (jobCardsStatusFilter === "completed") matchesStatus = allCompleted;
+                      else if (jobCardsStatusFilter === "majorHold") matchesStatus = hasMajorHold(jobPlan);
                       else if (jobCardsStatusFilter === "inProgress")
-                        matchesStatus = hasInProgress || hasHold;
+                        matchesStatus = (hasInProgress || hasHold) && !hasMajorHold(jobPlan);
                       else if (jobCardsStatusFilter === "planned")
                         matchesStatus = !hasInProgress && !hasHold && !allCompleted;
                     }
 
                     return matchesSearch && matchesDemand && matchesStatus;
                   });
+
+                  const getProgressPercentage = (jobPlan: JobPlanForStats) => {
+                    const completedSteps = jobPlan.steps.filter(
+                      (step) => getStepActualStatus(step) === "completed"
+                    ).length;
+                    const totalSteps = jobPlan.steps.length;
+                    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+                  };
+
+                  // Sort by progress descending (highest progress first), same as Admin Dashboard
+                  const sortedJobCards = [...filteredJobCards].sort(
+                    (a, b) => getProgressPercentage(b) - getProgressPercentage(a)
+                  );
 
                   const getJobStatus = (jobPlan: JobPlanForStats) => {
                     const stepStatuses = jobPlan.steps.map((step) => getStepActualStatus(step));
@@ -2546,17 +2577,11 @@ const ProductionHeadDashboard: React.FC = () => {
 
                     if (allCompleted)
                       return { text: "Completed", color: "bg-green-100 text-green-800" };
+                    if (hasMajorHold(jobPlan))
+                      return { text: "Major Hold", color: "bg-red-100 text-red-800" };
                     if (hasInProgress || hasHold)
                       return { text: "In Progress", color: "bg-yellow-100 text-yellow-800" };
                     return { text: "Planned", color: "bg-gray-100 text-gray-800" };
-                  };
-
-                  const getProgressPercentage = (jobPlan: JobPlanForStats) => {
-                    const completedSteps = jobPlan.steps.filter(
-                      (step) => getStepActualStatus(step) === "completed"
-                    ).length;
-                    const totalSteps = jobPlan.steps.length;
-                    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
                   };
 
                   const formatDate = (dateString: string | null) => {
@@ -2568,8 +2593,8 @@ const ProductionHeadDashboard: React.FC = () => {
                     return `${day}/${month}/${year}`;
                   };
 
-                  return filteredJobCards.length > 0 ? (
-                    filteredJobCards.map((jobPlan) => {
+                  return sortedJobCards.length > 0 ? (
+                    sortedJobCards.map((jobPlan) => {
                       const status = getJobStatus(jobPlan);
                       const progressPercentage = getProgressPercentage(jobPlan);
                       const jobDemand = (jobPlan as any).jobDemand || "low";
