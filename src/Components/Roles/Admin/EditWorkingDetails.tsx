@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ChevronDownIcon,
   ClockIcon,
@@ -60,7 +60,7 @@ interface StepDetails {
 
 const EditWorkingDetails: React.FC = () => {
   const [jobs, setJobs] = useState<JobPlan[]>([]);
-  const [filteredJobs, setFilteredJobs] = useState<JobPlan[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobPlan | null>(null);
@@ -74,9 +74,16 @@ const EditWorkingDetails: React.FC = () => {
   const [selectedStepData, setSelectedStepData] = useState<any>(null);
   const [selectedStepName, setSelectedStepName] = useState<string>("");
 
-  // Debug logging
-  console.log("EditWorkingDetails component rendered");
-  console.log("Current state:", { jobs, filteredJobs, loading, error });
+  // Filter jobs by NRC job number and job plan code (search)
+  const filteredJobs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return jobs;
+    return jobs.filter(
+      (job) =>
+        job.nrcJobNo.toLowerCase().includes(q) ||
+        (job.jobPlanCode && job.jobPlanCode.toLowerCase().includes(q))
+    );
+  }, [jobs, searchQuery]);
 
   // Fetch jobs on component mount
   useEffect(() => {
@@ -84,16 +91,11 @@ const EditWorkingDetails: React.FC = () => {
     fetchJobs();
   }, []);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (): Promise<JobPlan[]> => {
     console.log("fetchJobs function called");
     try {
       setLoading(true);
-      console.log("Making API call to fetch jobs...");
-
-      // Get the access token from localStorage
       const accessToken = localStorage.getItem("accessToken");
-      console.log("Access token:", accessToken ? "Present" : "Missing");
-
       const response = await fetch(
         "https://nrprod.nrcontainers.com/api/job-planning/",
         {
@@ -103,29 +105,23 @@ const EditWorkingDetails: React.FC = () => {
           },
         }
       );
-      console.log("API response received:", response);
       const data = await response.json();
-      console.log("API data:", data);
-
       if (data.success) {
-        // Filter jobs that have steps with "stop" or "start" status
         const jobsWithStoppedOrStartedSteps = data.data.filter((job: JobPlan) =>
           job.steps.some(
             (step) => step.status === "stop" || step.status === "start"
           )
         );
-        console.log("Filtered jobs:", jobsWithStoppedOrStartedSteps);
-
         setJobs(jobsWithStoppedOrStartedSteps);
-        setFilteredJobs(jobsWithStoppedOrStartedSteps);
+        return jobsWithStoppedOrStartedSteps;
       }
+      return [];
     } catch (err) {
       console.error("Error in fetchJobs:", err);
       setError("Failed to fetch jobs");
-      console.error("Error fetching jobs:", err);
+      return [];
     } finally {
       setLoading(false);
-      console.log("fetchJobs completed, loading set to false");
     }
   };
 
@@ -278,8 +274,10 @@ const EditWorkingDetails: React.FC = () => {
   };
 
   const handleUpdateDetails = async (updatedData: any) => {
+    if (!selectedStep) {
+      throw new Error("No step selected");
+    }
     try {
-      // Map step names to API endpoints
       const stepTypeMap: { [key: string]: string } = {
         PaperStore: "paper-store",
         PrintingDetails: "printing-details",
@@ -296,54 +294,62 @@ const EditWorkingDetails: React.FC = () => {
         throw new Error("Unknown step type");
       }
 
-      const accessToken = localStorage.getItem("accessToken");
+      // Do not send id, jobStepId, jobNrcJobNo, createdAt, updatedAt in body (backend uses them in where only)
+      const { id: _id, jobStepId: _js, jobNrcJobNo: _jn, createdAt: _ca, updatedAt: _ua, ...payload } = updatedData;
+      const body = JSON.stringify(payload);
 
-      // Try the ALB URL first, then fallback to onrender.com
-      let putUrl = `https://nrprod.nrcontainers.com/api/${stepType}/${encodeURIComponent(
-        updatedData.jobNrcJobNo
-      )}`;
-      let response = await fetch(putUrl, {
+      const accessToken = localStorage.getItem("accessToken");
+      const baseUrl = "https://nrprod.nrcontainers.com";
+
+      // Use by-step-id so the correct record is updated when multiple job plans share the same nrcJobNo
+      const putUrl = `${baseUrl}/api/${stepType}/by-step-id/${selectedStep.id}`;
+      const response = await fetch(putUrl, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(updatedData),
+        body,
       });
-
-      // If ALB fails, try onrender.com
-      if (!response.ok) {
-        console.log("🔍 ALB PUT failed, trying onrender.com...");
-        putUrl = `https://nrprod.nrcontainers.com/api/${stepType}/${encodeURIComponent(
-          updatedData.jobNrcJobNo
-        )}`;
-        console.log("🔍 PUT request to onrender.com URL:", putUrl);
-
-        response = await fetch(putUrl, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatedData),
-        });
-      }
-
-      console.log("🔍 PUT request to URL:", putUrl);
-      console.log("🔍 PUT payload:", updatedData);
-      console.log("🔍 Step Type:", stepType);
-      console.log("🔍 Job NRC:", updatedData.jobNrcJobNo);
-      console.log(
-        "🔍 Encoded Job NRC:",
-        encodeURIComponent(updatedData.jobNrcJobNo)
-      );
 
       if (!response.ok) {
         throw new Error(`Failed to update: ${response.status}`);
       }
 
-      // Refresh the data
-      await fetchStepDetails(selectedJob!.nrcJobNo);
+      // Refetch this step's details so modals show updated data
+      const getUrl = `${baseUrl}/api/${stepType}/by-step-id/${selectedStep.id}`;
+      const getRes = await fetch(getUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (getRes.ok) {
+        const result = await getRes.json();
+        if (result.success && result.data) {
+          const stepDataMap: { [key: string]: string } = {
+            PaperStore: "paperStore",
+            PrintingDetails: "printingDetails",
+            Corrugation: "corrugation",
+            FluteLaminateBoardConversion: "flutelam",
+            Punching: "punching",
+            SideFlapPasting: "sideFlapPasting",
+            QualityDept: "qualityDept",
+            DispatchProcess: "dispatchProcess",
+          };
+          const dataKey = stepDataMap[selectedStepName];
+          const stepData = dataKey ? result.data[dataKey] : result.data;
+          if (stepData) setSelectedStepData(stepData);
+        }
+      }
+
+      // Refresh job list so cards and step list reflect changes
+      const freshJobs = await fetchJobs();
+      if (selectedJob) {
+        const updatedJob = freshJobs.find((j) => j.jobPlanId === selectedJob.jobPlanId);
+        if (updatedJob) setSelectedJob(updatedJob);
+      }
+
       setShowEditDetailsModal(false);
     } catch (err) {
       console.error("Error updating step details:", err);
@@ -433,6 +439,21 @@ const EditWorkingDetails: React.FC = () => {
             <span className="text-sm sm:text-base text-gray-600 self-start sm:self-auto">
               {filteredJobs.length} Stopped Jobs
             </span>
+          </div>
+
+          {/* Search by NRC job number or job plan code */}
+          <div className="mb-4">
+            <label htmlFor="edit-working-search" className="sr-only">
+              Search by NRC job number or job plan code
+            </label>
+            <input
+              id="edit-working-search"
+              type="text"
+              placeholder="Search by NRC job number or job plan code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:max-w-md px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+            />
           </div>
 
           {/* Job Cards */}
