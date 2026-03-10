@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -23,6 +24,7 @@ import { useUsers } from "../../../../context/UsersContext";
 
 const PrintingDashboard: React.FC = () => {
   const { getUserName } = useUsers();
+  const navigate = useNavigate();
   const [printingData, setPrintingData] = useState<PrintingDetails[]>([]);
   const [summaryData, setSummaryData] = useState<PrintingSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,8 @@ const PrintingDashboard: React.FC = () => {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [showAllData, setShowAllData] = useState(false);
   const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
+  const [isLoadingMajorHoldJobs, setIsLoadingMajorHoldJobs] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -149,6 +153,35 @@ const PrintingDashboard: React.FC = () => {
       }
     };
     loadData();
+  }, []);
+
+  // Fetch major hold jobs count (lightweight single API call)
+  useEffect(() => {
+    const fetchMajorHoldJobsCount = async () => {
+      try {
+        setIsLoadingMajorHoldJobs(true);
+        const accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) {
+          setMajorHoldJobsCount(0);
+          return;
+        }
+        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const response = await fetch(`${baseUrl}/api/job-planning/major-hold/count`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          setMajorHoldJobsCount(0);
+          return;
+        }
+        const json = await response.json();
+        setMajorHoldJobsCount(json.success && typeof json.count === "number" ? json.count : 0);
+      } catch (_) {
+        setMajorHoldJobsCount(0);
+      } finally {
+        setIsLoadingMajorHoldJobs(false);
+      }
+    };
+    fetchMajorHoldJobsCount();
   }, []);
 
   // Combine printingData with completed jobs
@@ -413,7 +446,24 @@ const PrintingDashboard: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
+          <div className="flex items-center gap-3">
+            {/* Major Hold Jobs – same blinking icon as Admin/Planner/Production Head */}
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/major-hold-jobs")}
+              title="View and resume major hold jobs"
+              className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <ExclamationTriangleIcon
+                className={`h-6 w-6 text-red-500 ${majorHoldJobsCount > 0 ? "animate-pulse" : ""}`}
+              />
+              {majorHoldJobsCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
+                  {majorHoldJobsCount}
+                </span>
+              )}
+            </button>
+            <button
             onClick={handleRefresh}
             disabled={loading}
             className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
@@ -444,6 +494,7 @@ const PrintingDashboard: React.FC = () => {
               </>
             )}
           </button>
+          </div>
         </div>
         <p className="text-sm text-gray-500">
           Last updated:{" "}

@@ -961,10 +961,15 @@ const PlannerJobs: React.FC = () => {
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409) {
+          throw new Error(
+            errorData.error || errorData.message || "Job plan code conflict. Please try creating again."
+          );
+        }
         throw new Error(
           `Failed to create job plan for ${jobPlanningData.nrcJobNo}: ${
-            errorData.message || response.statusText
+            errorData.message || errorData.error || response.statusText
           }`,
         );
       }

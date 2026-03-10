@@ -588,10 +588,15 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
         let errorMessage = "Failed to create job plan";
         try {
           const errorData = JSON.parse(responseText);
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (response.status === 409) {
+            errorMessage = errorData.error || errorData.message || "Job plan code conflict. Please try creating again.";
+          } else {
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          }
           console.error("❌ API Error:", errorData);
         } catch (e) {
-          errorMessage = responseText || errorMessage;
+          if (response.status === 409) errorMessage = "Job plan code conflict. Please try creating again.";
+          else errorMessage = responseText || errorMessage;
         }
         throw new Error(errorMessage);
       }

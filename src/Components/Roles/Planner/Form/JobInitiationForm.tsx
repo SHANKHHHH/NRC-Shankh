@@ -1061,6 +1061,15 @@ const JobInitiationForm: React.FC<JobInitiationFormProps> = ({
         );
         console.error("❌ Response:", responseText);
 
+        if (jobPlanResponse.status === 409) {
+          let msg = "Job plan code conflict. Please try creating again.";
+          try {
+            const errJson = JSON.parse(responseText);
+            if (errJson.error || errJson.message) msg = errJson.error || errJson.message;
+          } catch (_) {}
+          throw new Error(msg);
+        }
+
         // Try the fallback approach
         console.log("🔄 Trying alternative approach...");
 
@@ -1294,6 +1303,14 @@ const JobInitiationForm: React.FC<JobInitiationFormProps> = ({
         console.log("Job plan created successfully:", jobPlanResult);
         return jobPlanResult;
       } else {
+        if (jobPlanResponse.status === 409) {
+          let msg = "Job plan code conflict. Please try creating again.";
+          try {
+            const errJson = await jobPlanResponse.json();
+            if (errJson.error || errJson.message) msg = errJson.error || errJson.message;
+          } catch (_) {}
+          throw new Error(msg);
+        }
         // If POST doesn't work, try to update existing job to trigger job plan creation
         console.log("Job plan creation failed, trying alternative approach...");
 

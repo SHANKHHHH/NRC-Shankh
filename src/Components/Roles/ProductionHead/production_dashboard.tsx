@@ -177,6 +177,10 @@ const ProductionHeadDashboard: React.FC = () => {
       .split("T")[0],
   });
 
+  // Major hold jobs count (for blinking icon + navigate to major-hold-jobs)
+  const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
+  const [isLoadingMajorHoldJobs, setIsLoadingMajorHoldJobs] = useState(false);
+
   // Check authentication status
   useEffect(() => {
     const checkAuth = () => {
@@ -236,6 +240,35 @@ const ProductionHeadDashboard: React.FC = () => {
     };
 
     loadPrintingDetails();
+  }, []);
+
+  // Fetch major hold jobs count (lightweight single API call)
+  useEffect(() => {
+    const fetchMajorHoldJobsCount = async () => {
+      try {
+        setIsLoadingMajorHoldJobs(true);
+        const accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) {
+          setMajorHoldJobsCount(0);
+          return;
+        }
+        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const response = await fetch(`${baseUrl}/api/job-planning/major-hold/count`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          setMajorHoldJobsCount(0);
+          return;
+        }
+        const json = await response.json();
+        setMajorHoldJobsCount(json.success && typeof json.count === "number" ? json.count : 0);
+      } catch (_) {
+        setMajorHoldJobsCount(0);
+      } finally {
+        setIsLoadingMajorHoldJobs(false);
+      }
+    };
+    fetchMajorHoldJobsCount();
   }, []);
 
   // Helper function to get step actual status (same as AdminDashboard)
@@ -2379,13 +2412,33 @@ const ProductionHeadDashboard: React.FC = () => {
       {/* Date Filter */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <DateFilterComponent
-            dateFilter={dateFilter}
-            setDateFilter={setDateFilter}
-            customDateRange={customDateRange}
-            setCustomDateRange={setCustomDateRange}
-            className="w-full"
-          />
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <DateFilterComponent
+                dateFilter={dateFilter}
+                setDateFilter={setDateFilter}
+                customDateRange={customDateRange}
+                setCustomDateRange={setCustomDateRange}
+                className="w-full"
+              />
+            </div>
+            {/* Major Hold Jobs – in filter row */}
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/major-hold-jobs")}
+              title="View and resume major hold jobs"
+              className="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00AEEF] text-red-500 shrink-0"
+            >
+              <ExclamationTriangleIcon
+                className={`h-6 w-6 ${majorHoldJobsCount > 0 ? "animate-pulse" : ""}`}
+              />
+              {majorHoldJobsCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
+                  {majorHoldJobsCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

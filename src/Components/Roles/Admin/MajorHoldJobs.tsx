@@ -162,18 +162,15 @@ const MajorHoldJobs: React.FC = () => {
     };
   };
 
-  // Fetch major hold jobs with details
+  // Fetch major hold jobs: single API returns list with full step details, then add PO details per job
   const fetchMajorHoldJobsWithDetails = async () => {
     try {
       setLoading(true);
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // 🔥 IMPORTANT: Major hold jobs should always be fetched regardless of date filters
-      // Don't apply date filtering when fetching major hold jobs
-      // Fetch job planning data WITHOUT date filter to get ALL major hold jobs
-      const jobPlanningUrl = `https://nrprod.nrcontainers.com/api/job-planning/`;
-      const jobPlanningResponse = await fetch(jobPlanningUrl, {
+      const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const response = await fetch(`${baseUrl}/api/job-planning/major-hold`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -182,132 +179,31 @@ const MajorHoldJobs: React.FC = () => {
         },
       });
 
-      if (!jobPlanningResponse.ok) {
-        throw new Error(
-          `Failed to fetch job planning data: ${jobPlanningResponse.status}`
-        );
+      if (!response.ok) {
+        throw new Error(`Failed to fetch major hold jobs: ${response.status}`);
       }
 
-      const jobPlanningResult = await jobPlanningResponse.json();
-
-      if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
-        // Fetch step details for each job to determine major hold status
-        const jobsWithStepDetails = await Promise.all(
-          jobPlanningResult.data.map(async (jobPlan: JobPlan) => {
-            const stepsWithDetails = await Promise.all(
-              jobPlan.steps.map(async (step: JobPlanStep) => {
-                let stepDetails = null;
-                if (step.status === "start" || step.status === "stop") {
-                  // Fetch step-specific details based on step name
-                  try {
-                    let endpoint = "";
-                    switch (step.stepName) {
-                      case "PaperStore":
-                        endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "PrintingDetails":
-                        endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "Corrugation":
-                        endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "FluteLaminateBoardConversion":
-                        endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "Punching":
-                        endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "SideFlapPasting":
-                        endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "QualityDept":
-                        endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      case "DispatchProcess":
-                        endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodeURIComponent(
-                          jobPlan.nrcJobNo
-                        )}`;
-                        break;
-                      default:
-                        break;
-                    }
-
-                    if (endpoint) {
-                      const stepResponse = await fetch(endpoint, {
-                        headers: { Authorization: `Bearer ${accessToken}` },
-                      });
-
-                      if (stepResponse.ok) {
-                        const stepResult = await stepResponse.json();
-                        if (
-                          stepResult.success &&
-                          stepResult.data &&
-                          stepResult.data.length > 0
-                        ) {
-                          stepDetails = { data: stepResult.data[0] };
-                        }
-                      }
-                    }
-                  } catch (err) {
-                    console.warn(
-                      `Error fetching ${step.stepName} details:`,
-                      err
-                    );
-                  }
-                }
-
-                return {
-                  ...step,
-                  stepDetails,
-                };
-              })
-            );
-
-            return {
-              ...jobPlan,
-              steps: stepsWithDetails,
-            };
-          })
-        );
-
-        // Filter only major hold jobs
-        const majorHold = jobsWithStepDetails.filter((job: JobPlan) =>
-          isMajorHold(job)
-        );
-
-        // Fetch additional details for each major hold job
-        const jobsWithDetails = await Promise.all(
-          majorHold.map(async (job: JobPlan) => {
-            const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-              await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-
-            return {
-              ...job,
-              jobDetails,
-              purchaseOrderDetails,
-              poJobPlannings,
-            };
-          })
-        );
-
-        setMajorHoldJobs(jobsWithDetails);
-      } else {
-        throw new Error("Invalid API response format");
+      const result = await response.json();
+      if (!result.success || !Array.isArray(result.data)) {
+        setMajorHoldJobs([]);
+        return;
       }
+
+      const majorHoldList = result.data as JobPlan[];
+      // Add job + PO details for card display (client name, etc.) – only for these jobs, not all
+      const jobsWithDetails = await Promise.all(
+        majorHoldList.map(async (job: JobPlan) => {
+          const { jobDetails, purchaseOrderDetails, poJobPlannings } =
+            await fetchJobWithPODetails(job.nrcJobNo, accessToken);
+          return {
+            ...job,
+            jobDetails,
+            purchaseOrderDetails,
+            poJobPlannings,
+          };
+        })
+      );
+      setMajorHoldJobs(jobsWithDetails);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to fetch major hold jobs"
@@ -318,142 +214,31 @@ const MajorHoldJobs: React.FC = () => {
     }
   };
 
-  // Function to enhance passed jobs with additional details
+  // When dashboard passes pre-filtered major hold jobs, only add PO details (steps already on job)
   const enhancePassedJobsWithDetails = async (jobs: JobPlan[]) => {
     try {
       setLoading(true);
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // First, fetch step details for all jobs to properly detect major hold
-      const jobsWithStepDetails = await Promise.all(
-        jobs.map(async (jobPlan: JobPlan) => {
-          const stepsWithDetails = await Promise.all(
-            jobPlan.steps.map(async (step: JobPlanStep) => {
-              // If step already has stepDetails, use it
-              if (step.stepDetails) {
-                return step;
-              }
-
-              // Otherwise fetch step details if step is started or stopped
-              let stepDetails = null;
-              if (step.status === "start" || step.status === "stop") {
-                try {
-                  let endpoint = "";
-                  switch (step.stepName) {
-                    case "PaperStore":
-                      endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "PrintingDetails":
-                      endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "Corrugation":
-                      endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "FluteLaminateBoardConversion":
-                      endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "Punching":
-                      endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "SideFlapPasting":
-                      endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "QualityDept":
-                      endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "DispatchProcess":
-                      endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    default:
-                      break;
-                  }
-
-                  if (endpoint) {
-                    const stepResponse = await fetch(endpoint, {
-                      headers: { Authorization: `Bearer ${accessToken}` },
-                    });
-
-                    if (stepResponse.ok) {
-                      const stepResult = await stepResponse.json();
-                      if (
-                        stepResult.success &&
-                        stepResult.data &&
-                        stepResult.data.length > 0
-                      ) {
-                        stepDetails = { data: stepResult.data[0] };
-                      }
-                    }
-                  }
-                } catch (err) {
-                  console.warn(`Error fetching ${step.stepName} details:`, err);
-                }
-              }
-
-              return {
-                ...step,
-                stepDetails: stepDetails || step.stepDetails,
-              };
-            })
-          );
-
-          return {
-            ...jobPlan,
-            steps: stepsWithDetails,
-          };
-        })
-      );
-
-      // Filter for major hold jobs after fetching step details
-      const majorHold = jobsWithStepDetails.filter((job: JobPlan) =>
-        isMajorHold(job)
-      );
-
       const jobsWithDetails = await Promise.all(
-        majorHold.map(async (job: JobPlan) => {
-          // Check if job already has complete details
-          if (
-            job.jobDetails &&
-            job.purchaseOrderDetails &&
-            job.poJobPlannings
-          ) {
+        jobs.map(async (job: JobPlan) => {
+          if (job.jobDetails && job.purchaseOrderDetails && job.poJobPlannings) {
             return job;
           }
-
           const { jobDetails, purchaseOrderDetails, poJobPlannings } =
             await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-
           return {
             ...job,
             jobDetails: jobDetails || job.jobDetails,
-            purchaseOrderDetails:
-              purchaseOrderDetails || job.purchaseOrderDetails || [],
+            purchaseOrderDetails: purchaseOrderDetails || job.purchaseOrderDetails || [],
             poJobPlannings: poJobPlannings || job.poJobPlannings || [],
           };
         })
       );
-
       setMajorHoldJobs(jobsWithDetails);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to enhance job details"
-      );
+      setError(err instanceof Error ? err.message : "Failed to enhance job details");
       console.error("Job enhancement error:", err);
     } finally {
       setLoading(false);

@@ -499,172 +499,26 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
     return false;
   };
 
-  // Fetch major hold jobs count
+  // Fetch major hold jobs count (lightweight single API call)
   useEffect(() => {
     const fetchMajorHoldJobsCount = async () => {
       try {
         setIsLoadingMajorHoldJobs(true);
         const accessToken = localStorage.getItem("accessToken");
-
         if (!accessToken) {
-          console.error("Authentication token not found");
           setMajorHoldJobsCount(0);
           return;
         }
-
-        const response = await fetch(
-          "https://nrprod.nrcontainers.com/api/job-planning/",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
-
+        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const response = await fetch(`${baseUrl}/api/job-planning/major-hold/count`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch job plans: ${response.status} ${response.statusText}`
-          );
-        }
-
-        const jobPlanningData = await response.json();
-        if (jobPlanningData.success && Array.isArray(jobPlanningData.data)) {
-          // Fetch step details for each job plan to check for major hold
-          let majorHoldCount = 0;
-
-          for (const jobPlan of jobPlanningData.data) {
-            // Fetch step details for steps that are started or stopped
-            const stepsWithDetails = await Promise.all(
-              (jobPlan.steps || []).map(async (step: any) => {
-                if (step.status !== "start" && step.status !== "stop") {
-                  return step;
-                }
-
-                try {
-                  let endpoint = "";
-                  switch (step.stepName) {
-                    case "PaperStore":
-                      endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "PrintingDetails":
-                      endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "Corrugation":
-                      endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "FluteLaminateBoardConversion":
-                      endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "Punching":
-                      endpoint = `https://nrprod.nrcontainers.com/api/punching/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "SideFlapPasting":
-                      endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "QualityDept":
-                      endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    case "DispatchProcess":
-                      endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-job/${encodeURIComponent(
-                        jobPlan.nrcJobNo
-                      )}`;
-                      break;
-                    default:
-                      return step;
-                  }
-
-                  if (endpoint) {
-                    const stepResponse = await fetch(endpoint, {
-                      headers: { Authorization: `Bearer ${accessToken}` },
-                    });
-
-                    if (stepResponse.ok) {
-                      const stepResult = await stepResponse.json();
-                      if (
-                        stepResult.success &&
-                        stepResult.data &&
-                        stepResult.data.length > 0
-                      ) {
-                        return {
-                          ...step,
-                          stepDetails: { data: stepResult.data[0] },
-                        };
-                      }
-                    }
-                  }
-                } catch (err) {
-                  console.warn(`Error fetching ${step.stepName} details:`, err);
-                }
-                return step;
-              })
-            );
-
-            // Check if this job has major hold - using same logic as AdminDashboard
-            const jobWithMajorHold = stepsWithDetails.some((step: any) => {
-              // Check direct step status
-              if (step.status === "major_hold") {
-                return true;
-              }
-
-              // Check step-specific properties (paperStore, printingDetails, etc.)
-              if (
-                step.paperStore?.status === "major_hold" ||
-                step.printingDetails?.status === "major_hold" ||
-                step.corrugation?.status === "major_hold" ||
-                step.flutelam?.status === "major_hold" ||
-                step.fluteLaminateBoardConversion?.status === "major_hold" ||
-                step.punching?.status === "major_hold" ||
-                step.sideFlapPasting?.status === "major_hold" ||
-                step.qualityDept?.status === "major_hold" ||
-                step.dispatchProcess?.status === "major_hold"
-              ) {
-                return true;
-              }
-
-              // Check stepDetails.data.status for "major_hold"
-              if (step?.stepDetails?.data?.status === "major_hold") {
-                return true;
-              }
-              // Also check stepDetails.status
-              if (step?.stepDetails?.status === "major_hold") {
-                return true;
-              }
-              // Check for major hold remark
-              if (
-                step?.stepDetails?.data?.majorHoldRemark ||
-                (step?.stepDetails?.data?.holdRemark &&
-                  /major/i.test(step.stepDetails.data.holdRemark))
-              ) {
-                return true;
-              }
-              return false;
-            });
-
-            if (jobWithMajorHold) {
-              majorHoldCount++;
-            }
-          }
-
-          setMajorHoldJobsCount(majorHoldCount);
-        } else {
           setMajorHoldJobsCount(0);
+          return;
         }
+        const json = await response.json();
+        setMajorHoldJobsCount(json.success && typeof json.count === "number" ? json.count : 0);
       } catch (error) {
         console.error("Error fetching major hold jobs count:", error);
         setMajorHoldJobsCount(0);
@@ -672,7 +526,6 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
         setIsLoadingMajorHoldJobs(false);
       }
     };
-
     fetchMajorHoldJobsCount();
   }, []);
 
@@ -1166,6 +1019,12 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       );
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409) {
+          throw new Error(
+            errorData.error || errorData.message || "Job plan code conflict. Please try creating again."
+          );
+        }
         throw new Error("Failed to save job planning");
       }
 
@@ -1200,6 +1059,12 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
       );
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409) {
+          throw new Error(
+            errorData.error || errorData.message || "Job plan code conflict. Please try creating again."
+          );
+        }
         throw new Error("Failed to save job planning");
       }
 

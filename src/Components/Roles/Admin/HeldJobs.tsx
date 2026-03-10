@@ -194,6 +194,7 @@ interface JobPlan {
   status: string;
   steps: JobPlanStep[];
   createdAt: string;
+  jobPlanCode?: string | null;
   jobDetails?: EnhancedJobDetails;
   purchaseOrderDetails?: PurchaseOrderDetails[];
   poJobPlannings?: POJobPlanning[];

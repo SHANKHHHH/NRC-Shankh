@@ -18,6 +18,7 @@ interface JobPlan {
   status: string;
   steps: JobPlanStep[];
   createdAt: string;
+  jobPlanCode?: string | null;
   // Enhanced with the new API response structure
   jobDetails?: EnhancedJobDetails;
   purchaseOrderDetails?: PurchaseOrderDetails[];

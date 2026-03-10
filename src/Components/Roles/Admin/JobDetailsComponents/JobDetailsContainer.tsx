@@ -37,6 +37,7 @@ interface CompletedJob {
   id: number;
   nrcJobNo: string;
   jobPlanId: number;
+  jobPlanCode?: string | null;
   jobDemand: string;
   jobDetails: {
     id: number;

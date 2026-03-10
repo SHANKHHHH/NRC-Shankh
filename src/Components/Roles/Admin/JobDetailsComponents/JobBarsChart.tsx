@@ -20,6 +20,7 @@ interface JobPlan {
   status: string;
   steps: JobPlanStep[];
   createdAt: string;
+  jobPlanCode?: string | null;
 }
 
 interface JobPlanStep {
@@ -33,6 +34,7 @@ interface CompletedJob {
   id: number;
   nrcJobNo: string;
   jobPlanId: number;
+  jobPlanCode?: string | null;
   jobDemand: string;
   jobDetails: {
     id: number;
@@ -272,6 +274,11 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <h4 className="font-bold text-sm mb-1">{getJobNumber(job)}</h4>
+                {(job as any).jobPlanCode && (
+                  <p className="text-xs opacity-95 mb-0.5">
+                    Plan: {(job as any).jobPlanCode}
+                  </p>
+                )}
                 <p className="text-xs opacity-90">
                   {getCompanyName(job) || "N/A"}
                 </p>
