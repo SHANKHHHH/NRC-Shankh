@@ -1807,6 +1807,39 @@ const PlannerJobs: React.FC = () => {
 
         setBulkUploadProgress(`Processing ${parsedData.length} records...`);
 
+        const accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) {
+          setIsBulkUploading(false);
+          setBulkUploadProgress("");
+          showSnackbar(
+            "Authentication token not found. Please log in.",
+            "error",
+          );
+          return;
+        }
+
+        // Sync the sequence first (same as single PO creation) so next IDs are correct
+        setBulkUploadProgress("Syncing sequence...");
+        try {
+          const syncResponse = await fetch(
+            "https://nrprod.nrcontainers.com/api/purchase-orders/sync-sequence",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+            },
+          );
+          if (!syncResponse.ok) {
+            console.warn(
+              "Warning: Failed to sync sequence before bulk upload",
+            );
+          }
+        } catch (syncError) {
+          console.warn("Warning: Sequence sync failed before bulk upload:", syncError);
+        }
+
         const { data: maxIdData, error: maxIdError } = await supabase
           .from("PurchaseOrder")
           .select("id")
@@ -1824,19 +1857,6 @@ const PlannerJobs: React.FC = () => {
         let nextId = maxIdData?.[0]?.id ? maxIdData[0].id + 1 : 1;
 
         setBulkUploadProgress("Fetching job data...");
-
-        // Fetch all jobs from API to match styleItemSKU with style
-        const accessToken = localStorage.getItem("accessToken");
-
-        if (!accessToken) {
-          setIsBulkUploading(false);
-          setBulkUploadProgress("");
-          showSnackbar(
-            "Authentication token not found. Please log in.",
-            "error",
-          );
-          return;
-        }
 
         const jobsResponse = await fetch(
           "https://nrprod.nrcontainers.com/api/jobs",
@@ -2426,28 +2446,6 @@ const PlannerJobs: React.FC = () => {
             successMessage += `\n\nNotifications have been created. Please:\n`;
             successMessage += `- Create jobs for styles without matching jobs\n`;
             successMessage += `- Update customer information for incomplete POs`;
-          }
-
-          // Sync the sequence after bulk insert (database trigger handles this, but this is a safeguard)
-          try {
-            const syncResponse = await fetch(
-              "https://nrprod.nrcontainers.com/api/purchase-orders/sync-sequence",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${accessToken}`,
-                },
-              },
-            );
-            if (!syncResponse.ok) {
-              console.warn(
-                "Warning: Failed to sync sequence after bulk upload",
-              );
-            }
-          } catch (syncError) {
-            console.warn("Warning: Sequence sync failed:", syncError);
-            // Don't fail the upload if sequence sync fails - trigger should handle it
           }
 
           // Reload POs to sync with database and trigger notification sync
