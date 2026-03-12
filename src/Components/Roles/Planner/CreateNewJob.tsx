@@ -670,6 +670,21 @@ const CreateNewJob: React.FC<CreateNewJobProps> = ({ onBack }) => {
                   required
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Latest Rate
+                </label>
+                <input
+                  type="number"
+                  name="latestRate"
+                  value={formData.latestRate ?? ""}
+                  onChange={handleInputChange}
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 79.76, 100.50"
+                />
+              </div>
             </div>
 
             {/* Dimensions */}

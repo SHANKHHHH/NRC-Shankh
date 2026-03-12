@@ -257,6 +257,25 @@ const HeldJobs: React.FC = () => {
     customDateRange,
   } = location.state || {};
 
+  // True if job has any step in major_hold (exclude from Held list; show only on Major Hold page)
+  const hasAnyStepInMajorHold = (job: JobPlan) =>
+    job.steps?.some((step: any) => {
+      if (step.stepSpecificData?.status === "major_hold") return true;
+      if (step.stepDetails?.data?.status === "major_hold") return true;
+      if (step.stepDetails?.status === "major_hold") return true;
+      if (step.status === "major_hold") return true;
+      if (step.paperStore?.status === "major_hold") return true;
+      if (step.printingDetails?.status === "major_hold") return true;
+      if (step.corrugation?.status === "major_hold") return true;
+      if (step.flutelam?.status === "major_hold") return true;
+      if (step.fluteLaminateBoardConversion?.status === "major_hold") return true;
+      if (step.punching?.status === "major_hold") return true;
+      if (step.sideFlapPasting?.status === "major_hold") return true;
+      if (step.qualityDept?.status === "major_hold") return true;
+      if (step.dispatchProcess?.status === "major_hold") return true;
+      return false;
+    }) ?? false;
+
   // Helper function to check if a job has recent step activity
   const hasRecentStepActivity = (
     job: JobPlan,
@@ -353,6 +372,15 @@ const HeldJobs: React.FC = () => {
       case "today":
         start.setHours(0, 0, 0, 0);
         break;
+      case "yesterday": {
+        start.setDate(today.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        return {
+          start: start.toISOString().split("T")[0],
+          end: end.toISOString().split("T")[0],
+        };
+      }
       case "week":
         start.setDate(today.getDate() - 7);
         break;
@@ -448,7 +476,7 @@ const HeldJobs: React.FC = () => {
       const jobPlanningResult = await jobPlanningResponse.json();
 
       if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
-        // Filter only held jobs
+        // Filter only held jobs (regular hold); exclude jobs that have any step in major_hold
         const heldJobsData = jobPlanningResult.data.filter((job: JobPlan) => {
           const isHeld = job.steps.some((step) => {
             // Check for held status in various possible locations
@@ -484,7 +512,8 @@ const HeldJobs: React.FC = () => {
             console.log(`✅ Job ${job.nrcJobNo} is held`);
           }
 
-          return isHeld;
+          // Do not show in Held Jobs if any step is in major_hold (show only on Major Hold page)
+          return isHeld && !hasAnyStepInMajorHold(job);
         });
 
         console.log(`🔍 Total jobs from API: ${jobPlanningResult.data.length}`);
@@ -529,9 +558,12 @@ const HeldJobs: React.FC = () => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Apply step-based date filtering if dateFilter is available
-      let filteredJobs = jobs;
-      console.log(`🔍 Starting with ${jobs.length} held jobs before filtering`);
+      // Exclude jobs that have any step in major_hold (they belong on Major Hold page only)
+      let filteredJobs = jobs.filter((job: JobPlan) => !hasAnyStepInMajorHold(job));
+      if (jobs.length !== filteredJobs.length) {
+        console.log(`🔍 Excluded ${jobs.length - filteredJobs.length} major-hold jobs from held list`);
+      }
+      console.log(`🔍 Starting with ${filteredJobs.length} held jobs before date filtering`);
 
       if (dateFilter) {
         const dateRange = getDateRangeFromFilter(dateFilter, customDateRange);
@@ -540,7 +572,7 @@ const HeldJobs: React.FC = () => {
             `Filtering held jobs by step activity for ${dateFilter}:`,
             dateRange
           );
-          filteredJobs = jobs.filter((job: JobPlan) => {
+          filteredJobs = filteredJobs.filter((job: JobPlan) => {
             const jobIdentifier =
               job.nrcJobNo || job.jobDetails?.nrcJobNo || job.id?.toString();
             console.log(`🔍 Checking job: ${jobIdentifier}`);
@@ -587,12 +619,12 @@ const HeldJobs: React.FC = () => {
             return isInDateRange;
           });
           console.log(
-            `Filtered ${jobs.length} held jobs to ${filteredJobs.length} based on step activity`
+            `Filtered to ${filteredJobs.length} held jobs based on step activity`
           );
         }
       } else {
         console.log(
-          `No date filter applied, keeping all ${jobs.length} held jobs`
+          `No date filter applied, keeping all ${filteredJobs.length} held jobs`
         );
       }
 

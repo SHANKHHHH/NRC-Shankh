@@ -408,6 +408,11 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
           }
         }
 
+        // Held jobs (and similar) provide step-specific data in stepSpecificData
+        if (step.stepSpecificData && typeof step.stepSpecificData === "object") {
+          return [step.stepSpecificData];
+        }
+
         return [];
       }
 
@@ -924,11 +929,14 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                     Purchase Order Details
                   </h3>
                   {(() => {
-                    // Prefer job.purchaseOrderDetails (array with full PO fields) for held jobs;
-                    // fallback to jobPlanningDetails.purchaseOrderDetails for in-progress/completed/planned
+                    // Support both shapes: (1) array from job-planning/held/planned/in-progress,
+                    // (2) single object from completed-jobs API (job.purchaseOrderDetails as object)
                     let poDetailsArray: any[] = [];
                     if (Array.isArray(job.purchaseOrderDetails) && job.purchaseOrderDetails.length > 0) {
                       poDetailsArray = job.purchaseOrderDetails;
+                    } else if (job.purchaseOrderDetails && typeof job.purchaseOrderDetails === "object" && !Array.isArray(job.purchaseOrderDetails)) {
+                      // Completed jobs API returns purchaseOrderDetails as a single object
+                      poDetailsArray = [job.purchaseOrderDetails];
                     } else if (Array.isArray(job.jobPlanningDetails?.purchaseOrderDetails)) {
                       poDetailsArray = job.jobPlanningDetails.purchaseOrderDetails;
                     } else if (job.jobPlanningDetails?.purchaseOrderDetails && typeof job.jobPlanningDetails.purchaseOrderDetails === "object" && !Array.isArray(job.jobPlanningDetails.purchaseOrderDetails)) {
@@ -1339,6 +1347,10 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                         if (step.stepName === "PaperStore" && step.paperStore && (!stepDetails || stepDetails.length === 0)) {
                           stepDetails = Array.isArray(step.paperStore) ? step.paperStore : [step.paperStore];
                         }
+                        // Held jobs (and similar API shapes) provide step-specific data in stepSpecificData; use it when stepDetails is empty so Paper Store / Printing etc. show full details
+                        if ((!stepDetails || stepDetails.length === 0) && step.stepSpecificData && typeof step.stepSpecificData === "object") {
+                          stepDetails = [step.stepSpecificData];
+                        }
 
                         // Helper function to get step status in priority order:
                         // 0. Held machines (hasHeldMachines / heldMachines[].jobStepMachineStatus)
@@ -1547,6 +1559,20 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                       key={detailIndex}
                                       className="text-xs text-gray-500 ml-2 space-y-1"
                                     >
+                                      {/* Step Start Date: step-level or from detail (stepSpecificData); hide when both null */}
+                                      {(() => {
+                                        const stepStartDateValue =
+                                          (step as any).stepStartDate ??
+                                          detail?.stepStartDate ??
+                                          detail?.date ??
+                                          null;
+                                        return stepStartDateValue ? (
+                                          <div className="flex justify-between">
+                                            <span>Step Start Date:</span>
+                                            <span>{formatDate(stepStartDateValue)}</span>
+                                          </div>
+                                        ) : null;
+                                      })()}
                                       {/* Paper Store Details */}
                                       {step.stepName === "PaperStore" && (
                                         <>

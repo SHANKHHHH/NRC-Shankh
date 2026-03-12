@@ -5,7 +5,7 @@ interface JobPlanStep {
   machineDetails: Array<{
     unit: string | null;
     machineId: string | number;
-    id: string | number;
+    id?: string | number;
     machineCode: string | null;
     machineType: string;
     machine?: {
@@ -15,7 +15,7 @@ interface JobPlanStep {
       capacity: number;
     };
   }>;
-  status: "planned" | "start" | "stop";
+  status: "planned" | "start" | "stop" | "accept" | "major_hold";
   startDate: string | null;
   endDate: string | null;
   user: string | null;

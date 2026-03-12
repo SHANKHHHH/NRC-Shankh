@@ -274,9 +274,9 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <h4 className="font-bold text-sm mb-1">{getJobNumber(job)}</h4>
-                {(job as any).jobPlanCode && (
+                {((job as any).jobPlanCode ?? (job as any).jobPlanningDetails?.jobPlanCode) && (
                   <p className="text-xs opacity-95 mb-0.5">
-                    Plan: {(job as any).jobPlanCode}
+                    Plan: {(job as any).jobPlanCode ?? (job as any).jobPlanningDetails?.jobPlanCode}
                   </p>
                 )}
                 <p className="text-xs opacity-90">
@@ -288,9 +288,9 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                   </p>
                 )}
 
-                {/* Show held step information for held jobs */}
+                {/* Show held step information and step start date for held jobs */}
                 {category === "held" && "steps" in job && (
-                  <p className="text-xs opacity-75 mt-1">
+                  <div className="text-xs opacity-75 mt-1 space-y-0.5">
                     {(() => {
                       const steps = job.steps || [];
                       // Prefer held-machines API format: hasHeldMachines / heldMachines[].jobStepMachineStatus
@@ -308,14 +308,26 @@ const JobBarsChart: React.FC<JobBarsChartProps> = ({
                             step.stepDetails?.status === "hold"
                         );
                       }
-                      return heldStep
-                        ? `Held at: ${heldStep.stepName.replace(
-                            /([a-z])([A-Z])/g,
-                            "$1 $2"
-                          )}`
-                        : "On Hold";
+                      const stepStart =
+                        heldStep &&
+                        ((heldStep as any).stepStartDate ?? (heldStep as any).startDate ?? (heldStep.stepDetails?.data?.date ?? heldStep.stepDetails?.date));
+                      return (
+                        <>
+                          <p>
+                            {heldStep
+                              ? `Held at: ${heldStep.stepName.replace(
+                                  /([a-z])([A-Z])/g,
+                                  "$1 $2"
+                                )}`
+                              : "On Hold"}
+                          </p>
+                          {stepStart && (
+                            <p>Started: {formatDate(stepStart)}</p>
+                          )}
+                        </>
+                      );
                     })()}
-                  </p>
+                  </div>
                 )}
               </div>
 

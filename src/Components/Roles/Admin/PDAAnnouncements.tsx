@@ -17,11 +17,14 @@ import { useUsers } from "../../../context/UsersContext";
 interface PDAAnnouncementsProps {
   dateFilter?: DateFilterType;
   customDateRange?: { start: string; end: string };
+  /** When set (e.g. after dashboard refresh or date filter change), fetches announcements. Omit or null = do not auto-fetch on mount. */
+  refreshTrigger?: number | null;
 }
 
 const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
   dateFilter,
   customDateRange,
+  refreshTrigger,
 }) => {
   const { getUserName } = useUsers();
   const [showForm, setShowForm] = useState(false);
@@ -75,9 +78,14 @@ const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
     }
   };
 
+  // When refreshTrigger is passed (AdminDashboard): only fetch when it's set (after refresh/date filter). When not passed: fetch on mount.
   useEffect(() => {
-    fetchAnnouncements();
-  }, []);
+    if (refreshTrigger === undefined) {
+      fetchAnnouncements();
+    } else if (refreshTrigger != null) {
+      fetchAnnouncements();
+    }
+  }, [refreshTrigger]);
 
   // Helper function to get date range from filter
   const getDateRange = (
@@ -95,6 +103,13 @@ const PDAAnnouncements: React.FC<PDAAnnouncementsProps> = ({
         startDate = new Date(today);
         endDate = new Date(today);
         break;
+      case "yesterday": {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = new Date(yesterday);
+        endDate = new Date(yesterday);
+        break;
+      }
       case "week":
         startDate = new Date(today);
         const dayOfWeek = today.getDay();

@@ -230,12 +230,16 @@ const InProgressJobs: React.FC = () => {
     customDateRange,
   } = location.state || {};
 
-  // Helper: get the most recent activity date for a step (step.updatedAt, stepDetails.updatedAt, or startDate)
+  // Helper: get the most recent activity date for a step (stepStartDate, stepEndDate, startDate, updatedAt, etc.)
   const getStepActivityDate = (step: JobPlanStep): Date | null => {
+    const s = step as any;
     const raw =
+      s.stepEndDate ||
+      s.stepStartDate ||
       step.updatedAt ||
       (step.stepDetails && step.stepDetails.updatedAt) ||
-      step.startDate;
+      step.startDate ||
+      (step.stepDetails && step.stepDetails.data && step.stepDetails.data.date);
     if (!raw) return null;
     const d = new Date(raw);
     return isNaN(d.getTime()) ? null : d;
@@ -275,6 +279,15 @@ const InProgressJobs: React.FC = () => {
       case "today":
         start.setHours(0, 0, 0, 0);
         break;
+      case "yesterday": {
+        start.setDate(today.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        return {
+          start: start.toISOString().split("T")[0],
+          end: end.toISOString().split("T")[0],
+        };
+      }
       case "week":
         start.setDate(today.getDate() - 7);
         break;
@@ -407,15 +420,19 @@ const InProgressJobs: React.FC = () => {
   };
 
   // Function to enhance passed jobs with additional details using the new API
-  const enhancePassedJobsWithDetails = async (jobs: JobPlan[]) => {
+  // When fromDashboard is true, skip date filtering - dashboard already sent the correct list for the selected period
+  const enhancePassedJobsWithDetails = async (
+    jobs: JobPlan[],
+    fromDashboard?: boolean
+  ) => {
     try {
       setLoading(true);
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      // Apply step-based date filtering if dateFilter is available
+      // Only apply date filtering when not using dashboard-passed data (dashboard already filtered)
       let filteredJobs = jobs;
-      if (dateFilter) {
+      if (!fromDashboard && dateFilter) {
         const dateRange = getDateRangeFromFilter(dateFilter, customDateRange);
         if (dateRange) {
           console.log(
@@ -423,17 +440,12 @@ const InProgressJobs: React.FC = () => {
             dateRange
           );
           filteredJobs = jobs.filter((job: JobPlan) => {
-            // Check if job has recent step activity within the date range
             const hasActivity = hasRecentStepActivity(
               job,
               dateRange.start,
               dateRange.end
             );
             if (!hasActivity) {
-              console.log(
-                `Job ${job.nrcJobNo} has no recent step activity, falling back to job updatedAt/createdAt`
-              );
-              // Fallback: use job updatedAt (last plan update) when available, else createdAt
               const jobTimestamp = (job as any).updatedAt ?? job.createdAt;
               const jobDate = new Date(jobTimestamp).toISOString().split("T")[0];
               return jobDate >= dateRange.start && jobDate <= dateRange.end;
@@ -486,8 +498,8 @@ const InProgressJobs: React.FC = () => {
     // Check if we have passed data from dashboard
     if (passedInProgressJobs && Array.isArray(passedInProgressJobs)) {
       console.log("Using passed in-progress jobs data:", passedInProgressJobs);
-      // Enhance passed data with additional details
-      enhancePassedJobsWithDetails(passedInProgressJobs);
+      // Enhance passed data (skip date filter - dashboard already sent the right list)
+      enhancePassedJobsWithDetails(passedInProgressJobs, true);
     } else {
       // Fallback: fetch data if no state was passed (direct URL access)
       console.log("No passed data found, fetching in-progress jobs...");
@@ -512,7 +524,7 @@ const InProgressJobs: React.FC = () => {
   // Add a retry function that calls the appropriate fetch method
   const handleRetry = () => {
     if (passedInProgressJobs && Array.isArray(passedInProgressJobs)) {
-      enhancePassedJobsWithDetails(passedInProgressJobs);
+      enhancePassedJobsWithDetails(passedInProgressJobs, true);
     } else {
       fetchInProgressJobsWithDetails();
     }

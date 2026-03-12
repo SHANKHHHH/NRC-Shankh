@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Calendar, AlertTriangle } from "lucide-react";
+import { Calendar, AlertTriangle, RefreshCw } from "lucide-react";
 import DateFilterComponent, {
   type DateFilterType,
 } from "./FilterComponents/DateFilterComponent";
@@ -206,8 +206,6 @@ interface AdminDashboardData {
   completedJobsData: CompletedJob[];
   heldJobs: number;
   heldJobsData: HeldJob[];
-  majorHoldJobs: number;
-  majorHoldJobsData: JobPlan[];
 }
 
 interface MachineDetails {
@@ -234,6 +232,24 @@ interface MachineUtilizationData {
   machineDetails: MachineDetails[];
 }
 
+// Cache last fetched dashboard data so we don't refetch when returning from a card (e.g. Back to Dashboard)
+function getDashboardCacheKey(
+  filter: DateFilterType,
+  customRange?: { start: string; end: string } | null
+): string {
+  if (filter === "custom" && customRange) {
+    return `custom|${customRange.start}|${customRange.end}`;
+  }
+  return filter;
+}
+let dashboardDataCache: {
+  data: AdminDashboardData;
+  cacheKey: string;
+  lastRefreshedAt: Date;
+  dateFilter: DateFilterType;
+  customDateRange: { start: string; end: string };
+} | null = null;
+
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -248,14 +264,20 @@ const AdminDashboard: React.FC = () => {
     customDateRange?: { start: string; end: string };
   } | null;
 
-  const [dateFilter, setDateFilter] = useState<DateFilterType>(
-    returnedState?.dateFilter || "today"
+  // Prefer returned state from Back to Dashboard, then cached filter, then default
+  const [dateFilter, setDateFilter] = useState<DateFilterType>(() =>
+    returnedState?.dateFilter ?? dashboardDataCache?.dateFilter ?? "today"
   );
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [pdaRefreshTrigger, setPdaRefreshTrigger] = useState<number | null>(
+    null
+  );
+  const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
     end: string;
-  }>(
-    returnedState?.customDateRange || {
+  }>(() =>
+    returnedState?.customDateRange ?? dashboardDataCache?.customDateRange ?? {
       start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0],
@@ -315,13 +337,10 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
-  // Navigate to Major Hold Jobs view
+  // Navigate to Major Hold Jobs view (page fetches list from GET /api/job-planning/major-hold)
   const handleMajorHoldJobsClick = () => {
-    // Pass pre-filtered major hold job plans so the page shows the correct list
-    const majorHoldList = filteredData?.majorHoldJobsData ?? filteredData?.jobPlans?.filter((jp) => isMajorHold(jp)) ?? [];
     navigate("/dashboard/major-hold-jobs", {
       state: {
-        heldJobsData: majorHoldList,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
@@ -714,6 +733,33 @@ const AdminDashboard: React.FC = () => {
     return mergedStats;
   };
 
+  // Fetch major hold count from API (same as Planner / Production / Printing dashboards)
+  const fetchMajorHoldCount = async () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        setMajorHoldJobsCount(0);
+        return;
+      }
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const response = await fetch(
+        `${baseUrl}/api/job-planning/major-hold/count`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!response.ok) {
+        setMajorHoldJobsCount(0);
+        return;
+      }
+      const json = await response.json();
+      setMajorHoldJobsCount(
+        json.success && typeof json.count === "number" ? json.count : 0
+      );
+    } catch {
+      setMajorHoldJobsCount(0);
+    }
+  };
+
   // Updated fetchDashboardData - make it async and await processJobPlanData
   const fetchDashboardData = async (
     filterType?: DateFilterType,
@@ -825,6 +871,20 @@ const AdminDashboard: React.FC = () => {
         );
 
         setData(processedData);
+        const filter = filterType ?? "today";
+        const range = customRange ?? customDateRange;
+        const cacheKey = getDashboardCacheKey(filter, range);
+        const refreshedAt = new Date();
+        dashboardDataCache = {
+          data: processedData,
+          cacheKey,
+          lastRefreshedAt: refreshedAt,
+          dateFilter: filter,
+          customDateRange: range,
+        };
+        setLastRefreshedAt(refreshedAt);
+        setPdaRefreshTrigger(Date.now());
+        fetchMajorHoldCount();
       } else {
         throw new Error("Invalid API response format");
       }
@@ -978,6 +1038,14 @@ const AdminDashboard: React.FC = () => {
     return false;
   };
 
+  // Held job has major_hold if any step has status major_hold (exclude from held count so it matches Held Jobs list)
+  const heldJobHasMajorHold = (heldJob: HeldJob): boolean =>
+    heldJob.steps?.some(
+      (step: HeldJobStep) =>
+        (step as any).stepSpecificData?.status === "major_hold" ||
+        (step as any).status === "major_hold"
+    ) ?? false;
+
   // Updated processJobPlanData - fetch machines once, not in loop
   const processJobPlanData = async (
     jobPlans: JobPlan[],
@@ -994,12 +1062,14 @@ const AdminDashboard: React.FC = () => {
     const totalJobs = jobPlans.length;
     let inProgressJobs = 0;
     let plannedJobs = 0;
-    // Get held jobs count from the new API
-    let heldJobs = heldJobsData.length;
-    let majorHoldJobs = 0;
+    // Exclude major-hold jobs from held count so dashboard count matches Held Jobs list (which also excludes major hold)
+    const heldJobsDataExcludingMajorHold = heldJobsData.filter(
+      (held) => !heldJobHasMajorHold(held)
+    );
+    let heldJobs = heldJobsDataExcludingMajorHold.length;
 
     console.log("Processing held jobs data:", heldJobsData);
-    console.log("Total held jobs from API:", heldJobs);
+    console.log("Total held jobs from API (excluding major hold):", heldJobs);
     let totalSteps = 0;
     let completedSteps = 0;
     const uniqueUsers = new Set<string>();
@@ -1079,11 +1149,6 @@ const AdminDashboard: React.FC = () => {
       const totalStepsInJob = jobPlan.steps.length;
       let completedStepsInJob = 0;
 
-      // Check if this job has major hold
-      if (isMajorHold(jobPlan)) {
-        majorHoldJobs++;
-      }
-
       totalSteps += totalStepsInJob;
 
       // ✅ FIXED: Process each step category separately
@@ -1113,9 +1178,11 @@ const AdminDashboard: React.FC = () => {
             jobInProgress = true;
             jobCompleted = false;
           } else {
-            // This step is planned
-            stepStats[stepName].planned++;
-            stepStats[stepName].plannedData.push(jobPlan);
+            // This step is planned - exclude jobs that have any step in major_hold from planned list
+            if (!isMajorHold(jobPlan)) {
+              stepStats[stepName].planned++;
+              stepStats[stepName].plannedData.push(jobPlan);
+            }
             jobCompleted = false;
           }
 
@@ -1161,8 +1228,10 @@ const AdminDashboard: React.FC = () => {
             jobInProgress = true;
             jobCompleted = false;
           } else {
-            stepStats[step.stepName].planned++;
-            stepStats[step.stepName].plannedData.push(jobPlan);
+            if (!isMajorHold(jobPlan)) {
+              stepStats[step.stepName].planned++;
+              stepStats[step.stepName].plannedData.push(jobPlan);
+            }
             jobCompleted = false;
           }
 
@@ -1173,11 +1242,12 @@ const AdminDashboard: React.FC = () => {
         }
       });
 
-      // Determine job status: held = regular hold only (from API or step status "hold"). Major hold is separate (majorHoldJobs).
+      // Determine job status: held = regular hold only (from API or step status "hold"). Major hold count comes from API (majorHoldJobsCount).
+      // Held count comes from heldJobsDataExcludingMajorHold only (not from this loop) so dashboard matches Held Jobs list.
       if (jobCompleted) {
         // This job is completed, but we're not counting it here since it comes from completed jobs API
       } else if (jobOnHold && !isMajorHold(jobPlan)) {
-        heldJobs++;
+        // heldJobs already set from API filtered list; do not double-count here
       } else if (jobInProgress) {
         inProgressJobs++;
       } else {
@@ -1246,9 +1316,6 @@ const AdminDashboard: React.FC = () => {
 
     const mergedStepStats = mergeStepCompletionStats(stepStats);
 
-    // Pre-filter job plans that are in major hold so Major Hold page can show them
-    const majorHoldJobsData = jobPlans.filter((jp) => isMajorHold(jp));
-
     return {
       jobPlans,
       totalJobs: totalJobs + completedJobsCount,
@@ -1265,9 +1332,7 @@ const AdminDashboard: React.FC = () => {
       timeSeriesData,
       completedJobsData: completedJobsData,
       heldJobs,
-      heldJobsData,
-      majorHoldJobs,
-      majorHoldJobsData,
+      heldJobsData: heldJobsDataExcludingMajorHold,
     };
   };
 
@@ -1279,8 +1344,29 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData(newFilter, customRange);
   };
 
+  // On mount: restore from cache when available (e.g. Back from In Progress, Planned, Held, Completed, Total Jobs) to avoid refetch. Only fetch when there is no cache.
   useEffect(() => {
-    fetchDashboardData();
+    if (dashboardDataCache) {
+      setData(dashboardDataCache.data);
+      setLastRefreshedAt(dashboardDataCache.lastRefreshedAt);
+      setDateFilter(dashboardDataCache.dateFilter ?? "today");
+      setCustomDateRange(
+        dashboardDataCache.customDateRange ?? {
+          start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0],
+          end: new Date().toISOString().split("T")[0],
+        }
+      );
+      setLoading(false);
+      return;
+    }
+    fetchDashboardData(dateFilter, customDateRange);
+  }, []);
+
+  // Fetch major hold count from API on mount (same as Planner / Production / Printing)
+  useEffect(() => {
+    fetchMajorHoldCount();
   }, []);
 
   // Clear location state after it's been read to prevent stale data
@@ -1324,6 +1410,13 @@ const AdminDashboard: React.FC = () => {
         startDate = new Date(today);
         endDate = new Date(today);
         break;
+      case "yesterday": {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = new Date(yesterday);
+        endDate = new Date(yesterday);
+        break;
+      }
       case "week":
         // This week (from Monday to Sunday)
         startDate = new Date(today);
@@ -1453,9 +1546,6 @@ const AdminDashboard: React.FC = () => {
     let totalSteps = 0;
     // Use held jobs count from the API data, not recalculated
     const heldJobs = data.heldJobs;
-    // 🔥 IMPORTANT: Major hold jobs should always show regardless of date filter
-    // Use the original count from all jobs, not filtered ones
-    const majorHoldJobs = data.majorHoldJobs;
     let completedSteps = 0;
     const uniqueUsers = new Set<string>();
 
@@ -1589,8 +1679,10 @@ const AdminDashboard: React.FC = () => {
             stepCompletionStats[stepName].inProgress++;
             stepCompletionStats[stepName].inProgressData.push(jobPlan);
           } else {
-            stepCompletionStats[stepName].planned++;
-            stepCompletionStats[stepName].plannedData.push(jobPlan);
+            if (!isMajorHold(jobPlan)) {
+              stepCompletionStats[stepName].planned++;
+              stepCompletionStats[stepName].plannedData.push(jobPlan);
+            }
           }
         }
       });
@@ -1622,8 +1714,10 @@ const AdminDashboard: React.FC = () => {
             stepCompletionStats[step.stepName].inProgress++;
             stepCompletionStats[step.stepName].inProgressData.push(jobPlan);
           } else {
-            stepCompletionStats[step.stepName].planned++;
-            stepCompletionStats[step.stepName].plannedData.push(jobPlan);
+            if (!isMajorHold(jobPlan)) {
+              stepCompletionStats[step.stepName].planned++;
+              stepCompletionStats[step.stepName].plannedData.push(jobPlan);
+            }
           }
         }
       });
@@ -1644,8 +1738,6 @@ const AdminDashboard: React.FC = () => {
     console.log("Held jobs (from API):", heldJobs);
     console.log("Total jobs:", totalJobs + completedJobs);
 
-    const majorHoldJobsData = filteredJobPlans.filter((jp) => isMajorHold(jp));
-
     return {
       ...data, // Keep machine utilization and other non-date-dependent data
       jobPlans: filteredJobPlans,
@@ -1663,8 +1755,6 @@ const AdminDashboard: React.FC = () => {
       completedJobsData: filteredCompletedJobsData,
       heldJobs,
       heldJobsData: data.heldJobsData, // Keep the original held jobs data as it's not date-filtered
-      majorHoldJobs,
-      majorHoldJobsData,
     };
   }, [data, dateFilter, customDateRange]);
 
@@ -1718,41 +1808,54 @@ const AdminDashboard: React.FC = () => {
             >
               <AlertTriangle
                 className={`text-red-500 ${
-                  typeof filteredData?.majorHoldJobs === "number" &&
-                  filteredData.majorHoldJobs > 0
-                    ? "animate-pulse"
-                    : ""
+                  majorHoldJobsCount > 0 ? "animate-pulse" : ""
                 }`}
                 size={20}
               />
-              {typeof filteredData?.majorHoldJobs === "number" &&
-                filteredData.majorHoldJobs > 0 && (
-                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
-                    {filteredData.majorHoldJobs}
-                  </span>
-                )}
+              {majorHoldJobsCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-red-600 rounded-full animate-pulse">
+                  {majorHoldJobsCount}
+                </span>
+              )}
             </button>
 
             <Calendar className="text-gray-500" size={20} />
             <span className="text-sm text-gray-600">
-              Last updated: {new Date().toLocaleString()}
+              Last updated:{" "}
+              {lastRefreshedAt
+                ? lastRefreshedAt.toLocaleString()
+                : "—"}
             </span>
           </div>
         </div>
 
-        {/* Date Filter Controls */}
-        <DateFilterComponent
-          dateFilter={dateFilter}
-          setDateFilter={(filter) => {
-            setDateFilter(filter);
-            handleFilterChange(filter);
-          }}
-          customDateRange={customDateRange}
-          setCustomDateRange={(range) => {
-            setCustomDateRange(range);
-            handleFilterChange("custom", range);
-          }}
-        />
+        {/* Date Filter and Refresh */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <DateFilterComponent
+            dateFilter={dateFilter}
+            setDateFilter={(filter) => {
+              setDateFilter(filter);
+              handleFilterChange(filter);
+            }}
+            customDateRange={customDateRange}
+            setCustomDateRange={(range) => {
+              setCustomDateRange(range);
+              handleFilterChange("custom", range);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fetchDashboardData(dateFilter, customDateRange)}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#00AEEF] text-white font-medium hover:bg-[#0099cc] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00AEEF] disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              aria-hidden
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* PDA Announcements */}
@@ -2297,6 +2400,7 @@ const AdminDashboard: React.FC = () => {
         <PDAAnnouncements
           dateFilter={dateFilter}
           customDateRange={customDateRange}
+          refreshTrigger={pdaRefreshTrigger}
         />
       </div>
 

@@ -117,20 +117,16 @@ const BarChartComponent: React.FC<BarChartComponentProps> = ({
   stacked = false,
   className = '',
   maxDataPoints = 100,
-  showValues = false,
-  stepCompletionStats
+  stepCompletionStats,
+  showValues: _showValues = false,
 }) => {
-  const [dateFilter, setDateFilter] = useState<string>("all");
-  const [customDateRange, setCustomDateRange] = useState<{ start: Date | null, end: Date | null }>({
-    start: null,
-    end: null
-  });
-
-   const [popupOpen, setPopupOpen] = useState(false);
+  const [dateFilter] = useState<string>("all");
+  const [customDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [popupOpen, setPopupOpen] = useState(false);
   const [selectedStep, setSelectedStep] = useState<string>('');
 
   // Add click handler
-  const handleBarClick = (event: any, elements: any) => {
+  const handleBarClick = (_event: any, elements: any) => {
     if (elements.length > 0 && stepCompletionStats) {
       const elementIndex = elements[0].index;
       const stepName = optimizedData[elementIndex][xAxisKey] as string;
@@ -153,6 +149,12 @@ const BarChartComponent: React.FC<BarChartComponentProps> = ({
       if (dateFilter === "today") {
         const today = new Date();
         return itemDate.toDateString() === today.toDateString();
+      }
+
+      if (dateFilter === "yesterday") {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return itemDate.toDateString() === yesterday.toDateString();
       }
 
       if (dateFilter === "last7days") {
