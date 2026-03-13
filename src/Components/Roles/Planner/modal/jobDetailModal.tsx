@@ -67,6 +67,12 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  // Keep modal state in sync when parent passes updated job (e.g. after save or continue)
+  useEffect(() => {
+    setEditedJob({ ...job });
+    setImagePreview(job.imageURL || null);
+  }, [job.id, job.nrcJobNo, job.status, job.updatedAt, job.imageURL]);
+
   // Helper to format dates
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A";
@@ -301,37 +307,11 @@ const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
       const result = await response.json();
       if (result.success) {
-        // ✅ Success: Fetch the latest data from the API to ensure consistency
-        console.log("✅ Save successful: Fetching latest data from API");
-
-        try {
-          const fetchResponse = await fetch(
-            `https://nrprod.nrcontainers.com/api/jobs/${encodedJobNo}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                Pragma: "no-cache",
-                Expires: "0",
-              },
-            }
-          );
-
-          if (fetchResponse.ok) {
-            const fetchResult = await fetchResponse.json();
-            if (fetchResult.success && fetchResult.data) {
-              // Update with the actual data from the database
-              const freshJobData = fetchResult.data;
-              console.log("✅ Fresh data from API:", freshJobData);
-              onJobUpdate(freshJobData);
-              setEditedJob(freshJobData);
-            }
-          }
-        } catch (fetchError) {
-          console.warn(
-            "Could not fetch latest data, keeping optimistic update:",
-            fetchError
-          );
+        // Use the PUT response as source of truth; do not follow up with GET,
+        // as GET can return cached/stale data and overwrite the correct update.
+        if (result.data && typeof result.data === "object") {
+          onJobUpdate(result.data);
+          setEditedJob(result.data);
         }
 
         setSaveMessage("Job details updated successfully!");

@@ -1,5 +1,5 @@
 // src/Components/Roles/Planner/startNew_job.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { type Job } from "./Types/job.ts"; // Adjust path as needed
 import JobCard from "./jobCard/JobCard"; // Adjust path as needed
 import JobDetailModal from "./modal/jobDetailModal"; // Adjust path as needed
@@ -12,7 +12,16 @@ const StartNewJob: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null); // For the read-only detail modal
   const [message, setMessage] = useState<string | null>(null); // For success/error messages after update
   const [searchTerm, setSearchTerm] = useState<string>(""); // For search functionality
-  const [filteredJobs, setFilteredJobs] = useState<Job[]>([]); // For filtered search results
+  // Derived from jobs + searchTerm so list updates immediately when a job is updated (e.g. status)
+  const filteredJobs = useMemo(
+    () =>
+      !searchTerm.trim()
+        ? []
+        : jobs.filter((job) =>
+            job.nrcJobNo.toLowerCase().includes(searchTerm.toLowerCase())
+          ),
+    [jobs, searchTerm]
+  );
   const [activeVisible, setActiveVisible] = useState(50);
   const [inactiveVisible, setInactiveVisible] = useState(50);
   const [isRefreshing, setIsRefreshing] = useState(false); // Track refresh state
@@ -97,7 +106,7 @@ const StartNewJob: React.FC = () => {
         throw new Error("Authentication token not found. Please log in.");
       }
 
-      const API_ENDPOINT = `https://nrprod.nrcontainers.com/api/jobs/${nrcJobNo}`;
+      const API_ENDPOINT = `https://nrprod.nrcontainers.com/api/jobs/${encodeURIComponent(nrcJobNo)}`;
       const response = await fetch(API_ENDPOINT, {
         method: "PUT",
         headers: {
@@ -118,8 +127,28 @@ const StartNewJob: React.FC = () => {
       const result = await response.json();
       if (result.success) {
         setMessage(`Job ${nrcJobNo} status updated to ACTIVE successfully!`);
-        // Refresh the jobs list to reflect the change
-        fetchJobs();
+        // Update UI immediately with API response so modal and list reflect change without refresh
+        const mergedJob =
+          result.data && typeof result.data === "object"
+            ? result.data
+            : null;
+        setJobs((prevJobs) =>
+          prevJobs.map((j) =>
+            j.nrcJobNo === nrcJobNo
+              ? mergedJob
+                ? { ...j, ...mergedJob }
+                : { ...j, status: "ACTIVE" }
+              : j
+          )
+        );
+        setSelectedJob((prev) => {
+          if (!prev || prev.nrcJobNo !== nrcJobNo) return prev;
+          return mergedJob
+            ? { ...prev, ...mergedJob }
+            : { ...prev, status: "ACTIVE" };
+        });
+        // Do not call fetchJobs() here: GET /api/jobs can return stale/cached data
+        // and would overwrite the correct PUT response, making the card show INACTIVE again.
       } else {
         throw new Error(result.message || "Failed to update job status.");
       }
@@ -136,23 +165,10 @@ const StartNewJob: React.FC = () => {
     }
   };
 
-  // Function to handle search - optimized with useCallback
-  const handleSearch = useCallback(
-    (searchValue: string) => {
-      setSearchTerm(searchValue);
-
-      if (!searchValue.trim()) {
-        setFilteredJobs([]); // Clear filtered results if search is empty
-        return;
-      }
-
-      const filtered = jobs.filter((job) =>
-        job.nrcJobNo.toLowerCase().includes(searchValue.toLowerCase())
-      );
-      setFilteredJobs(filtered);
-    },
-    [jobs]
-  );
+  // Function to handle search - only updates searchTerm; filteredJobs is derived via useMemo
+  const handleSearch = useCallback((searchValue: string) => {
+    setSearchTerm(searchValue);
+  }, []);
 
   // Function to clear search
   // const clearSearch = () => {
@@ -173,12 +189,6 @@ const StartNewJob: React.FC = () => {
       const value = e.target.value;
       setSearchTerm(value); // Update input immediately for responsive UI
 
-      // Clear results immediately if search is empty
-      if (!value.trim()) {
-        setFilteredJobs([]);
-        return;
-      }
-
       // Small delay for search to avoid excessive filtering on every keystroke
       const timeoutId = setTimeout(() => {
         handleSearch(value);
@@ -192,7 +202,6 @@ const StartNewJob: React.FC = () => {
   // Immediate clear function for instant feedback
   const handleImmediateClear = useCallback(() => {
     setSearchTerm("");
-    setFilteredJobs([]);
   }, []);
 
   useEffect(() => {
