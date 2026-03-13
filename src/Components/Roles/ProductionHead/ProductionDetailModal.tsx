@@ -10,6 +10,7 @@ import {
   Download,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import nrcLogo from "../../../assets/Logo/nrclogo.png";
 import type { JobPlan, ProductionStep } from "./productionService";
 import { useUsers } from "../../../context/UsersContext";
 
@@ -73,6 +74,22 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
       minute: "2-digit",
     });
   };
+
+  const getLogoAsBase64 = (): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => reject(new Error("Failed to load logo"));
+      img.src = nrcLogo;
+    });
 
   const getStepDisplayName = (stepName: string) => {
     switch (stepName) {
@@ -203,11 +220,16 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
       // Header
       drawRect(0, 0, pageWidth, 50, colors.primary);
 
-      // Company logo area
-      drawRect(15, 10, 8, 8, colors.white);
-      pdf.setFontSize(6);
-      pdf.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-      pdf.text("NRC", 19, 15.5, { align: "center" });
+      try {
+        const logoBase64 = await getLogoAsBase64();
+        // Slightly smaller logo for better balance
+        pdf.addImage(logoBase64, "PNG", 16, 9, 18, 18);
+      } catch {
+        drawRect(15, 10, 8, 8, colors.white);
+        pdf.setFontSize(6);
+        pdf.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+        pdf.text("NRC", 19, 15.5, { align: "center" });
+      }
 
       // Company name
       pdf.setFontSize(24);
@@ -250,96 +272,107 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
       yPosition += 35;
       pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
 
-      // Job details
+      // Helper: get display status for PDF (same logic as UI)
+      const getActualStatusForPdf = (s: ProductionStep, jp: JobPlan): string => {
+        const hasAccept = () => {
+          if ((s as any).stepDetails?.data) {
+            const stepDataKey =
+              s.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : s.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : s.stepName.toLowerCase();
+            const stepData = ((s as any).stepDetails.data as any)[stepDataKey];
+            if (stepData && stepData.status === "accept") return true;
+          }
+          if ((s as any).stepDetails?.data?.status === "accept") return true;
+          if ((s as any).stepDetails?.status === "accept") return true;
+          const allStepDetails = (jp as any).allStepDetails;
+          if (allStepDetails) {
+            const stepDetailKey =
+              s.stepName === "FluteLaminateBoardConversion"
+                ? "flutelam"
+                : s.stepName === "SideFlapPasting"
+                ? "sideFlapPasting"
+                : s.stepName.toLowerCase();
+            const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+            if (Array.isArray(stepDetails) && stepDetails.some((d: any) => d.status === "accept")) return true;
+          }
+          return false;
+        };
+        if (s.status === "stop" && hasAccept()) return "completed";
+        if (s.status === "accept") return "completed";
+        return s.status;
+      };
+
+      // Job details – card layout similar to screen (Demand, Job Created, and structure)
       jobs.forEach((jobData, index) => {
         const { jobPlan, step } = jobData;
+        const demandLabel = jobPlan.jobDemand === "medium" ? "Regular" : (jobPlan.jobDemand || "");
 
-        // Check if we need a new page
-        if (yPosition > pageHeight - 80) {
+        if (yPosition > pageHeight - 95) {
           pdf.addPage();
           yPosition = 30;
         }
 
-        // Job card
-        const cardHeight = 45;
+        const cardHeight = 58;
+        const leftX = 20;
+        const rightX = 110;
+        const lineH = 5.5;
+
         drawRect(15, yPosition - 2, pageWidth - 30, cardHeight, colors.white);
         pdf.setDrawColor(colors.light[0], colors.light[1], colors.light[2]);
         pdf.setLineWidth(0.5);
         pdf.rect(15, yPosition - 2, pageWidth - 30, cardHeight, "S");
 
-        // Job number
-        pdf.setFontSize(14);
+        pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.text(`${index + 1}. ${jobPlan.nrcJobNo}`, 20, yPosition + 8);
+        pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        pdf.text(`${index + 1}. ${jobPlan.nrcJobNo}`, leftX, yPosition + 6);
 
-        // Step name and status
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        pdf.text(
-          `Step: ${getStepDisplayName(step.stepName)}`,
-          20,
-          yPosition + 18
-        );
-        // Get actual display status (check for accept)
-        const getActualStatus = (step: ProductionStep, jobPlan: JobPlan): string => {
-          const hasAccept = () => {
-            if ((step as any).stepDetails?.data) {
-              const stepDataKey =
-                step.stepName === "FluteLaminateBoardConversion"
-                  ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
-              if (stepData && stepData.status === "accept") return true;
-            }
-            if ((step as any).stepDetails?.data?.status === "accept") return true;
-            if ((step as any).stepDetails?.status === "accept") return true;
-            const allStepDetails = (jobPlan as any).allStepDetails;
-            if (allStepDetails) {
-              const stepDetailKey =
-                step.stepName === "FluteLaminateBoardConversion"
-                  ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
-              if (Array.isArray(stepDetails) && stepDetails.some((d: any) => d.status === "accept")) return true;
-            }
-            return false;
-          };
-          if (step.status === "stop" && hasAccept()) return "completed";
-          if (step.status === "accept") return "completed";
-          return step.status;
-        };
-        const actualStatus = getActualStatus(step, jobPlan);
+        let row = 1;
+        if ((jobPlan as any).jobPlanCode) {
+          pdf.setFontSize(8);
+          pdf.setFont("helvetica", "normal");
+          pdf.text(`Plan: ${(jobPlan as any).jobPlanCode}`, leftX, yPosition + 6 + row * lineH);
+          row++;
+        }
+        pdf.text(`Demand: ${demandLabel}`, leftX, yPosition + 6 + row * lineH);
+        row++;
+
+        const actualStatus = getActualStatusForPdf(step, jobPlan);
         const displayStatus =
-          actualStatus === "completed" || actualStatus === "accepted" 
-            ? "COMPLETED" 
+          actualStatus === "completed" || actualStatus === "accepted"
+            ? "COMPLETED"
             : actualStatus.toUpperCase();
-        pdf.text(`Status: ${displayStatus}`, 20, yPosition + 26);
+        pdf.text(`Status: ${displayStatus}`, rightX, yPosition + 6 + (row - 1) * lineH);
 
-        // Dates
-        pdf.text(`Started: ${formatDate(step.startDate)}`, 20, yPosition + 34);
+        pdf.setFontSize(8);
+        pdf.text(`Step: ${getStepDisplayName(step.stepName)}`, leftX, yPosition + 6 + row * lineH);
+        row++;
+        pdf.text(`Step No: ${step.stepNo}`, leftX, yPosition + 6 + row * lineH);
+        row++;
+        pdf.text(`Started: ${formatDate(step.startDate)}`, leftX, yPosition + 6 + row * lineH);
         if (step.endDate) {
-          pdf.text(
-            `Completed: ${formatDate(step.endDate)}`,
-            120,
-            yPosition + 34
-          );
+          pdf.text(`Completed: ${formatDate(step.endDate)}`, rightX, yPosition + 6 + row * lineH);
+        }
+        row++;
+        if (step.user) {
+          pdf.text(`Operator: ${getUserName(step.user)}`, leftX, yPosition + 6 + row * lineH);
+        }
+        if (step.machineDetails[0]?.machineCode) {
+          pdf.text(`Machine Code: ${step.machineDetails[0].machineCode}`, rightX, yPosition + 6 + row * lineH);
+        }
+        row++;
+        if (step.machineDetails[0]?.unit) {
+          pdf.text(`Unit: ${step.machineDetails[0].unit}`, leftX, yPosition + 6 + row * lineH);
+          row++;
         }
 
-        // Machine and operator
-        if (step.machineDetails[0]?.machineType) {
-          pdf.text(
-            `Machine: ${step.machineDetails[0].machineType}`,
-            120,
-            yPosition + 18
-          );
-        }
-        if (step.user) {
-          pdf.text(`Operator: ${step.user}`, 120, yPosition + 26);
-        }
+        pdf.setDrawColor(220, 220, 220);
+        pdf.setLineWidth(0.2);
+        pdf.line(leftX, yPosition + 6 + row * lineH - 1, pageWidth - 20, yPosition + 6 + row * lineH - 1);
+        pdf.text(`Job Created: ${formatDate(jobPlan.createdAt)}`, leftX, yPosition + 6 + (row + 0.5) * lineH);
 
         yPosition += cardHeight + 8;
       });
@@ -438,6 +471,11 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
                         <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
                           {jobPlan.nrcJobNo}
                         </h3>
+                        {(jobPlan as any).jobPlanCode && (
+                          <p className="text-[11px] text-gray-600 mb-1 truncate">
+                            Plan: {(jobPlan as any).jobPlanCode}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500 capitalize">
                           Demand:{" "}
                           {jobPlan.jobDemand === "medium"

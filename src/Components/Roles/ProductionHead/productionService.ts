@@ -141,14 +141,14 @@ class ProductionService {
       // Check authentication first
       if (!this.isAuthenticated()) {
         throw new Error(
-          "Authentication token not found or expired. Please log in."
+          "Authentication token not found or expired. Please log in.",
         );
       }
 
       // Warn if token is expiring soon
       if (this.isTokenExpiringSoon()) {
         console.warn(
-          "Warning: Your session will expire soon. Please save your work and log in again."
+          "Warning: Your session will expire soon. Please save your work and log in again.",
         );
       }
 
@@ -305,7 +305,7 @@ class ProductionService {
             step.stepName === "Corrugation" ||
             step.stepName === "FluteLaminateBoardConversion" ||
             step.stepName === "Punching" ||
-            step.stepName === "SideFlapPasting"
+            step.stepName === "SideFlapPasting",
         );
 
         // Count statuses for each step
@@ -340,8 +340,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
             // This is the most direct way to check accept status for each step
@@ -350,10 +350,12 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
+
+              const stepData = ((step as any).stepDetails.data as any)[
+                stepDataKey
+              ];
               if (stepData && stepData.status === "accept") {
                 isCompleted = true;
               }
@@ -366,7 +368,7 @@ class ProductionService {
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 // Check if any step detail has "accept" status
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   isCompleted = true;
@@ -380,23 +382,26 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   isCompleted = true;
                 }
               }
             }
-            
+
             // FOURTH: Check stepDetails.data.status and stepDetails.status (fallback)
             if (!isCompleted) {
-              if ((step as any).stepDetails?.data?.status === "accept" || (step as any).stepDetails?.status === "accept") {
+              if (
+                (step as any).stepDetails?.data?.status === "accept" ||
+                (step as any).stepDetails?.status === "accept"
+              ) {
                 isCompleted = true;
               }
             }
@@ -453,7 +458,7 @@ class ProductionService {
   // Get jobs by step and status
   async getJobsByStepAndStatus(
     stepName: string,
-    status: string
+    status: string,
   ): Promise<
     Array<{
       jobPlan: JobPlan;
@@ -504,15 +509,17 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
+
+              const stepData = ((step as any).stepDetails.data as any)[
+                stepDataKey
+              ];
               if (stepData && stepData.status === "accept") {
                 return true;
               }
             }
-            
+
             // SECOND: Check stepDetails.data.status (fallback)
             if ((step as any).stepDetails?.data?.status === "accept") {
               return true;
@@ -525,8 +532,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -546,8 +553,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -595,8 +602,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             // Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -604,7 +611,7 @@ class ProductionService {
                 allStepDetails[stepDetailKey as keyof typeof allStepDetails];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   displayStep = { ...step, status: "accepted" };
@@ -618,13 +625,13 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   displayStep = { ...step, status: "accepted" };
@@ -691,15 +698,17 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
+
+              const stepData = ((step as any).stepDetails.data as any)[
+                stepDataKey
+              ];
               if (stepData && stepData.status === "accept") {
                 return true;
               }
             }
-            
+
             // SECOND: Check stepDetails.data.status (fallback)
             if ((step as any).stepDetails?.data?.status === "accept") {
               return true;
@@ -712,8 +721,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -733,8 +742,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -782,8 +791,8 @@ class ProductionService {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
 
             // Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -791,7 +800,7 @@ class ProductionService {
                 allStepDetails[stepDetailKey as keyof typeof allStepDetails];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   displayStep = { ...step, status: "accepted" };
@@ -805,13 +814,13 @@ class ProductionService {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
                 const hasAcceptStatus = stepDetails.some(
-                  (detail: any) => detail.status === "accept"
+                  (detail: any) => detail.status === "accept",
                 );
                 if (hasAcceptStatus) {
                   displayStep = { ...step, status: "accepted" };
@@ -847,16 +856,16 @@ class ProductionService {
 
       // Filter and map only the 4 production steps
       const corrugation = jobPlan.steps.filter(
-        (step) => step.stepName === "Corrugation"
+        (step) => step.stepName === "Corrugation",
       );
       const fluteLamination = jobPlan.steps.filter(
-        (step) => step.stepName === "FluteLaminateBoardConversion"
+        (step) => step.stepName === "FluteLaminateBoardConversion",
       );
       const punching = jobPlan.steps.filter(
-        (step) => step.stepName === "Punching"
+        (step) => step.stepName === "Punching",
       );
       const flapPasting = jobPlan.steps.filter(
-        (step) => step.stepName === "SideFlapPasting"
+        (step) => step.stepName === "SideFlapPasting",
       );
 
       return {
@@ -896,7 +905,7 @@ class ProductionService {
               step.stepName === "Corrugation" ||
               step.stepName === "FluteLaminateBoardConversion" ||
               step.stepName === "Punching" ||
-              step.stepName === "SideFlapPasting"
+              step.stepName === "SideFlapPasting",
           );
 
           return {
@@ -910,7 +919,7 @@ class ProductionService {
 
       const term = searchTerm.toLowerCase();
       const filteredJobs = allJobs.filter((job) =>
-        job.nrcJobNo.toLowerCase().includes(term)
+        job.nrcJobNo.toLowerCase().includes(term),
       );
 
       return filteredJobs.map((job) => {
@@ -920,7 +929,7 @@ class ProductionService {
             step.stepName === "Corrugation" ||
             step.stepName === "FluteLaminateBoardConversion" ||
             step.stepName === "Punching" ||
-            step.stepName === "SideFlapPasting"
+            step.stepName === "SideFlapPasting",
         );
 
         return {
@@ -943,7 +952,7 @@ class ProductionService {
       corrugation:
         productionData.corrugation.length > 0
           ? (productionData.corrugation.filter(
-              (step) => step.status === "completed" || step.status === "accept"
+              (step) => step.status === "completed" || step.status === "accept",
             ).length /
               productionData.corrugation.length) *
             100
@@ -951,7 +960,7 @@ class ProductionService {
       fluteLamination:
         productionData.fluteLamination.length > 0
           ? (productionData.fluteLamination.filter(
-              (step) => step.status === "completed" || step.status === "accept"
+              (step) => step.status === "completed" || step.status === "accept",
             ).length /
               productionData.fluteLamination.length) *
             100
@@ -959,7 +968,7 @@ class ProductionService {
       punching:
         productionData.punching.length > 0
           ? (productionData.punching.filter(
-              (step) => step.status === "completed" || step.status === "accept"
+              (step) => step.status === "completed" || step.status === "accept",
             ).length /
               productionData.punching.length) *
             100
@@ -967,7 +976,7 @@ class ProductionService {
       flapPasting:
         productionData.flapPasting.length > 0
           ? (productionData.flapPasting.filter(
-              (step) => step.status === "completed" || step.status === "accept"
+              (step) => step.status === "completed" || step.status === "accept",
             ).length /
               productionData.flapPasting.length) *
             100

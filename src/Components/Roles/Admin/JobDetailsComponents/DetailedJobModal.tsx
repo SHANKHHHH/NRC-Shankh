@@ -9,7 +9,7 @@ import {
   PlayCircle,
 } from "lucide-react";
 import jsPDF from "jspdf";
-import logoImage from "../../../../assets/Login/logo.jpg";
+import logoImage from "../../../../assets/Logo/nrclogo.png";
 import { useUsers } from "../../../../context/UsersContext";
 
 interface Job {
@@ -114,7 +114,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
         canvas.width = img.width;
         canvas.height = img.height;
         ctx?.drawImage(img, 0, 0);
-        const dataURL = canvas.toDataURL("image/jpeg", 0.8);
+        const dataURL = canvas.toDataURL("image/png");
         resolve(dataURL);
       };
       img.onerror = () => reject(new Error("Failed to load logo"));
@@ -184,7 +184,7 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
       // Add NRC Logo - SMALLER
       try {
         const logoBase64 = await getLogoAsBase64();
-        pdf.addImage(logoBase64, "JPEG", 16, yPosition + 1, 20, 10); // Smaller logo
+        pdf.addImage(logoBase64, "PNG", 16, yPosition + 1, 20, 10); // NRC logo
       } catch (error) {
         console.warn("Could not load logo, using text fallback:", error);
         pdf.setFontSize(7); // Reduced font size

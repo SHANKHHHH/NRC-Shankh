@@ -1938,14 +1938,15 @@ const ProductionHeadDashboard: React.FC = () => {
               return false;
             }
             
-            if (status === "start" || status === "in_progress") {
-              // For in progress, include "start" status and "stop" without accept
-              if (step.status === "start") {
-                return true;
-              }
-              if (step.status === "stop" && !hasAcceptStatus()) {
-                return true;
-              }
+            if (status === "start") {
+              // For Start Jobs view, show only true 'start' status steps
+              return step.status === "start";
+            }
+
+            if (status === "in_progress") {
+              // For In Progress view, include 'start' and 'stop' without accept
+              if (step.status === "start") return true;
+              if (step.status === "stop" && !hasAcceptStatus()) return true;
               return false;
             }
             

@@ -12,6 +12,7 @@ import {
   Save,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import nrcLogo from "../../../../assets/Logo/nrclogo.png";
 import SingleJobPlanningModal from "../../Planner/modal/SingleJobPlanningModal";
 
 interface PurchaseOrder {
@@ -97,6 +98,22 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
     return new Date(dateString).toLocaleString("en-GB");
   };
 
+  const getLogoAsBase64 = (): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => reject(new Error("Failed to load logo"));
+      img.src = nrcLogo;
+    });
+
   const generatePDF = async () => {
     if (!po) return;
 
@@ -153,11 +170,15 @@ const PODetailModal: React.FC<PODetailModalProps> = ({
       // Header
       drawRect(0, 0, pageWidth, 50, colors.primary);
 
-      // Company logo area
-      // drawRect(15, 10, 8, 8, colors.white);
-      // pdf.setFontSize(6);
-      // pdf.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-      // pdf.text('NRC', 19, 15.5, { align: 'center' });
+      try {
+        const logoBase64 = await getLogoAsBase64();
+        pdf.addImage(logoBase64, "PNG", 15, 8, 28, 28);
+      } catch {
+        drawRect(15, 10, 8, 8, colors.white);
+        pdf.setFontSize(6);
+        pdf.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+        pdf.text("NRC", 19, 15.5, { align: "center" });
+      }
 
       // Company name
       pdf.setFontSize(24);
