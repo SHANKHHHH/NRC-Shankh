@@ -59,11 +59,11 @@ const sidebarConfig: Record<
     ],
   },
   qc_manager: {
-    displayName: "QC Manager",
+    displayName: "Check/Sort",
     options: [], // No options - only logout available
   },
   qc_head: {
-    displayName: "QC Head",
+    displayName: "QC Manager",
     options: [], // No options - only logout available
   },
   dispatch_manager: {

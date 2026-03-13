@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
-import { roleOptions } from "../UserManagement/types";
+import { roleOptions, getRoleDisplayName } from "../UserManagement/types";
 import {
   filterMachinesByRoles,
   getMachineCategory,
@@ -392,7 +392,10 @@ const CreateNewId: React.FC<CreateNewIdProps> = ({ onClose, onSuccess }) => {
               {/* Selected Roles Display */}
               {selectedRoles.length > 0 && (
                 <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                  <strong>Selected:</strong> {selectedRoles.join(", ")}
+                  <strong>Selected:</strong>{" "}
+                  {selectedRoles
+                    .map((value) => getRoleDisplayName(value))
+                    .join(", ")}
                 </div>
               )}
             </div>
