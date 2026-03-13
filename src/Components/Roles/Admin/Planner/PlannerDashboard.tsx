@@ -2781,17 +2781,15 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ data }) => {
           <div className="mt-6 pt-4 border-t border-gray-200 bg-gray-50 rounded-lg p-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-900">
-                {Math.round(
-                  (chartData.comparisonData.reduce(
-                    (sum, item) => sum + item.completed,
-                    0
-                  ) /
-                    chartData.comparisonData.reduce(
-                      (sum, item) => sum + item.total,
-                      0
-                    )) *
-                    100
-                )}
+                {(() => {
+                  const totalPOs = chartData.comparisonData[0]?.total || 0;
+                  const completedPOs =
+                    chartData.completionData.find(
+                      (item) => item.name === "Completed POs"
+                    )?.value || 0;
+                  if (!totalPOs) return 0;
+                  return Math.round((completedPOs / totalPOs) * 100);
+                })()}
                 %
               </div>
               <div className="text-sm text-gray-600">
