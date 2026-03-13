@@ -152,7 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         {actualUserRole === "admin" && tabValue === "printing" && (
           <PrintingDashboard />
         )}
-        {actualUserRole === "admin" && tabValue === "edit-working-details" && (
+        {tabValue === "edit-working-details" && (
           <EditWorkingDetails />
         )}
 

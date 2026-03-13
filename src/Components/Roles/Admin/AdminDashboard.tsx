@@ -1862,7 +1862,12 @@ const AdminDashboard: React.FC = () => {
 
       {/* Statistics Grid */}
       <StatisticsGrid
-        totalJobs={filteredData?.totalJobs || 0}
+        totalJobs={
+          (filteredData?.plannedJobs || 0) +
+          (filteredData?.inProgressJobs || 0) +
+          (filteredData?.completedJobs || 0) +
+          (filteredData?.heldJobs || 0)
+        }
         completedJobs={filteredData?.completedJobs || 0}
         inProgressJobs={filteredData?.inProgressJobs || 0}
         plannedJobs={filteredData?.plannedJobs || 0}
@@ -1879,7 +1884,8 @@ const AdminDashboard: React.FC = () => {
           return filteredData?.heldJobs || 0;
         })()}
         className="mb-8"
-        onTotalJobsClick={handleTotalJobsClick}
+        // Make Total Job Cards a pure summary (not clickable)
+        onTotalJobsClick={undefined}
         onCompletedJobsClick={handleCompletedJobsClick}
         onInProgressJobsClick={handleInProgressJobsClick}
         onActiveUsersClick={handleActiveUsersClick}
@@ -2347,22 +2353,25 @@ const AdminDashboard: React.FC = () => {
       {/* Job Demand Distribution Pie Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <PieChartComponent
-          data={[
-            {
-              name: "Regular",
-              value: filteredData.jobPlans.filter(
-                (jp) => jp.jobDemand === "medium"
-              ).length,
-              color: colors.warning,
-            },
-            {
-              name: "Urgent",
-              value: filteredData.jobPlans.filter(
-                (jp) => jp.jobDemand === "high"
-              ).length,
-              color: colors.danger,
-            },
-          ]}
+          data={(() => {
+            const nonHeldJobs = filteredData.jobPlans.filter(
+              (jp) => !isMajorHold(jp)
+            );
+            return [
+              {
+                name: "Regular",
+                value: nonHeldJobs.filter((jp) => jp.jobDemand === "medium")
+                  .length,
+                color: colors.warning,
+              },
+              {
+                name: "Urgent",
+                value: nonHeldJobs.filter((jp) => jp.jobDemand === "high")
+                  .length,
+                color: colors.danger,
+              },
+            ];
+          })()}
           title="Job Demand Distribution"
           height={300}
           maxDataPoints={50}

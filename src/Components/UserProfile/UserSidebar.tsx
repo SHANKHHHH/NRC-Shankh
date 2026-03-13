@@ -43,6 +43,7 @@ const sidebarConfig: Record<
       "Job Cards",
       "Create New Job",
       "Start New Job",
+      "Edit Working Details",
     ],
   },
   dispatch_executive: {
@@ -56,6 +57,7 @@ const sidebarConfig: Record<
       "Job Cards",
       "Create New Job",
       "Start New Job",
+      "Edit Working Details",
     ],
   },
   qc_manager: {

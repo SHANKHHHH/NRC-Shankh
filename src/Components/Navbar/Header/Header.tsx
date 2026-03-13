@@ -43,6 +43,7 @@ const sidebarConfig: {
       { label: "Job Cards", tab: "jobs" },
       { label: "Create New Job", tab: "create new job" },
       { label: "Start New Job", tab: "start new job" },
+      { label: "Edit Working Details", tab: "edit-working-details" },
     ],
   },
   production_head: {
@@ -52,6 +53,7 @@ const sidebarConfig: {
       { label: "Job Cards", tab: "jobs" },
       { label: "Create New Job", tab: "create new job" },
       { label: "Start New Job", tab: "start new job" },
+      { label: "Edit Working Details", tab: "edit-working-details" },
     ],
   },
   dispatch_executive: {

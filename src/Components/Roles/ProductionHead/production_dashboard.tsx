@@ -386,6 +386,13 @@ const ProductionHeadDashboard: React.FC = () => {
         startDate = new Date(today);
         endDate = new Date(today);
         break;
+      case "yesterday": {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = new Date(yesterday);
+        endDate = new Date(yesterday);
+        break;
+      }
       case "week":
         // This week (from Monday to Sunday)
         startDate = new Date(today);
@@ -571,8 +578,8 @@ const ProductionHeadDashboard: React.FC = () => {
       }
     });
 
-    // Total includes both in-progress/planned jobs and completed jobs (same as AdminDashboard)
-    const totalJobs = totalJobPlans + completedJobs;
+    // Total jobs for display = planned + in-progress + completed (exclude held)
+    const totalJobs = plannedJobs + inProgressJobs + completedJobs;
 
     return {
       totalJobs,
@@ -2451,13 +2458,18 @@ const ProductionHeadDashboard: React.FC = () => {
           </div>
         ) : (
           <StatisticsGrid
-            totalJobs={filteredJobStats.totalJobs}
+            totalJobs={
+              filteredJobStats.plannedJobs +
+              filteredJobStats.inProgressJobs +
+              filteredJobStats.completedJobs
+            }
             completedJobs={filteredJobStats.completedJobs}
             inProgressJobs={filteredJobStats.inProgressJobs}
             plannedJobs={filteredJobStats.plannedJobs}
             activeUsers={0}
             heldJobs={0}
-            onTotalJobsClick={handleTotalJobsClick}
+            // Total Job Cards: show as summary only (not clickable)
+            onTotalJobsClick={undefined}
             onCompletedJobsClick={handleCompletedJobsClick}
             onInProgressJobsClick={handleInProgressJobsClick}
             onPlannedJobsClick={handlePlannedJobsClick}
@@ -3289,7 +3301,7 @@ const ProductionHeadDashboard: React.FC = () => {
                       Total Jobs
                     </p>
                     <p className="text-3xl font-bold text-green-600">
-                      {filteredAggregatedData?.totalJobs || aggregatedData?.totalJobs || 0}
+                      {filteredJobStats.totalJobs}
                     </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-xl">
