@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   ChartBarIcon,
   ClockIcon,
@@ -69,9 +69,52 @@ interface CompletedJob {
   [key: string]: any;
 }
 
+// Held job from held-machines API (match Admin)
+interface HeldJobStep {
+  stepNo: number;
+  stepName: string;
+  stepStatus?: string;
+  stepSpecificData?: { status?: string };
+  status?: string;
+  [key: string]: any;
+}
+interface HeldJob {
+  jobDetails?: { nrcJobNo: string; [key: string]: any };
+  steps?: HeldJobStep[];
+  [key: string]: any;
+}
+
+function getProductionDashboardCacheKey(
+  filter: DateFilterType,
+  customRange?: { start: string; end: string } | null
+): string {
+  if (filter === "custom" && customRange) {
+    return `custom|${customRange.start}|${customRange.end}`;
+  }
+  return filter;
+}
+
+let productionDashboardCache: {
+  jobPlansData: JobPlanForStats[];
+  completedJobsData: CompletedJob[];
+  heldJobsData: HeldJob[];
+  dateFilter: DateFilterType;
+  customDateRange: { start: string; end: string };
+  cacheKey: string;
+  aggregatedData?: AggregatedProductionData | null;
+  printingDetails?: PrintingDetails[];
+  majorHoldJobsCount?: number;
+} | null = null;
+
 const ProductionHeadDashboard: React.FC = () => {
   const { getUserName } = useUsers();
   const navigate = useNavigate();
+  const location = useLocation();
+  const restoredFromCacheRef = useRef(false);
+  const returnedState = location.state as {
+    dateFilter?: DateFilterType;
+    customDateRange?: { start: string; end: string };
+  } | null;
   const [aggregatedData, setAggregatedData] =
     useState<AggregatedProductionData | null>(null);
   const [selectedJob, setSelectedJob] = useState<string>("");
@@ -147,8 +190,14 @@ const ProductionHeadDashboard: React.FC = () => {
   const [jobPlansData, setJobPlansData] = useState<JobPlanForStats[]>([]);
   const [completedJobsData, setCompletedJobsData] = useState<CompletedJob[]>([]);
 
-  // Date filter state (default to "month")
-  const [dateFilter, setDateFilter] = useState<DateFilterType>("month");
+  // Date filter state (from returned state, cache, or default "month")
+  const [dateFilter, setDateFilter] = useState<DateFilterType>(
+    () =>
+      returnedState?.dateFilter ??
+      productionDashboardCache?.dateFilter ??
+      "month"
+  );
+  const [heldJobsData, setHeldJobsData] = useState<HeldJob[]>([]);
   
   // Printing Details state
   const [printingDetails, setPrintingDetails] = useState<PrintingDetails[]>([]);
@@ -164,18 +213,22 @@ const ProductionHeadDashboard: React.FC = () => {
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
     end: string;
-  }>({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      .toISOString()
-      .split("T")[0],
-    end: new Date(
-      new Date().getFullYear(),
-      new Date().getMonth() + 1,
-      0
-    )
-      .toISOString()
-      .split("T")[0],
-  });
+  }>(
+    () =>
+      returnedState?.customDateRange ??
+      productionDashboardCache?.customDateRange ?? {
+        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          .toISOString()
+          .split("T")[0],
+        end: new Date(
+          new Date().getFullYear(),
+          new Date().getMonth() + 1,
+          0
+        )
+          .toISOString()
+          .split("T")[0],
+      }
+  );
 
   // Major hold jobs count (for blinking icon + navigate to major-hold-jobs)
   const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
@@ -195,20 +248,67 @@ const ProductionHeadDashboard: React.FC = () => {
     checkAuth();
   }, []);
 
-  // Load aggregated production data
+  // Run first: when returning from child pages, restore from cache and skip all data loads below
   useEffect(() => {
+    if (!productionDashboardCache) return;
+    restoredFromCacheRef.current = true;
+    setJobPlansData(productionDashboardCache.jobPlansData);
+    setCompletedJobsData(productionDashboardCache.completedJobsData);
+    setHeldJobsData(productionDashboardCache.heldJobsData);
+    setDateFilter(productionDashboardCache.dateFilter ?? "month");
+    setCustomDateRange(
+      productionDashboardCache.customDateRange ?? {
+        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          .toISOString()
+          .split("T")[0],
+        end: new Date(
+          new Date().getFullYear(),
+          new Date().getMonth() + 1,
+          0
+        )
+          .toISOString()
+          .split("T")[0],
+      }
+    );
+    if (productionDashboardCache.aggregatedData !== undefined) {
+      setAggregatedData(productionDashboardCache.aggregatedData);
+    }
+    if (productionDashboardCache.printingDetails !== undefined) {
+      setPrintingDetails(productionDashboardCache.printingDetails);
+    }
+    if (productionDashboardCache.majorHoldJobsCount !== undefined) {
+      setMajorHoldJobsCount(productionDashboardCache.majorHoldJobsCount);
+    }
+    setIsLoadingJobStats(false);
+    setIsLoadingAggregated(false);
+    setIsLoadingPrintingDetails(false);
+  }, []);
+
+  // Keep cache in sync with selected date filter so "Go to Dashboard" restores the same filter (e.g. yesterday)
+  useEffect(() => {
+    if (productionDashboardCache) {
+      productionDashboardCache.dateFilter = dateFilter;
+      productionDashboardCache.customDateRange = customDateRange;
+      productionDashboardCache.cacheKey = getProductionDashboardCacheKey(
+        dateFilter,
+        customDateRange
+      );
+    }
+  }, [dateFilter, customDateRange]);
+
+  // Load aggregated production data (skip when restored from cache)
+  useEffect(() => {
+    if (restoredFromCacheRef.current) return;
     const loadAggregatedData = async () => {
       if (authStatus?.isAuthenticated) {
         try {
           setIsLoadingAggregated(true);
           setError(null);
           const data = await productionService.getAggregatedProductionData();
-          
-          // Console log the aggregated data
-          console.log("=== AGGREGATED PRODUCTION DATA ===", JSON.stringify(data, null, 2));
-          console.log("=== AGGREGATED PRODUCTION DATA (parsed) ===", data);
-          
           setAggregatedData(data);
+          if (productionDashboardCache) {
+            productionDashboardCache.aggregatedData = data;
+          }
         } catch (error) {
           console.error("Error loading aggregated data:", error);
           setError(
@@ -223,14 +323,18 @@ const ProductionHeadDashboard: React.FC = () => {
     loadAggregatedData();
   }, [authStatus]);
 
-  // Load printing details
+  // Load printing details (skip when restored from cache)
   useEffect(() => {
+    if (restoredFromCacheRef.current) return;
     const loadPrintingDetails = async () => {
       try {
         setIsLoadingPrintingDetails(true);
         setPrintingDetailsError(null);
         const data = await printingService.getAllPrintingDetails();
         setPrintingDetails(data);
+        if (productionDashboardCache) {
+          productionDashboardCache.printingDetails = data;
+        }
       } catch (error) {
         console.error("Error loading printing details:", error);
         setPrintingDetailsError("Failed to load printing details");
@@ -242,8 +346,9 @@ const ProductionHeadDashboard: React.FC = () => {
     loadPrintingDetails();
   }, []);
 
-  // Fetch major hold jobs count (lightweight single API call)
+  // Fetch major hold jobs count (skip when restored from cache)
   useEffect(() => {
+    if (restoredFromCacheRef.current) return;
     const fetchMajorHoldJobsCount = async () => {
       try {
         setIsLoadingMajorHoldJobs(true);
@@ -261,7 +366,11 @@ const ProductionHeadDashboard: React.FC = () => {
           return;
         }
         const json = await response.json();
-        setMajorHoldJobsCount(json.success && typeof json.count === "number" ? json.count : 0);
+        const count = json.success && typeof json.count === "number" ? json.count : 0;
+        setMajorHoldJobsCount(count);
+        if (productionDashboardCache) {
+          productionDashboardCache.majorHoldJobsCount = count;
+        }
       } catch (_) {
         setMajorHoldJobsCount(0);
       } finally {
@@ -1199,163 +1308,166 @@ const ProductionHeadDashboard: React.FC = () => {
     }
   };
 
-  // Load job statistics (total, planned, in progress, completed)
-  useEffect(() => {
-    const loadJobStatistics = async () => {
-      if (authStatus?.isAuthenticated) {
-        try {
-          setIsLoadingJobStats(true);
-          const accessToken = localStorage.getItem("accessToken");
-          if (!accessToken) {
-            throw new Error("Authentication token not found");
-          }
+  const heldJobHasMajorHold = useCallback((heldJob: HeldJob): boolean => {
+    return (
+      heldJob.steps?.some(
+        (step: HeldJobStep) =>
+          (step as any).stepSpecificData?.status === "major_hold" ||
+          (step as any).status === "major_hold"
+      ) ?? false
+    );
+  }, []);
 
-          // Fetch job planning data
-          const jobPlanningResponse = await fetch(
-            `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          );
+  const fetchProductionDashboardData = useCallback(
+    async (filterType?: DateFilterType, customRange?: { start: string; end: string } | null) => {
+      if (!authStatus?.isAuthenticated) return;
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) return;
+      try {
+        setIsLoadingJobStats(true);
+        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
 
-          // Fetch completed jobs data
-          const completedJobsResponse = await fetch(
-            `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/completed-jobs`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
-          );
-
-          let jobPlans: JobPlanForStats[] = [];
-          let completedJobs: CompletedJob[] = [];
-
-          if (jobPlanningResponse.ok) {
-            const jobPlanningResult = await jobPlanningResponse.json();
-            
-            // Console log the complete original JSON from API
-            console.log("=== COMPLETE ORIGINAL JSON - JOB PLANNING API ===", JSON.stringify(jobPlanningResult, null, 2));
-            console.log("=== JOB PLANNING DATA (parsed) ===", jobPlanningResult);
-            
-            if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
-              jobPlans = jobPlanningResult.data;
-              
-              // Console log the job plans array
-              console.log("=== JOB PLANS ARRAY (jobPlans) ===", jobPlans);
-
-              // Fetch step details for each job plan (same as AdminDashboard)
-              const jobPlansWithDetails = await Promise.all(
-                jobPlans.map(async (jobPlan: JobPlanForStats) => {
-                  const stepsWithDetails = await Promise.all(
-                    jobPlan.steps.map(async (step: JobPlanStep) => {
-                      let stepDetails = null;
-                      if (step.status === "start" || step.status === "stop") {
-                        stepDetails = await fetchStepDetails(
-                          step.stepName,
-                          step.id,
-                          accessToken
-                        );
-                      }
-
-                      return {
-                        ...step,
-                        stepDetails: stepDetails || undefined,
-                      };
-                    })
-                  );
-
-                  return {
-                    ...jobPlan,
-                    steps: stepsWithDetails,
-                  };
-                })
-              );
-
-              // Console log the enriched job plans with step details
-              console.log("=== JOB PLANS WITH STEP DETAILS (jobPlansWithDetails) ===", jobPlansWithDetails);
-              
-              setJobPlansData(jobPlansWithDetails);
-              jobPlans = jobPlansWithDetails; // Use the enriched data for calculations
-            }
-          }
-
-          if (completedJobsResponse.ok) {
-            const completedJobsResult = await completedJobsResponse.json();
-            
-            // Console log the complete original JSON from API
-            console.log("=== COMPLETE ORIGINAL JSON - COMPLETED JOBS API ===", JSON.stringify(completedJobsResult, null, 2));
-            console.log("=== COMPLETED JOBS DATA (parsed) ===", completedJobsResult);
-            
-            if (completedJobsResult.success && Array.isArray(completedJobsResult.data)) {
-              completedJobs = completedJobsResult.data;
-              
-              // Console log the completed jobs array
-              console.log("=== COMPLETED JOBS ARRAY (completedJobs) ===", completedJobs);
-              
-              setCompletedJobsData(completedJobs);
-            }
-          }
-
-          // Calculate statistics using getStepActualStatus for accurate categorization
-          let plannedJobs = 0;
-          let inProgressJobs = 0;
-
-          jobPlans.forEach((jobPlan: JobPlanForStats) => {
-            let jobInProgress = false;
-            let jobOnHold = false;
-            let jobCompleted = true;
-
-            jobPlan.steps.forEach((step: JobPlanStep) => {
-              const stepStatus = getStepActualStatus(step);
-
-              if (stepStatus === "hold") {
-                jobOnHold = true;
-                jobCompleted = false;
-              } else if (stepStatus === "completed") {
-                // Continue checking other steps
-              } else if (stepStatus === "in_progress") {
-                jobInProgress = true;
-                jobCompleted = false;
-              } else {
-                jobCompleted = false;
-              }
-            });
-
-            // Categorize job
-            if (jobOnHold) {
-              // Don't count held jobs as in progress or planned
-            } else if (jobInProgress) {
-              inProgressJobs++;
-            } else if (!jobCompleted) {
-              plannedJobs++;
-            }
-          });
-
-          const totalJobs = jobPlans.length + completedJobs.length;
-          const completedJobsCount = completedJobs.length;
-
-          // Note: jobStats will be recalculated by filteredJobStats useMemo
-          // This initial calculation is kept for backward compatibility
-          setJobStats({
-            totalJobs,
-            plannedJobs,
-            inProgressJobs,
-            completedJobs: completedJobsCount,
-          });
-        } catch (error) {
-          console.error("Error loading job statistics:", error);
-          // Don't set error state here to avoid breaking the dashboard
-        } finally {
-          setIsLoadingJobStats(false);
+        // Ensure cache exists early so loadAggregatedData (and others) can attach data when they complete
+        const filter = filterType ?? dateFilter;
+        const range = customRange ?? customDateRange;
+        const cacheKey = getProductionDashboardCacheKey(filter, range);
+        if (!productionDashboardCache) {
+          productionDashboardCache = {
+            jobPlansData: [],
+            completedJobsData: [],
+            heldJobsData: [],
+            dateFilter: filter,
+            customDateRange: range,
+            cacheKey,
+          };
         }
-      }
-    };
 
-    loadJobStatistics();
-  }, [authStatus]);
+        const [jobPlanningResponse, completedJobsResponse, heldMachinesResponse] = await Promise.all([
+          fetch(`${baseUrl}/api/job-planning/`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          fetch(`${baseUrl}/api/completed-jobs`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          fetch(`${baseUrl}/api/job-step-machines/held-machines`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+        ]);
+
+        let heldJobsData: HeldJob[] = [];
+        if (heldMachinesResponse.ok) {
+          const heldMachinesResult = await heldMachinesResponse.json();
+          if (
+            heldMachinesResult.success &&
+            heldMachinesResult.data &&
+            Array.isArray(heldMachinesResult.data.heldJobs)
+          ) {
+            heldJobsData = heldMachinesResult.data.heldJobs;
+          }
+        }
+
+        let jobPlans: JobPlanForStats[] = [];
+        let completedJobs: CompletedJob[] = [];
+
+        if (jobPlanningResponse.ok) {
+          const jobPlanningResult = await jobPlanningResponse.json();
+          if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
+            jobPlans = jobPlanningResult.data;
+            const jobPlansWithDetails = await Promise.all(
+              jobPlans.map(async (jobPlan: JobPlanForStats) => {
+                const stepsWithDetails = await Promise.all(
+                  jobPlan.steps.map(async (step: JobPlanStep) => {
+                    let stepDetails = null;
+                    if (step.status === "start" || step.status === "stop") {
+                      stepDetails = await fetchStepDetails(
+                        step.stepName,
+                        step.id,
+                        accessToken
+                      );
+                    }
+                    return { ...step, stepDetails: stepDetails || undefined };
+                  })
+                );
+                return { ...jobPlan, steps: stepsWithDetails };
+              })
+            );
+            setJobPlansData(jobPlansWithDetails);
+            jobPlans = jobPlansWithDetails;
+          }
+        }
+
+        if (completedJobsResponse.ok) {
+          const completedJobsResult = await completedJobsResponse.json();
+          if (completedJobsResult.success && Array.isArray(completedJobsResult.data)) {
+            completedJobs = completedJobsResult.data;
+            setCompletedJobsData(completedJobs);
+          }
+        }
+
+        setHeldJobsData(heldJobsData);
+
+        let plannedJobs = 0;
+        let inProgressJobs = 0;
+        jobPlans.forEach((jobPlan: JobPlanForStats) => {
+          let jobInProgress = false;
+          let jobOnHold = false;
+          let jobCompleted = true;
+          jobPlan.steps.forEach((step: JobPlanStep) => {
+            const stepStatus = getStepActualStatus(step);
+            if (stepStatus === "hold") {
+              jobOnHold = true;
+              jobCompleted = false;
+            } else if (stepStatus === "in_progress") {
+              jobInProgress = true;
+              jobCompleted = false;
+            } else if (stepStatus !== "completed") {
+              jobCompleted = false;
+            }
+          });
+          if (jobOnHold) {
+            // skip
+          } else if (jobInProgress) {
+            inProgressJobs++;
+          } else if (!jobCompleted) {
+            plannedJobs++;
+          }
+        });
+
+        setJobStats({
+          totalJobs: jobPlans.length + completedJobs.length,
+          plannedJobs,
+          inProgressJobs,
+          completedJobs: completedJobs.length,
+        });
+
+        // Update cache (mutate so aggregatedData/printingDetails/majorHoldJobsCount from other effects are kept)
+        productionDashboardCache.jobPlansData = jobPlans;
+        productionDashboardCache.completedJobsData = completedJobs;
+        productionDashboardCache.heldJobsData = heldJobsData;
+        productionDashboardCache.dateFilter = filter;
+        productionDashboardCache.customDateRange = range;
+        productionDashboardCache.cacheKey = cacheKey;
+      } catch (error) {
+        console.error("Error loading job statistics:", error);
+      } finally {
+        setIsLoadingJobStats(false);
+      }
+    },
+    [authStatus?.isAuthenticated, dateFilter, customDateRange]
+  );
+
+  // When no cache, fetch job/held data (aggregated, printing, major hold are loaded by their own effects)
+  useEffect(() => {
+    if (productionDashboardCache) return;
+    if (!authStatus?.isAuthenticated) return;
+    fetchProductionDashboardData(dateFilter, customDateRange);
+  }, [authStatus?.isAuthenticated]);
+
+  useEffect(() => {
+    if (returnedState) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [returnedState]);
 
   // Click handlers for statistics cards (using filtered data)
   const handleTotalJobsClick = () => {
@@ -1411,6 +1523,22 @@ const ProductionHeadDashboard: React.FC = () => {
       },
     });
   };
+
+  const heldJobsDataExcludingMajorHold = useMemo(
+    () => heldJobsData.filter((h) => !heldJobHasMajorHold(h)),
+    [heldJobsData, heldJobHasMajorHold]
+  );
+  const heldJobsCount = heldJobsDataExcludingMajorHold.length;
+
+  const handleHeldJobsClick = useCallback(() => {
+    navigate("/dashboard/held-jobs", {
+      state: {
+        heldJobs: heldJobsDataExcludingMajorHold,
+        dateFilter: dateFilter,
+        customDateRange: customDateRange,
+      },
+    });
+  }, [navigate, heldJobsDataExcludingMajorHold, dateFilter, customDateRange]);
 
   const handlePlannedJobsClick = () => {
     const plannedJobPlans = filteredJobPlansData.filter((jobPlan) => {
@@ -2355,26 +2483,33 @@ const ProductionHeadDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Refresh Button */}
+              {/* Refresh Button: reload dashboard job data + aggregated data */}
               <button
-                onClick={() => {
-                  const loadAggregatedData = async () => {
-                    try {
-                      setIsLoadingAggregated(true);
-                      setError(null);
-                      const data =
-                        await productionService.getAggregatedProductionData();
-                      setAggregatedData(data);
-                    } catch (error) {
-                      console.error("Error refreshing data:", error);
-                      setError(
-                        "Failed to refresh production data. Please try again."
-                      );
-                    } finally {
-                      setIsLoadingAggregated(false);
+                onClick={async () => {
+                  try {
+                    setIsLoadingAggregated(true);
+                    setError(null);
+                    const [data] = await Promise.all([
+                      productionService.getAggregatedProductionData(),
+                      (async () => {
+                        await fetchProductionDashboardData(
+                          dateFilter,
+                          customDateRange
+                        );
+                      })(),
+                    ]);
+                    setAggregatedData(data);
+                    if (productionDashboardCache) {
+                      productionDashboardCache.aggregatedData = data;
                     }
-                  };
-                  loadAggregatedData();
+                  } catch (error) {
+                    console.error("Error refreshing data:", error);
+                    setError(
+                      "Failed to refresh production data. Please try again."
+                    );
+                  } finally {
+                    setIsLoadingAggregated(false);
+                  }
                 }}
                 className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isLoadingAggregated}
@@ -2461,19 +2596,19 @@ const ProductionHeadDashboard: React.FC = () => {
             totalJobs={
               filteredJobStats.plannedJobs +
               filteredJobStats.inProgressJobs +
-              filteredJobStats.completedJobs
+              filteredJobStats.completedJobs +
+              heldJobsCount
             }
             completedJobs={filteredJobStats.completedJobs}
             inProgressJobs={filteredJobStats.inProgressJobs}
             plannedJobs={filteredJobStats.plannedJobs}
             activeUsers={0}
-            heldJobs={0}
-            // Total Job Cards: show as summary only (not clickable)
+            heldJobs={heldJobsCount}
             onTotalJobsClick={undefined}
             onCompletedJobsClick={handleCompletedJobsClick}
             onInProgressJobsClick={handleInProgressJobsClick}
             onPlannedJobsClick={handlePlannedJobsClick}
-            onHeldJobsClick={() => {}}
+            onHeldJobsClick={handleHeldJobsClick}
           />
         )}
       </div>
