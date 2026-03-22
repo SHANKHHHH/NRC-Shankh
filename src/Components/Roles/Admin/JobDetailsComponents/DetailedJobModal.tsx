@@ -695,6 +695,12 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
             }
           } else if (step.stepName === "DispatchProcess") {
             displayField("Qty", detail.quantity);
+            displayField(
+              "Total Dispatch Qty",
+              detail.totalDispatchedQty ??
+                detail.dispatchedQty ??
+                detail.quantity
+            );
             displayField("Balance", detail.balanceQty);
             displayField("Dispatch No", detail.dispatchNo);
             displayField("Operator", getUserName(detail.operatorName));
@@ -2369,6 +2375,18 @@ const DetailedJobModal: React.FC<DetailedJobModalProps> = ({
                                       {/* Dispatch Process Details */}
                                       {step.stepName === "DispatchProcess" && (
                                         <>
+                                          {(detail.totalDispatchedQty ??
+                                            detail.dispatchedQty) != null && (
+                                            <div className="flex justify-between">
+                                              <span>
+                                                Total Dispatch Qty:
+                                              </span>
+                                              <span>
+                                                {detail.totalDispatchedQty ??
+                                                  detail.dispatchedQty}
+                                              </span>
+                                            </div>
+                                          )}
                                           {detail.quantity && (
                                             <div className="flex justify-between">
                                               <span>Quantity:</span>

@@ -1,3 +1,5 @@
+import { fetchJobsWithPODetailsBatch } from "../../../../utils/fetchJobsWithPODetailsBatch";
+
 export interface PrintingDetails {
   id: number;
   jobNrcJobNo: string;
@@ -270,10 +272,9 @@ class PrintingService {
   }
 
   /**
-   * Enrich printing jobs with deliveryDate (and purchaseOrderId). jobPlanCode comes from
-   * the printing details API response (jobPlanning.jobPlanCode) and is not overwritten here.
-   * - Fetch job planning by nrcJobNo only for purchaseOrderId (used for deliveryDate lookup)
-   * - Then fetch purchase orders by ID to get deliveryDate
+   * Enrich printing jobs with deliveryDate (and purchaseOrderId / jobPlanCode when missing).
+   * Uses POST /api/dashboard/jobs-with-po-details-batch (same as Admin list pages) instead of
+   * 2×N GETs per unique NRC (job-planning + with-po-details), which caused thousands of requests.
    */
   private async enrichWithPlanningInfo(
     printJobs: PrintingDetails[]
@@ -281,11 +282,9 @@ class PrintingService {
     try {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
-        // If not authenticated, just return base list
         return printJobs;
       }
 
-      // Unique job numbers to look up
       const jobNos = Array.from(
         new Set(
           printJobs
@@ -296,99 +295,68 @@ class PrintingService {
 
       if (jobNos.length === 0) return printJobs;
 
-      // Map: nrcJobNo -> { jobPlanCode, purchaseOrderId, deliveryDate }
+      const apiOrigin =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+
+      const poBatch = await fetchJobsWithPODetailsBatch(
+        apiOrigin,
+        accessToken,
+        jobNos
+      );
+
       const planningMap: Record<
         string,
-        { jobPlanCode?: string; purchaseOrderId?: number | null; deliveryDate?: string | null }
+        {
+          jobPlanCode?: string;
+          purchaseOrderId?: number | null;
+          deliveryDate?: string | null;
+        }
       > = {};
 
-      // Fetch job planning for each job number in parallel
-      await Promise.all(
-        jobNos.map(async (jobNo) => {
-          try {
-            const resp = await fetch(
-              `${this.baseUrl}/job-planning/${encodeURIComponent(jobNo)}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
+      for (const jobNo of jobNos) {
+        const row = poBatch[jobNo];
+        if (!row?.jobDetails) continue;
 
-            if (!resp.ok) return;
-            const result = await resp.json();
-            if (!result.success || !result.data) return;
-            const jp = result.data;
+        const jd = row.jobDetails as Record<string, unknown>;
+        const jobPlanCode =
+          (jd.jobPlanCode as string | undefined) ||
+          (jd.jobPlanningDetails &&
+          typeof jd.jobPlanningDetails === "object" &&
+          jd.jobPlanningDetails !== null
+            ? (jd.jobPlanningDetails as { jobPlanCode?: string }).jobPlanCode
+            : undefined);
 
-            const jobPlanCode: string | undefined = jp.jobPlanCode || undefined;
-            const purchaseOrderId: number | null | undefined =
-              jp.purchaseOrderId ?? null;
+        const rawPoId = jd.purchaseOrderId;
+        const purchaseOrderId =
+          typeof rawPoId === "number" ? rawPoId : null;
 
-            planningMap[jobNo] = {
-              jobPlanCode,
-              purchaseOrderId:
-                typeof purchaseOrderId === "number" ? purchaseOrderId : null,
-              deliveryDate: undefined,
-            };
-          } catch (e) {
-            console.warn("Failed to fetch job planning for", jobNo, e);
+        const poList = Array.isArray(row.purchaseOrderDetails)
+          ? row.purchaseOrderDetails
+          : Array.isArray((jd as { purchaseOrders?: unknown[] }).purchaseOrders)
+            ? ((jd as { purchaseOrders: unknown[] }).purchaseOrders as any[])
+            : [];
+
+        let deliveryDate: string | null | undefined = undefined;
+        if (poList.length > 0) {
+          let chosenPO: any = null;
+          if (purchaseOrderId != null) {
+            chosenPO =
+              poList.find((po: any) => po.id === purchaseOrderId) || null;
           }
-        })
-      );
-
-      // SECOND PASS: Fetch job+PO details to derive correct deliveryDate per job
-      await Promise.all(
-        jobNos.map(async (jobNo) => {
-          try {
-            const info = planningMap[jobNo];
-            if (!info) return;
-
-            const resp = await fetch(
-              `${this.baseUrl}/jobs/${encodeURIComponent(jobNo)}/with-po-details`,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-            if (!resp.ok) return;
-            const result = await resp.json();
-            if (!result.success || !result.data) return;
-
-            const data = result.data;
-            const poList = Array.isArray(data.purchaseOrders)
-              ? data.purchaseOrders
-              : [];
-
-            if (poList.length === 0) return;
-
-            // Prefer PO matching purchaseOrderId; fallback to first PO
-            let chosenPO: any | null = null;
-            if (
-              info.purchaseOrderId &&
-              typeof info.purchaseOrderId === "number"
-            ) {
-              chosenPO =
-                poList.find((po: any) => po.id === info.purchaseOrderId) ||
-                null;
-            }
-            if (!chosenPO) {
-              chosenPO = poList[0];
-            }
-
-            if (chosenPO) {
-              planningMap[jobNo].deliveryDate =
-                chosenPO.nrcDeliveryDate || chosenPO.deliveryDate || null;
-            }
-          } catch (e) {
-            console.warn("Failed to fetch job+PO details for", jobNo, e);
+          if (!chosenPO) chosenPO = poList[0];
+          if (chosenPO) {
+            deliveryDate =
+              chosenPO.nrcDeliveryDate || chosenPO.deliveryDate || null;
           }
-        })
-      );
+        }
 
-      // Attach planning info to each printing job. Prefer jobPlanCode from printing details API (already on job).
+        planningMap[jobNo] = {
+          jobPlanCode,
+          purchaseOrderId: purchaseOrderId ?? null,
+          deliveryDate,
+        };
+      }
+
       return printJobs.map((job) => {
         const info = planningMap[job.jobNrcJobNo];
         if (info) {

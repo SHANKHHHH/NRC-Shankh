@@ -5,6 +5,7 @@ import { ArrowLeft, PlayCircle } from "lucide-react";
 import JobSearchBar from "./JobDetailsComponents/JobSearchBar";
 import JobBarsChart from "./JobDetailsComponents/JobBarsChart";
 import DetailedJobModal from "./JobDetailsComponents/DetailedJobModal";
+import { fetchJobsWithPODetailsBatch } from "../../../utils/fetchJobsWithPODetailsBatch";
 interface CompletedJob {
   id: number;
   nrcJobNo: string;
@@ -304,46 +305,6 @@ const InProgressJobs: React.FC = () => {
     };
   };
 
-  // Fetch job details with PO details using the new combined API
-  const fetchJobWithPODetails = async (
-    nrcJobNo: string,
-    accessToken: string
-  ) => {
-    try {
-      const response = await fetch(
-        `https://nrprod.nrcontainers.com/api/jobs/${encodeURIComponent(
-          nrcJobNo
-        )}/with-po-details`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          return {
-            jobDetails: result.data,
-            purchaseOrderDetails: result.data.purchaseOrders || [],
-            poJobPlannings: result.data.poJobPlannings || [],
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching job+PO details for ${nrcJobNo}:`, error);
-    }
-    return {
-      jobDetails: null,
-      purchaseOrderDetails: [],
-      poJobPlannings: [],
-    };
-  };
-
   // Enhanced fetch function with the new combined API
   const fetchInProgressJobsWithDetails = async () => {
     try {
@@ -390,20 +351,22 @@ const InProgressJobs: React.FC = () => {
           )
         );
 
-        // Fetch additional details for each in-progress job using the new combined API
-        const jobsWithDetails = await Promise.all(
-          inProgress.map(async (job: JobPlan) => {
-            const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-              await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-
-            return {
-              ...job,
-              jobDetails,
-              purchaseOrderDetails,
-              poJobPlannings,
-            };
-          })
+        const baseUrl =
+          import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const poBatch = await fetchJobsWithPODetailsBatch(
+          baseUrl,
+          accessToken,
+          inProgress.map((j: JobPlan) => j.nrcJobNo)
         );
+        const jobsWithDetails = inProgress.map((job: JobPlan) => {
+          const po = poBatch[job.nrcJobNo];
+          return {
+            ...job,
+            jobDetails: po?.jobDetails ?? null,
+            purchaseOrderDetails: po?.purchaseOrderDetails ?? [],
+            poJobPlannings: po?.poJobPlannings ?? [],
+          };
+        });
 
         setInProgressJobs(jobsWithDetails);
       } else {
@@ -458,30 +421,30 @@ const InProgressJobs: React.FC = () => {
         }
       }
 
-      const jobsWithDetails = await Promise.all(
-        filteredJobs.map(async (job: JobPlan) => {
-          // Check if job already has complete details to avoid unnecessary API calls
-          if (
-            job.jobDetails &&
-            job.purchaseOrderDetails &&
-            job.poJobPlannings
-          ) {
-            return job;
-          }
-
-          // Fetch complete details using the new combined API
-          const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-            await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-
-          return {
-            ...job,
-            jobDetails: jobDetails || job.jobDetails,
-            purchaseOrderDetails:
-              purchaseOrderDetails || job.purchaseOrderDetails || [],
-            poJobPlannings: poJobPlannings || job.poJobPlannings || [],
-          };
-        })
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const needPo = filteredJobs.filter(
+        (j) =>
+          !j.jobDetails || !j.purchaseOrderDetails || !j.poJobPlannings
       );
+      const poBatch = await fetchJobsWithPODetailsBatch(
+        baseUrl,
+        accessToken,
+        needPo.map((j) => j.nrcJobNo)
+      );
+      const jobsWithDetails = filteredJobs.map((job: JobPlan) => {
+        if (job.jobDetails && job.purchaseOrderDetails && job.poJobPlannings) {
+          return job;
+        }
+        const po = poBatch[job.nrcJobNo];
+        return {
+          ...job,
+          jobDetails: po?.jobDetails ?? job.jobDetails,
+          purchaseOrderDetails:
+            po?.purchaseOrderDetails ?? job.purchaseOrderDetails ?? [],
+          poJobPlannings: po?.poJobPlannings ?? job.poJobPlannings ?? [],
+        };
+      });
 
       setInProgressJobs(jobsWithDetails);
     } catch (err) {

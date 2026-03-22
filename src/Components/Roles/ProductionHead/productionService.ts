@@ -94,6 +94,22 @@ export interface AggregatedProductionData {
       completed: number;
       inProgress: number;
     };
+    printing: {
+      total: number;
+      planned: number;
+      start: number;
+      stop: number;
+      completed: number;
+      inProgress: number;
+    };
+    qualityDept: {
+      total: number;
+      planned: number;
+      start: number;
+      stop: number;
+      completed: number;
+      inProgress: number;
+    };
   };
   overallEfficiency: number;
 }
@@ -284,6 +300,22 @@ class ProductionService {
           completed: 0,
           inProgress: 0,
         },
+        printing: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
+        qualityDept: {
+          total: 0,
+          planned: 0,
+          start: 0,
+          stop: 0,
+          completed: 0,
+          inProgress: 0,
+        },
       };
 
       let totalJobs = 0;
@@ -299,13 +331,15 @@ class ProductionService {
         const allStepDetails =
           completedJob?.allStepDetails || jobPlan.allStepDetails;
 
-        // Filter only the 4 production steps we care about
+        // Filter only the 6 production steps we care about
         const productionSteps = jobPlan.steps.filter(
           (step) =>
             step.stepName === "Corrugation" ||
             step.stepName === "FluteLaminateBoardConversion" ||
             step.stepName === "Punching" ||
-            step.stepName === "SideFlapPasting",
+            step.stepName === "SideFlapPasting" ||
+            step.stepName === "PrintingDetails" ||
+            step.stepName === "QualityDept",
         );
 
         // Count statuses for each step
@@ -326,8 +360,14 @@ class ProductionService {
             case "SideFlapPasting":
               stepKey = "flapPasting";
               break;
+            case "PrintingDetails":
+              stepKey = "printing";
+              break;
+            case "QualityDept":
+              stepKey = "qualityDept";
+              break;
             default:
-              return; // Skip if not one of our 4 steps
+              return; // Skip if not one of our 6 steps
           }
 
           stepSummary[stepKey].total++;
@@ -341,7 +381,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
             // This is the most direct way to check accept status for each step
@@ -351,7 +395,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepData = ((step as any).stepDetails.data as any)[
                 stepDataKey
@@ -383,7 +431,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -510,7 +562,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepData = ((step as any).stepDetails.data as any)[
                 stepDataKey
@@ -533,7 +589,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -554,7 +614,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -603,7 +667,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             // Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -626,7 +694,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -699,7 +771,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepData = ((step as any).stepDetails.data as any)[
                 stepDataKey
@@ -722,7 +798,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             // THIRD: Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -743,7 +823,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
@@ -792,7 +876,11 @@ class ProductionService {
                 ? "flutelam"
                 : step.stepName === "SideFlapPasting"
                   ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             // Check allStepDetails from completed job or jobPlan
             if (allStepDetails) {
@@ -815,7 +903,11 @@ class ProductionService {
                   ? "flutelam"
                   : step.stepName === "SideFlapPasting"
                     ? "sideFlapPasting"
-                    : step.stepName.toLowerCase();
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
 
               const stepDetails = (step as any)[stepDetailProp];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {

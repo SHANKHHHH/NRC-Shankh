@@ -14,6 +14,10 @@ import {
   MagnifyingGlassIcon,
   EyeIcon,
   FunnelIcon,
+  PrinterIcon,
+  CalendarDaysIcon,
+  UserIcon,
+  CurrencyRupeeIcon,
 } from "@heroicons/react/24/outline";
 import { productionService } from "./productionService";
 import type {
@@ -31,6 +35,7 @@ import DateFilterComponent, {
 } from "../Admin/FilterComponents/DateFilterComponent";
 import { printingService } from "../Admin/PrintingManager/printingService";
 import type { PrintingDetails } from "../Admin/PrintingManager/printingService";
+import { fetchStepDetailsBatch } from "../../../utils/dashboardStepDetailsBatch";
 
 // Interface for JobPlanStep (matching AdminDashboard structure)
 interface JobPlanStep {
@@ -69,6 +74,164 @@ interface CompletedJob {
   [key: string]: any;
 }
 
+/** Row shape for “Completed Jobs Summary” (revenue table). */
+interface CompletedJobSummaryRow {
+  id: number;
+  nrcJobNo: string;
+  recordDateIso: string;
+  recordDateDisplay: string;
+  customerName: string;
+  unitLabel: string;
+  dispatchDateIso: string | null;
+  dispatchDateDisplay: string;
+  dispatchQty: number;
+  totalValue: number;
+}
+
+function formatDdMmYyyy(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatInr(value: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+/**
+ * Production **unit** = machine unit from job-plan steps (NR1, delhi, Mk…), same as Admin
+ * `CompletedJobsTable` — NOT purchase order `unit` (often numeric codes like 2100).
+ */
+function extractUnitFromCompletedJobAllSteps(allSteps: unknown): string {
+  if (!Array.isArray(allSteps)) return "N/A";
+  const steps = allSteps as Array<{
+    stepName?: string;
+    machineDetails?: Array<{ unit?: string | null }>;
+  }>;
+  const dispatchStep = steps.find(
+    (s) =>
+      s.stepName === "DispatchProcess" ||
+      s.stepName === "Dispatch"
+  );
+  const u0 = dispatchStep?.machineDetails?.[0]?.unit;
+  if (u0 != null && String(u0).trim() !== "") return String(u0).trim();
+  for (const step of steps) {
+    const u = step?.machineDetails?.[0]?.unit;
+    if (u != null && String(u).trim() !== "") return String(u).trim();
+  }
+  return "N/A";
+}
+
+function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow {
+  const jd = (cj as any).jobDetails ?? {};
+  const po = (cj as any).purchaseOrderDetails;
+  const asd = (cj as any).allStepDetails;
+  const dps = Array.isArray(asd?.dispatchProcess) ? asd.dispatchProcess : [];
+  const allSteps = (cj as any).allSteps;
+
+  const dispatchStepFromPlan = Array.isArray(allSteps)
+    ? (allSteps as { stepName?: string; dispatchProcess?: any }[]).find(
+        (s) =>
+          s.stepName === "DispatchProcess" || s.stepName === "Dispatch"
+      )
+    : undefined;
+
+  /** Match Admin CompletedJobsTable: qty from dispatch step’s process */
+  let dispatchQty = Number(
+    dispatchStepFromPlan?.dispatchProcess?.totalDispatchedQty ??
+      dispatchStepFromPlan?.dispatchProcess?.quantity ??
+      0
+  );
+
+  let bestTs = 0;
+  let dispatchDateIso: string | null = null;
+
+  const dpFromStep = dispatchStepFromPlan?.dispatchProcess;
+  if (dpFromStep) {
+    const raw = dpFromStep.dispatchDate ?? dpFromStep.date;
+    if (raw) {
+      dispatchDateIso =
+        typeof raw === "string" ? raw : new Date(raw).toISOString();
+    }
+  }
+
+  for (const dp of dps) {
+    const raw = dp?.dispatchDate ?? dp?.date;
+    if (raw) {
+      const t = new Date(raw).getTime();
+      if (!isNaN(t) && t >= bestTs) {
+        bestTs = t;
+        if (!dispatchDateIso) {
+          dispatchDateIso =
+            typeof raw === "string" ? raw : new Date(raw).toISOString();
+        }
+      }
+    }
+    if (!dispatchQty) {
+      const q = Number(dp?.quantity ?? dp?.totalDispatchedQty ?? 0);
+      if (q > dispatchQty) dispatchQty = q;
+    }
+  }
+
+  if (!dispatchQty) {
+    dispatchQty =
+      Number(po?.dispatchQuantity ?? 0) ||
+      dps.reduce(
+        (s: number, dp: any) =>
+          s + (Number(dp?.quantity) || Number(dp?.totalDispatchedQty) || 0),
+        0
+      );
+  }
+
+  /** Admin table uses PO delivery date for “Dispatch Date” column when showing schedule */
+  if (!dispatchDateIso && po?.deliveryDate) {
+    dispatchDateIso =
+      typeof po.deliveryDate === "string"
+        ? po.deliveryDate
+        : new Date(po.deliveryDate).toISOString();
+  }
+  if (!dispatchDateIso && po?.dispatchDate) {
+    dispatchDateIso =
+      typeof po.dispatchDate === "string"
+        ? po.dispatchDate
+        : new Date(po.dispatchDate).toISOString();
+  }
+
+  const rate = Number(jd.latestRate ?? 0);
+  const totalValue =
+    rate > 0 && dispatchQty > 0 ? rate * dispatchQty : 0;
+
+  const customerName =
+    String(jd.customerName ?? po?.customer ?? "").trim() || "—";
+  const unitLabel = extractUnitFromCompletedJobAllSteps(allSteps);
+
+  const completedAt = cj.completedAt
+    ? new Date(cj.completedAt).toISOString()
+    : new Date().toISOString();
+
+  return {
+    id: cj.id,
+    nrcJobNo: cj.nrcJobNo,
+    recordDateIso: completedAt,
+    recordDateDisplay: formatDdMmYyyy(completedAt),
+    customerName,
+    unitLabel,
+    dispatchDateIso,
+    dispatchDateDisplay: formatDdMmYyyy(dispatchDateIso),
+    dispatchQty,
+    totalValue,
+  };
+}
+
 // Held job from held-machines API (match Admin)
 interface HeldJobStep {
   stepNo: number;
@@ -92,6 +255,15 @@ function getProductionDashboardCacheKey(
     return `custom|${customRange.start}|${customRange.end}`;
   }
   return filter;
+}
+
+/** Job-plan API may use "Flap Pasting" or "FlapPasting" instead of "SideFlapPasting" (same as Admin). */
+function isFlapPastingStepName(name: string): boolean {
+  return (
+    name === "SideFlapPasting" ||
+    name === "Flap Pasting" ||
+    name === "FlapPasting"
+  );
 }
 
 let productionDashboardCache: {
@@ -209,7 +381,18 @@ const ProductionHeadDashboard: React.FC = () => {
   const [printingDetailsError, setPrintingDetailsError] = useState<string | null>(null);
   const [printingDetailsSearchTerm, setPrintingDetailsSearchTerm] = useState("");
   const [printingDetailsStatusFilter, setPrintingDetailsStatusFilter] = useState<string>("");
-  
+
+  /** Completed Jobs Summary (below KPI cards): local filters + sort */
+  const [completedSummaryDateFilter, setCompletedSummaryDateFilter] = useState("");
+  const [completedSummaryCustomerFilter, setCompletedSummaryCustomerFilter] =
+    useState("");
+  const [completedSummaryUnitFilter, setCompletedSummaryUnitFilter] =
+    useState("");
+  const [completedSummarySort, setCompletedSummarySort] = useState<{
+    key: keyof CompletedJobSummaryRow;
+    dir: "asc" | "desc";
+  }>({ key: "recordDateIso", dir: "desc" });
+
   const [customDateRange, setCustomDateRange] = useState<{
     start: string;
     end: string;
@@ -232,7 +415,6 @@ const ProductionHeadDashboard: React.FC = () => {
 
   // Major hold jobs count (for blinking icon + navigate to major-hold-jobs)
   const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
-  const [isLoadingMajorHoldJobs, setIsLoadingMajorHoldJobs] = useState(false);
 
   // Check authentication status
   useEffect(() => {
@@ -296,32 +478,10 @@ const ProductionHeadDashboard: React.FC = () => {
     }
   }, [dateFilter, customDateRange]);
 
-  // Load aggregated production data (skip when restored from cache)
-  useEffect(() => {
-    if (restoredFromCacheRef.current) return;
-    const loadAggregatedData = async () => {
-      if (authStatus?.isAuthenticated) {
-        try {
-          setIsLoadingAggregated(true);
-          setError(null);
-          const data = await productionService.getAggregatedProductionData();
-          setAggregatedData(data);
-          if (productionDashboardCache) {
-            productionDashboardCache.aggregatedData = data;
-          }
-        } catch (error) {
-          console.error("Error loading aggregated data:", error);
-          setError(
-            "Failed to load production overview data. Please try again."
-          );
-        } finally {
-          setIsLoadingAggregated(false);
-        }
-      }
-    };
-
-    loadAggregatedData();
-  }, [authStatus]);
+  // Aggregated production data was previously fetched from a separate API.
+  // We now derive the Production Steps Status Overview entirely from the
+  // same job planning + completed jobs data used for the Planned/In Progress/Completed cards.
+  // (No separate aggregated API call is needed anymore.)
 
   // Load printing details (skip when restored from cache)
   useEffect(() => {
@@ -346,39 +506,7 @@ const ProductionHeadDashboard: React.FC = () => {
     loadPrintingDetails();
   }, []);
 
-  // Fetch major hold jobs count (skip when restored from cache)
-  useEffect(() => {
-    if (restoredFromCacheRef.current) return;
-    const fetchMajorHoldJobsCount = async () => {
-      try {
-        setIsLoadingMajorHoldJobs(true);
-        const accessToken = localStorage.getItem("accessToken");
-        if (!accessToken) {
-          setMajorHoldJobsCount(0);
-          return;
-        }
-        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
-        const response = await fetch(`${baseUrl}/api/job-planning/major-hold/count`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!response.ok) {
-          setMajorHoldJobsCount(0);
-          return;
-        }
-        const json = await response.json();
-        const count = json.success && typeof json.count === "number" ? json.count : 0;
-        setMajorHoldJobsCount(count);
-        if (productionDashboardCache) {
-          productionDashboardCache.majorHoldJobsCount = count;
-        }
-      } catch (_) {
-        setMajorHoldJobsCount(0);
-      } finally {
-        setIsLoadingMajorHoldJobs(false);
-      }
-    };
-    fetchMajorHoldJobsCount();
-  }, []);
+  // Major hold count is loaded with fetchProductionDashboardData via /api/dashboard/role-bundle
 
   // Helper function to get step actual status (same as AdminDashboard)
   const getStepActualStatus = (
@@ -584,124 +712,220 @@ const ProductionHeadDashboard: React.FC = () => {
     return checkDate >= start && checkDate <= end;
   };
 
-  // Filter job plans and completed jobs based on date filter
-  const filteredJobPlansData = useMemo(() => {
-    if (!dateFilter) return jobPlansData;
+  // Apply the SAME date filter to printing details list (so it matches the dashboard cards)
+  const filteredPrintingDetails = useMemo(() => {
+    if (!dateFilter) return printingDetails;
 
     const dateRange = getDateRange(dateFilter, customDateRange);
-    if (!dateRange) return jobPlansData;
+    if (!dateRange) return printingDetails;
 
     const { startDate, endDate } = dateRange;
+    return printingDetails.filter((p) => {
+      const byMainDate =
+        p.date != null &&
+        p.date !== "" &&
+        isDateInRange(p.date, startDate, endDate);
+      const del = p.deliveryDate;
+      const byDelivery =
+        del != null &&
+        del !== "" &&
+        isDateInRange(del, startDate, endDate);
+      return byMainDate || byDelivery;
+    });
+  }, [printingDetails, dateFilter, customDateRange]);
 
-    // Get step activity date from step.updatedAt, stepDetails.updatedAt, or startDate
-    const getStepActivityDate = (step: any): Date | null => {
-      const raw =
-        (step as any).updatedAt ||
-        (step.stepDetails && step.stepDetails.updatedAt) ||
-        (step as any).startDate;
-      if (!raw) return null;
-      const d = new Date(raw);
-      return isNaN(d.getTime()) ? null : d;
-    };
+  // Single pipeline: date filter + categorization (mirror Admin so card counts match exactly)
+  const dashboardFiltered = useMemo(() => {
+    let filteredJobPlans: JobPlanForStats[] = jobPlansData;
+    let filteredCompleted: CompletedJob[] = completedJobsData;
 
-    return jobPlansData.filter((jobPlan) => {
-      const hasRecentStepActivity = jobPlan.steps.some((step) => {
-        const stepUpdateDate = getStepActivityDate(step);
-        if (!stepUpdateDate) return false;
-        return isDateInRange(stepUpdateDate, startDate, endDate);
-      });
-
-      if (!hasRecentStepActivity) {
-        // Fallback: use job plan updatedAt when available, else createdAt
-        const jobTimestamp = (jobPlan as any).updatedAt ?? (jobPlan as any).createdAt ?? Date.now();
-        const jobDate = new Date(jobTimestamp);
-        return isDateInRange(jobDate, startDate, endDate);
+    if (dateFilter) {
+      const dateRange = getDateRange(dateFilter, customDateRange);
+      if (dateRange) {
+        const { startDate, endDate } = dateRange;
+        const getStepActivityDate = (step: any): Date | null => {
+          const raw =
+            step.updatedAt ||
+            // ProductionHead wraps stepDetails as { data: <stepDetails> }
+            // while other places may store updatedAt directly under stepDetails.
+            (step.stepDetails && (step.stepDetails.updatedAt ?? step.stepDetails.data?.updatedAt)) ||
+            step.startDate;
+          if (!raw) return null;
+          const d = new Date(raw);
+          return isNaN(d.getTime()) ? null : d;
+        };
+        filteredJobPlans = jobPlansData.filter((jobPlan) => {
+          const hasRecentStepActivity = jobPlan.steps.some((step) => {
+            const stepUpdateDate = getStepActivityDate(step);
+            if (!stepUpdateDate) return false;
+            return isDateInRange(stepUpdateDate, startDate, endDate);
+          });
+          if (!hasRecentStepActivity) {
+            const jobTimestamp = (jobPlan as any).updatedAt ?? (jobPlan as any).createdAt;
+            if (!jobTimestamp) return false;
+            const jobDate = new Date(jobTimestamp);
+            return isDateInRange(jobDate, startDate, endDate);
+          }
+          return hasRecentStepActivity;
+        });
+        filteredCompleted = completedJobsData.filter((completedJob) => {
+          const completedAt = completedJob.completedAt;
+          if (!completedAt) return false;
+          return isDateInRange(completedAt, startDate, endDate);
+        });
       }
+    }
 
-      return hasRecentStepActivity;
-    });
-  }, [jobPlansData, dateFilter, customDateRange]);
+    const plannedJobPlans: JobPlanForStats[] = [];
+    const inProgressJobPlans: JobPlanForStats[] = [];
+    const uniqueUsers = new Set<string>();
 
-  const filteredCompletedJobsData = useMemo(() => {
-    if (!dateFilter) return completedJobsData;
-
-    const dateRange = getDateRange(dateFilter, customDateRange);
-    if (!dateRange) return completedJobsData;
-
-    const { startDate, endDate } = dateRange;
-
-    return completedJobsData.filter((completedJob) => {
-      const completedAt = completedJob.completedAt;
-      if (!completedAt) return false;
-      return isDateInRange(completedAt, startDate, endDate);
-    });
-  }, [completedJobsData, dateFilter, customDateRange]);
-
-  // Recalculate job statistics based on filtered data - use the SAME logic as AdminDashboard
-  const filteredJobStats = useMemo(() => {
-    // Count completed jobs from the completed jobs API (same as AdminDashboard)
-    const completedJobs = filteredCompletedJobsData.length;
-    
-    // Count jobs from job planning API (these are in progress or planned)
-    const totalJobPlans = filteredJobPlansData.length;
-    let inProgressJobs = 0;
-    let plannedJobs = 0;
-
-    // Process each job plan using the EXACT same logic as AdminDashboard
-    filteredJobPlansData.forEach((jobPlan: JobPlanForStats) => {
+    filteredJobPlans.forEach((jobPlan: JobPlanForStats) => {
       let jobCompleted = true;
       let jobInProgress = false;
       let jobOnHold = false;
-
       jobPlan.steps.forEach((step: JobPlanStep) => {
-        // Use helper function to get actual step status (same as AdminDashboard)
+        if (step.user) uniqueUsers.add(step.user);
         const stepStatus = getStepActualStatus(step);
-
         if (stepStatus === "hold") {
           jobOnHold = true;
           jobCompleted = false;
         } else if (stepStatus === "completed") {
-          // This step is completed
+          // completed
         } else if (stepStatus === "in_progress") {
-          // This step is in progress (only if not on hold)
           jobInProgress = true;
           jobCompleted = false;
         } else {
-          // This step is planned (not started)
           jobCompleted = false;
         }
       });
-
-      // 🔥 FIXED: Use the exact same job categorization logic as AdminDashboard
       if (jobCompleted) {
-        // This job is completed, but we're not counting it here since it comes from completed jobs API
-        // NOTE: This case should not happen for job plans
-      }
-      // Don't increment heldJobs here - we use the count from the API
-      if (jobOnHold) {
-        // Job is on hold - don't count it as in progress or planned
+        // completed from API
+      } else if (jobOnHold) {
+        // don't count
       } else if (jobInProgress) {
-        inProgressJobs++;
+        inProgressJobPlans.push(jobPlan);
       } else {
-        plannedJobs++;
+        plannedJobPlans.push(jobPlan);
       }
     });
 
-    // Total jobs for display = planned + in-progress + completed (exclude held)
+    const completedJobs = filteredCompleted.length;
+    const plannedJobs = plannedJobPlans.length;
+    const inProgressJobs = inProgressJobPlans.length;
     const totalJobs = plannedJobs + inProgressJobs + completedJobs;
 
     return {
-      totalJobs,
+      filteredJobPlansData: filteredJobPlans,
+      filteredCompletedJobsData: filteredCompleted,
+      plannedJobPlans,
+      inProgressJobPlans,
       plannedJobs,
       inProgressJobs,
       completedJobs,
+      totalJobs,
+      activeUsers: uniqueUsers.size,
     };
-  }, [filteredJobPlansData, filteredCompletedJobsData]);
+  }, [jobPlansData, completedJobsData, dateFilter, customDateRange]);
+
+  const filteredJobPlansData = dashboardFiltered.filteredJobPlansData;
+  const filteredCompletedJobsData = dashboardFiltered.filteredCompletedJobsData;
+  const filteredJobStats = {
+    totalJobs: dashboardFiltered.totalJobs,
+    plannedJobs: dashboardFiltered.plannedJobs,
+    inProgressJobs: dashboardFiltered.inProgressJobs,
+    completedJobs: dashboardFiltered.completedJobs,
+    activeUsers: dashboardFiltered.activeUsers,
+  };
+
+  /** Completed Jobs Summary table: same date-filtered completed jobs as KPI “Completed” */
+  const completedJobsSummaryRows = useMemo(
+    () => filteredCompletedJobsData.map(extractCompletedJobSummaryRow),
+    [filteredCompletedJobsData]
+  );
+
+  const completedJobsSummaryFilteredSorted = useMemo(() => {
+    let rows = completedJobsSummaryRows;
+    const df = completedSummaryDateFilter.trim().toLowerCase();
+    const cf = completedSummaryCustomerFilter.trim().toLowerCase();
+    const uf = completedSummaryUnitFilter.trim().toLowerCase();
+    if (df) {
+      rows = rows.filter((r) =>
+        `${r.recordDateDisplay} ${r.recordDateIso} ${r.dispatchDateDisplay}`
+          .toLowerCase()
+          .includes(df)
+      );
+    }
+    if (cf) {
+      rows = rows.filter((r) =>
+        r.customerName.toLowerCase().includes(cf)
+      );
+    }
+    if (uf) {
+      rows = rows.filter((r) =>
+        r.unitLabel.toLowerCase().includes(uf)
+      );
+    }
+
+    const { key, dir } = completedSummarySort;
+    const mul = dir === "asc" ? 1 : -1;
+    const sortKey = key as keyof CompletedJobSummaryRow;
+    return [...rows].sort((a, b) => {
+      if (sortKey === "dispatchDateIso" || sortKey === "recordDateIso") {
+        const ta = a[sortKey]
+          ? new Date(a[sortKey] as string).getTime()
+          : 0;
+        const tb = b[sortKey]
+          ? new Date(b[sortKey] as string).getTime()
+          : 0;
+        const aMissing = !a[sortKey];
+        const bMissing = !b[sortKey];
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1 * mul;
+        if (bMissing) return -1 * mul;
+        return (ta - tb) * mul;
+      }
+      const va = a[sortKey];
+      const vb = b[sortKey];
+      if (typeof va === "number" && typeof vb === "number") {
+        return (va - vb) * mul;
+      }
+      return (
+        String(va ?? "").localeCompare(String(vb ?? ""), undefined, {
+          sensitivity: "base",
+        }) * mul
+      );
+    });
+  }, [
+    completedJobsSummaryRows,
+    completedSummaryDateFilter,
+    completedSummaryCustomerFilter,
+    completedSummaryUnitFilter,
+    completedSummarySort,
+  ]);
+
+  const completedJobsSummaryTotalRevenue = useMemo(
+    () =>
+      completedJobsSummaryFilteredSorted.reduce(
+        (s, r) => s + (Number.isFinite(r.totalValue) ? r.totalValue : 0),
+        0
+      ),
+    [completedJobsSummaryFilteredSorted]
+  );
+
+  const handleCompletedSummarySort = useCallback(
+    (key: keyof CompletedJobSummaryRow) => {
+      setCompletedSummarySort((prev) =>
+        prev.key === key
+          ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+          : { key, dir: "desc" }
+      );
+    },
+    []
+  );
 
   // Calculate filtered aggregated data based on filtered job plans
   const filteredAggregatedData = useMemo(() => {
-    if (!aggregatedData) return null;
-
     // Create a map of completed jobs by nrcJobNo
     const completedJobsMap = new Map<string, any>();
     filteredCompletedJobsData.forEach((job: any) => {
@@ -710,6 +934,20 @@ const ProductionHeadDashboard: React.FC = () => {
 
     // Get date range for filtering steps individually
     const dateRange = getDateRange(dateFilter, customDateRange);
+
+    /**
+     * Printing Details table shows "Printed" when printing-details row has status accept.
+     * Job-plan step can still be "start" until workflow moves — count those as printing completed so
+     * overview matches the Printing Details list (e.g. 13 Printed vs 12 completed).
+     */
+    const printingStepIdsMarkedPrinted = new Set<number>();
+    filteredPrintingDetails.forEach((p) => {
+      if (p.status !== "accept") return;
+      const jid = Number((p as { jobStepId?: number | string }).jobStepId);
+      if (Number.isFinite(jid) && jid > 0) {
+        printingStepIdsMarkedPrinted.add(jid);
+      }
+    });
 
     // Initialize counters for each step
     const stepSummary = {
@@ -745,6 +983,22 @@ const ProductionHeadDashboard: React.FC = () => {
         completed: 0,
         inProgress: 0,
       },
+      printing: {
+        total: 0,
+        planned: 0,
+        start: 0,
+        stop: 0,
+        completed: 0,
+        inProgress: 0,
+      },
+      qualityDept: {
+        total: 0,
+        planned: 0,
+        start: 0,
+        stop: 0,
+        completed: 0,
+        inProgress: 0,
+      },
     };
 
     let totalJobs = 0;
@@ -758,6 +1012,23 @@ const ProductionHeadDashboard: React.FC = () => {
       stepStatus: string;
       stepActualStatus: string;
     }> = [];
+
+    // Keep exact completed jobs per step so cards and modals use the same data
+    const completedJobsByStep: {
+      corrugation: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+      fluteLamination: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+      punching: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+      flapPasting: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+      printing: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+      qualityDept: Array<{ jobPlan: JobPlan; step: ProductionStep }>;
+    } = {
+      corrugation: [],
+      fluteLamination: [],
+      punching: [],
+      flapPasting: [],
+      printing: [],
+      qualityDept: [],
+    };
 
     // 🔥 DEBUG: Collect all Corrugation completed jobs
     const corrugationCompletedJobs: Array<{
@@ -788,13 +1059,15 @@ const ProductionHeadDashboard: React.FC = () => {
       const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
       const allStepDetails = (completedJob as any)?.allStepDetails || (jobPlan as any).allStepDetails;
 
-      // Filter only the 4 production steps
+      // Filter only the 6 production steps
       const productionSteps = jobPlan.steps.filter(
         (step) =>
           step.stepName === "Corrugation" ||
           step.stepName === "FluteLaminateBoardConversion" ||
           step.stepName === "Punching" ||
-          step.stepName === "SideFlapPasting"
+          isFlapPastingStepName(step.stepName) ||
+          step.stepName === "PrintingDetails" ||
+          step.stepName === "QualityDept"
       );
 
       // Count statuses for each step - use the SAME logic as productionService.getAggregatedProductionData
@@ -853,12 +1126,55 @@ const ProductionHeadDashboard: React.FC = () => {
               stepInDateRange = true;
             }
           }
+
+          // Flap / Printing often lack step.updatedAt; job-level update still reflects work in range (esp. "today")
+          if (
+            !stepInDateRange &&
+            (jobPlan as any).updatedAt &&
+            (isFlapPastingStepName(step.stepName) ||
+              step.stepName === "PrintingDetails")
+          ) {
+            const jobUpd = new Date((jobPlan as any).updatedAt);
+            if (
+              !isNaN(jobUpd.getTime()) &&
+              isDateInRange(jobUpd, startDate, endDate)
+            ) {
+              stepInDateRange = true;
+            }
+          }
+
+          // Flap pasting: completion date in step payload (same idea as Corrugation)
+          if (
+            !stepInDateRange &&
+            isFlapPastingStepName(step.stepName) &&
+            (step.stepDetails as any)?.data?.sideFlapPasting
+          ) {
+            const sf = (step.stepDetails as any).data.sideFlapPasting;
+            if (sf?.date) {
+              const flapDate = new Date(sf.date);
+              if (
+                !isNaN(flapDate.getTime()) &&
+                isDateInRange(flapDate, startDate, endDate)
+              ) {
+                stepInDateRange = true;
+              }
+            }
+          }
           
           // Fall back to job creation date if step dates are not available
           if (!stepInDateRange) {
             const jobDate = new Date((jobPlan as any).createdAt || Date.now());
             stepInDateRange = isDateInRange(jobDate, startDate, endDate);
           }
+        }
+
+        // Printing row is in filtered printing list but job-plan step has no in-range timestamps yet
+        if (
+          dateRange &&
+          step.stepName === "PrintingDetails" &&
+          printingStepIdsMarkedPrinted.has(Number(step.id))
+        ) {
+          stepInDateRange = true;
         }
         
         // Skip this step if it's not in the date range
@@ -879,7 +1195,15 @@ const ProductionHeadDashboard: React.FC = () => {
             stepKey = "punching";
             break;
           case "SideFlapPasting":
+          case "Flap Pasting":
+          case "FlapPasting":
             stepKey = "flapPasting";
+            break;
+          case "PrintingDetails":
+            stepKey = "printing";
+            break;
+          case "QualityDept":
+            stepKey = "qualityDept";
             break;
           default:
             return;
@@ -895,8 +1219,12 @@ const ProductionHeadDashboard: React.FC = () => {
           const stepDetailKey =
             step.stepName === "FluteLaminateBoardConversion"
               ? "flutelam"
-              : step.stepName === "SideFlapPasting"
+              : isFlapPastingStepName(step.stepName)
               ? "sideFlapPasting"
+              : step.stepName === "PrintingDetails"
+              ? "printingDetails"
+              : step.stepName === "QualityDept"
+              ? "qualityDept"
               : step.stepName.toLowerCase();
 
           // Check allStepDetails from completed job or jobPlan
@@ -919,8 +1247,12 @@ const ProductionHeadDashboard: React.FC = () => {
             const stepDetailProp =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
-                : step.stepName === "SideFlapPasting"
+                : isFlapPastingStepName(step.stepName)
                 ? "sideFlapPasting"
+                : step.stepName === "PrintingDetails"
+                ? "printingDetails"
+                : step.stepName === "QualityDept"
+                ? "qualityDept"
                 : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
@@ -941,8 +1273,12 @@ const ProductionHeadDashboard: React.FC = () => {
             const stepDataKey =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
-                : step.stepName === "SideFlapPasting"
+                : isFlapPastingStepName(step.stepName)
                 ? "sideFlapPasting"
+                : step.stepName === "PrintingDetails"
+                ? "printingDetails"
+                : step.stepName === "QualityDept"
+                ? "qualityDept"
                 : step.stepName.toLowerCase();
             
             // Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
@@ -963,6 +1299,14 @@ const ProductionHeadDashboard: React.FC = () => {
               isCompleted = true;
             }
           }
+        }
+
+        // Align with Printing Details: "Printed" = printing-details API status accept (even if step still "start")
+        if (
+          step.stepName === "PrintingDetails" &&
+          printingStepIdsMarkedPrinted.has(Number(step.id))
+        ) {
+          isCompleted = true;
         }
 
         // Count statuses - match productionService.getAggregatedProductionData logic exactly
@@ -1005,16 +1349,35 @@ const ProductionHeadDashboard: React.FC = () => {
             });
           }
         } else if (step.status === "start") {
-          stepSummary[stepKey].start++;
-          stepSummary[stepKey].inProgress++;
-          finalStatus = "in_progress";
+          if (
+            step.stepName === "PrintingDetails" &&
+            printingStepIdsMarkedPrinted.has(Number(step.id))
+          ) {
+            stepSummary[stepKey].completed++;
+            completedSteps++;
+            finalStatus = "completed";
+            completedJobsByStep[stepKey].push({
+              jobPlan: jobPlan as JobPlan,
+              step: step as unknown as ProductionStep,
+            });
+          } else {
+            stepSummary[stepKey].start++;
+            stepSummary[stepKey].inProgress++;
+            finalStatus = "in_progress";
+          }
         } else if (step.status === "stop") {
           if (isCompleted) {
             // If step detail has "accept", count as completed (NOT as stop)
             stepSummary[stepKey].completed++;
             completedSteps++;
             finalStatus = "completed";
-            
+
+            // Track this exact completed job for the detail modal
+            completedJobsByStep[stepKey].push({
+              jobPlan: jobPlan as JobPlan,
+              step: step as unknown as ProductionStep,
+            });
+
             // 🔥 DEBUG: Collect Corrugation completed jobs (stop with accept)
             if (stepKey === "corrugation") {
               corrugationCompletedJobs.push({
@@ -1059,7 +1422,13 @@ const ProductionHeadDashboard: React.FC = () => {
           stepSummary[stepKey].completed++;
           completedSteps++;
           finalStatus = "completed";
-          
+
+          // Track this exact completed job for the detail modal
+          completedJobsByStep[stepKey].push({
+            jobPlan: jobPlan as JobPlan,
+            step: step as unknown as ProductionStep,
+          });
+
           // 🔥 DEBUG: Collect Corrugation completed jobs (accept status)
           if (stepKey === "corrugation") {
             corrugationCompletedJobs.push({
@@ -1238,6 +1607,20 @@ const ProductionHeadDashboard: React.FC = () => {
           stopped: stepSummary.flapPasting.stop,
           planned: stepSummary.flapPasting.planned,
         },
+        printing: {
+          total: stepSummary.printing.total,
+          completed: stepSummary.printing.completed,
+          inProgress: stepSummary.printing.inProgress,
+          stopped: stepSummary.printing.stop,
+          planned: stepSummary.printing.planned,
+        },
+        qualityDept: {
+          total: stepSummary.qualityDept.total,
+          completed: stepSummary.qualityDept.completed,
+          inProgress: stepSummary.qualityDept.inProgress,
+          stopped: stepSummary.qualityDept.stop,
+          planned: stepSummary.qualityDept.planned,
+        },
       },
     });
 
@@ -1245,68 +1628,15 @@ const ProductionHeadDashboard: React.FC = () => {
       totalJobs,
       stepSummary,
       overallEfficiency,
+      completedJobsByStep,
     };
-  }, [filteredJobPlansData, filteredCompletedJobsData, aggregatedData]);
-
-  // Helper function to fetch step details (same as AdminDashboard)
-  const fetchStepDetails = async (
-    stepName: string,
-    stepId: number,
-    accessToken: string
-  ) => {
-    try {
-      let endpoint = "";
-      switch (stepName) {
-        case "PaperStore":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/paper-store/by-step-id/${stepId}`;
-          break;
-        case "PrintingDetails":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/printing-details/by-step-id/${stepId}`;
-          break;
-        case "Corrugation":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/corrugation/by-step-id/${stepId}`;
-          break;
-        case "FluteLaminateBoardConversion":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/flute-laminate-board-conversion/by-step-id/${stepId}`;
-          break;
-        case "Punching":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/punching/by-step-id/${stepId}`;
-          break;
-        case "SideFlapPasting":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/side-flap-pasting/by-step-id/${stepId}`;
-          break;
-        case "QualityDept":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/quality-dept/by-step-id/${stepId}`;
-          break;
-        case "DispatchProcess":
-          endpoint = `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/dispatch-process/by-step-id/${stepId}`;
-          break;
-        default:
-          return null;
-      }
-
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) return null;
-        console.warn(
-          `Failed to fetch ${stepName} details for step ${stepId}: ${response.status}`
-        );
-        return null;
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        return { data: result.data };
-      }
-      return null;
-    } catch (error) {
-      console.warn(`Error fetching ${stepName} details:`, error);
-      return null;
-    }
-  };
+  }, [
+    filteredJobPlansData,
+    filteredCompletedJobsData,
+    filteredPrintingDetails,
+    dateFilter,
+    customDateRange,
+  ]);
 
   const heldJobHasMajorHold = useCallback((heldJob: HeldJob): boolean => {
     return (
@@ -1325,7 +1655,8 @@ const ProductionHeadDashboard: React.FC = () => {
       if (!accessToken) return;
       try {
         setIsLoadingJobStats(true);
-        const baseUrl = import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const baseUrl =
+          import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
 
         // Ensure cache exists early so loadAggregatedData (and others) can attach data when they complete
         const filter = filterType ?? dateFilter;
@@ -1342,66 +1673,84 @@ const ProductionHeadDashboard: React.FC = () => {
           };
         }
 
-        const [jobPlanningResponse, completedJobsResponse, heldMachinesResponse] = await Promise.all([
-          fetch(`${baseUrl}/api/job-planning/`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          fetch(`${baseUrl}/api/completed-jobs`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          fetch(`${baseUrl}/api/job-step-machines/held-machines`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-        ]);
+        // Build query params for date filtering (same as Admin Dashboard)
+        const queryParams = new URLSearchParams();
+        if (filter && filter !== "custom") {
+          queryParams.append("filter", filter);
+        } else if (range?.start && range?.end) {
+          queryParams.append("startDate", range.start);
+          queryParams.append("endDate", range.end);
+        }
+        const queryString = queryParams.toString();
+        const bundleUrl = `${baseUrl}/api/dashboard/role-bundle${queryString ? `?${queryString}` : ""}`;
+
+        const bundleResponse = await fetch(bundleUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!bundleResponse.ok) {
+          throw new Error(`Dashboard bundle failed: ${bundleResponse.status}`);
+        }
+
+        const bundle = await bundleResponse.json();
+        if (!bundle.success || !bundle.data?.jobPlanning) {
+          throw new Error("Invalid dashboard bundle response");
+        }
+
+        const majorHoldPayload = bundle.data.majorHoldCount;
+        const majorCount =
+          majorHoldPayload?.success && typeof majorHoldPayload.count === "number"
+            ? majorHoldPayload.count
+            : 0;
+        setMajorHoldJobsCount(majorCount);
+        if (productionDashboardCache) {
+          productionDashboardCache.majorHoldJobsCount = majorCount;
+        }
 
         let heldJobsData: HeldJob[] = [];
-        if (heldMachinesResponse.ok) {
-          const heldMachinesResult = await heldMachinesResponse.json();
-          if (
-            heldMachinesResult.success &&
-            heldMachinesResult.data &&
-            Array.isArray(heldMachinesResult.data.heldJobs)
-          ) {
-            heldJobsData = heldMachinesResult.data.heldJobs;
-          }
+        const heldMachinesResult = bundle.data.heldMachines;
+        if (
+          heldMachinesResult?.success &&
+          heldMachinesResult.data &&
+          Array.isArray(heldMachinesResult.data.heldJobs)
+        ) {
+          heldJobsData = heldMachinesResult.data.heldJobs;
         }
 
         let jobPlans: JobPlanForStats[] = [];
         let completedJobs: CompletedJob[] = [];
 
-        if (jobPlanningResponse.ok) {
-          const jobPlanningResult = await jobPlanningResponse.json();
-          if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
-            jobPlans = jobPlanningResult.data;
-            const jobPlansWithDetails = await Promise.all(
-              jobPlans.map(async (jobPlan: JobPlanForStats) => {
-                const stepsWithDetails = await Promise.all(
-                  jobPlan.steps.map(async (step: JobPlanStep) => {
-                    let stepDetails = null;
-                    if (step.status === "start" || step.status === "stop") {
-                      stepDetails = await fetchStepDetails(
-                        step.stepName,
-                        step.id,
-                        accessToken
-                      );
-                    }
-                    return { ...step, stepDetails: stepDetails || undefined };
-                  })
-                );
-                return { ...jobPlan, steps: stepsWithDetails };
-              })
-            );
-            setJobPlansData(jobPlansWithDetails);
-            jobPlans = jobPlansWithDetails;
-          }
+        const jobPlanningResult = bundle.data.jobPlanning;
+        if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
+          jobPlans = jobPlanningResult.data;
+          const stepIndexList = jobPlans.flatMap((jp: JobPlanForStats) =>
+            jp.steps.map((s: JobPlanStep) => ({
+              stepId: s.id,
+              stepName: s.stepName,
+            }))
+          );
+          const detailsByStepId = await fetchStepDetailsBatch(
+            baseUrl,
+            accessToken,
+            stepIndexList
+          );
+          const jobPlansWithDetails = jobPlans.map((jobPlan: JobPlanForStats) => ({
+            ...jobPlan,
+            steps: jobPlan.steps.map((step: JobPlanStep) => {
+              const row = detailsByStepId[String(step.id)];
+              const stepDetails =
+                row != null ? { data: row } : undefined;
+              return { ...step, stepDetails };
+            }),
+          }));
+          setJobPlansData(jobPlansWithDetails);
+          jobPlans = jobPlansWithDetails;
         }
 
-        if (completedJobsResponse.ok) {
-          const completedJobsResult = await completedJobsResponse.json();
-          if (completedJobsResult.success && Array.isArray(completedJobsResult.data)) {
-            completedJobs = completedJobsResult.data;
-            setCompletedJobsData(completedJobs);
-          }
+        const completedJobsResult = bundle.data.completedJobs;
+        if (completedJobsResult?.success && Array.isArray(completedJobsResult.data)) {
+          completedJobs = completedJobsResult.data;
+          setCompletedJobsData(completedJobs);
         }
 
         setHeldJobsData(heldJobsData);
@@ -1456,6 +1805,17 @@ const ProductionHeadDashboard: React.FC = () => {
     [authStatus?.isAuthenticated, dateFilter, customDateRange]
   );
 
+  /** Same as Admin: refetch role-bundle (job planning + completed jobs + held + major hold) when date filter changes */
+  const handleProductionFilterChange = useCallback(
+    (
+      newFilter: DateFilterType,
+      customRange?: { start: string; end: string } | null
+    ) => {
+      fetchProductionDashboardData(newFilter, customRange ?? null);
+    },
+    [fetchProductionDashboardData]
+  );
+
   // When no cache, fetch job/held data (aggregated, printing, major hold are loaded by their own effects)
   useEffect(() => {
     if (productionDashboardCache) return;
@@ -1498,26 +1858,9 @@ const ProductionHeadDashboard: React.FC = () => {
   };
 
   const handleInProgressJobsClick = () => {
-    const inProgressJobPlans = filteredJobPlansData.filter((jobPlan) => {
-      let jobInProgress = false;
-      let jobOnHold = false;
-
-      jobPlan.steps.forEach((step) => {
-        const stepStatus = getStepActualStatus(step);
-
-        if (stepStatus === "hold") {
-          jobOnHold = true;
-        } else if (stepStatus === "in_progress") {
-          jobInProgress = true;
-        }
-      });
-
-      return jobInProgress && !jobOnHold;
-    });
-
     navigate("/dashboard/in-progress-jobs", {
       state: {
-        inProgressJobs: inProgressJobPlans,
+        inProgressJobs: dashboardFiltered.inProgressJobPlans,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
@@ -1541,33 +1884,9 @@ const ProductionHeadDashboard: React.FC = () => {
   }, [navigate, heldJobsDataExcludingMajorHold, dateFilter, customDateRange]);
 
   const handlePlannedJobsClick = () => {
-    const plannedJobPlans = filteredJobPlansData.filter((jobPlan) => {
-      let jobCompleted = true;
-      let jobInProgress = false;
-      let jobOnHold = false;
-
-      jobPlan.steps.forEach((step) => {
-        const stepStatus = getStepActualStatus(step);
-
-        if (stepStatus === "hold") {
-          jobOnHold = true;
-          jobCompleted = false;
-        } else if (stepStatus === "completed") {
-          // Continue checking
-        } else if (stepStatus === "in_progress") {
-          jobInProgress = true;
-          jobCompleted = false;
-        } else {
-          jobCompleted = false;
-        }
-      });
-
-      return !jobCompleted && !jobInProgress && !jobOnHold;
-    });
-
     navigate("/dashboard/planned-jobs", {
       state: {
-        plannedJobs: plannedJobPlans,
+        plannedJobs: dashboardFiltered.plannedJobPlans,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
@@ -1618,7 +1937,9 @@ const ProductionHeadDashboard: React.FC = () => {
             step.stepName === "Corrugation" ||
             step.stepName === "FluteLaminateBoardConversion" ||
             step.stepName === "Punching" ||
-            step.stepName === "SideFlapPasting"
+            isFlapPastingStepName(step.stepName) ||
+            step.stepName === "PrintingDetails" ||
+            step.stepName === "QualityDept"
         ) || false;
 
         return {
@@ -1702,6 +2023,10 @@ const ProductionHeadDashboard: React.FC = () => {
   // Handler for Continue to Production button
   // Calls the continue-step API to mark the step as continued by Production Head
   const handleContinueToProduction = async (printingDetail: PrintingDetails) => {
+    const apiBase = (
+      import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
+    ).replace(/\/$/, "");
+
     try {
       if (!printingDetail.jobStepId) {
         setError("Job step ID not found. Cannot continue to production.");
@@ -1728,7 +2053,7 @@ const ProductionHeadDashboard: React.FC = () => {
         continueBody = { stepNo, jobPlanCode: printingDetail.jobPlanCode };
       } else {
         const jobStepResponse = await fetch(
-          `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/${encodeURIComponent(
+          `${apiBase}/api/job-planning/${encodeURIComponent(
             printingDetail.jobNrcJobNo
           )}/steps/${stepNo}?jobStepId=${printingDetail.jobStepId}`,
           {
@@ -1759,7 +2084,7 @@ const ProductionHeadDashboard: React.FC = () => {
 
       // Call the continue-step API (accepts jobPlanCode or jobPlanId)
       const continueResponse = await fetch(
-        `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning/continue-step`,
+        `${apiBase}/api/job-planning/continue-step`,
         {
           method: "POST",
           headers: {
@@ -1770,87 +2095,68 @@ const ProductionHeadDashboard: React.FC = () => {
         }
       );
 
-      if (!continueResponse.ok) {
-        const errorData = await continueResponse.json();
-        throw new Error(errorData.message || "Failed to continue step");
+      let continueResult: { success?: boolean; message?: string } = {};
+      const ct = continueResponse.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        try {
+          continueResult = await continueResponse.json();
+        } catch {
+          continueResult = {};
+        }
       }
 
-      const continueResult = await continueResponse.json();
+      if (!continueResponse.ok) {
+        throw new Error(
+          (continueResult as { message?: string }).message || "Failed to continue step"
+        );
+      }
       if (!continueResult.success) {
         throw new Error(continueResult.message || "Failed to continue step");
       }
 
-      // Refresh printing details
-      const data = await printingService.getAllPrintingDetails();
-      setPrintingDetails(data);
-      
-      // Refresh aggregated data to show updated workflow status
-      try {
-        const aggregatedData = await productionService.getAggregatedProductionData();
-        setAggregatedData(aggregatedData);
-      } catch (aggError) {
-        console.warn("Failed to refresh aggregated data:", aggError);
-      }
-
-      // Refresh job plans to show updated step statuses
-      try {
-        const jobPlanningResponse = await fetch(
-          `${import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"}/api/job-planning`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        
-        if (jobPlanningResponse.ok) {
-          const jobPlanningResult = await jobPlanningResponse.json();
-          if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
-            // Fetch step details for updated job plans
-            const jobPlansWithDetails = await Promise.all(
-              jobPlanningResult.data.map(async (jobPlan: JobPlanForStats) => {
-                const stepsWithDetails = await Promise.all(
-                  jobPlan.steps.map(async (step: JobPlanStep) => {
-                    let stepDetails = null;
-                    if (step.status === "start" || step.status === "stop") {
-                      stepDetails = await fetchStepDetails(
-                        step.stepName,
-                        step.id,
-                        accessToken
-                      );
-                    }
-                    return {
-                      ...step,
-                      stepDetails: stepDetails || undefined,
-                    };
-                  })
-                );
-                return {
-                  ...jobPlan,
-                  steps: stepsWithDetails,
-                };
-              })
-            );
-            setJobPlansData(jobPlansWithDetails);
-          }
-        }
-      } catch (refreshError) {
-        console.warn("Failed to refresh job plans:", refreshError);
-      }
-
-      // Mark this step as continued in local state so button is disabled
+      /**
+       * Continue-step is done; DB is updated. Previously we awaited getAllPrintingDetails +
+       * getAggregatedProductionData + full job-planning + step-details-batch (~30s+). Any
+       * failure or slow JSON there surfaced as "Failed to continue step" even on HTTP 200.
+       * Optimistic UI + background refresh fixes that.
+       */
       if (printingDetail.jobStepId) {
         setContinuedSteps((prev) => ({
           ...prev,
           [printingDetail.jobStepId]: true,
         }));
       }
-
-      // Show success message
       setError(null);
-      alert(continueResult.message || `Job ${printingDetail.jobNrcJobNo} has been continued to production successfully!`);
-      
+      alert(
+        continueResult.message ||
+          `Job ${printingDetail.jobNrcJobNo} has been continued to production successfully!`
+      );
+
+      void (async () => {
+        try {
+          const data = await printingService.getAllPrintingDetails();
+          setPrintingDetails(data);
+          if (productionDashboardCache) {
+            productionDashboardCache.printingDetails = data;
+          }
+        } catch (e) {
+          console.warn("Refresh printing details after continue:", e);
+        }
+        try {
+          const aggregatedData = await productionService.getAggregatedProductionData();
+          setAggregatedData(aggregatedData);
+          if (productionDashboardCache) {
+            productionDashboardCache.aggregatedData = aggregatedData;
+          }
+        } catch (e) {
+          console.warn("Refresh aggregated data after continue:", e);
+        }
+        try {
+          await fetchProductionDashboardData(dateFilter, customDateRange);
+        } catch (e) {
+          console.warn("Refresh role-bundle after continue:", e);
+        }
+      })();
     } catch (error) {
       console.error("Error continuing to production:", error);
       setError(error instanceof Error ? error.message : "Failed to continue to production");
@@ -1930,7 +2236,13 @@ const ProductionHeadDashboard: React.FC = () => {
       case "Punching":
         return "Punching";
       case "SideFlapPasting":
+      case "Flap Pasting":
+      case "FlapPasting":
         return "Flap Pasting";
+      case "PrintingDetails":
+        return "Printing";
+      case "QualityDept":
+        return "Quality Checks";
       default:
         return stepName;
     }
@@ -1962,6 +2274,7 @@ const ProductionHeadDashboard: React.FC = () => {
       setIsLoadingModalData(true);
       let jobData: Array<{ jobPlan: JobPlan; step: ProductionStep }> = [];
       let title = "";
+      let usedCompletedList = false;
 
       // 🔥 IMPORTANT: Use filteredJobPlansData (which has stepDetails populated) instead of calling service
       // This ensures we use the same data source as the counting logic
@@ -1976,13 +2289,37 @@ const ProductionHeadDashboard: React.FC = () => {
           fluteLamination: "FluteLaminateBoardConversion",
           punching: "Punching",
           flapPasting: "SideFlapPasting",
+          printing: "PrintingDetails",
+          qualityDept: "QualityDept",
         };
         const targetStepName = stepNameMapping[stepKey];
-        
+
+        // For completed: use the exact same list that was used for the card count (completedJobsByStep)
+        // so the number on the card always matches the number of jobs shown in the modal
+        if (status === "completed") {
+          const byStep = filteredAggregatedData?.completedJobsByStep as
+            | Record<string, Array<{ jobPlan: JobPlan; step: ProductionStep }>>
+            | undefined;
+          const list = byStep?.[stepKey] ?? [];
+          jobData = Array.isArray(list) ? list : [];
+          title = `${stepName} - Completed Jobs`;
+          usedCompletedList = true;
+        }
+
+        if (!usedCompletedList) {
         // Use filteredJobPlansData directly (same as counting logic) to ensure stepDetails are available
         const completedJobsMap = new Map<string, any>();
         filteredCompletedJobsData.forEach((job: any) => {
           completedJobsMap.set(job.nrcJobNo, job);
+        });
+
+        const printingAcceptedStepIds = new Set<number>();
+        filteredPrintingDetails.forEach((p) => {
+          if (p.status !== "accept") return;
+          const jid = Number((p as { jobStepId?: number | string }).jobStepId);
+          if (Number.isFinite(jid) && jid > 0) {
+            printingAcceptedStepIds.add(jid);
+          }
         });
         
         const localJobData: Array<{ jobPlan: JobPlan; step: ProductionStep }> = [];
@@ -1992,7 +2329,11 @@ const ProductionHeadDashboard: React.FC = () => {
           const allStepDetails = (completedJob as any)?.allStepDetails || (jobPlan as any).allStepDetails;
           
           const matchingSteps = jobPlan.steps.filter((step) => {
-            if (step.stepName !== targetStepName) return false;
+            if (stepKey === "flapPasting") {
+              if (!isFlapPastingStepName(step.stepName)) return false;
+            } else if (step.stepName !== targetStepName) {
+              return false;
+            }
             
             // Use the same hasAcceptStatus logic as counting
             const hasAcceptStatus = () => {
@@ -2001,8 +2342,12 @@ const ProductionHeadDashboard: React.FC = () => {
                 const stepDataKey =
                   step.stepName === "FluteLaminateBoardConversion"
                     ? "flutelam"
-                    : step.stepName === "SideFlapPasting"
+                    : isFlapPastingStepName(step.stepName)
                     ? "sideFlapPasting"
+                    : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                    ? "qualityDept"
                     : step.stepName.toLowerCase();
                 
                 const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
@@ -2024,8 +2369,12 @@ const ProductionHeadDashboard: React.FC = () => {
                 const stepDetailKey =
                   step.stepName === "FluteLaminateBoardConversion"
                     ? "flutelam"
-                    : step.stepName === "SideFlapPasting"
+                    : isFlapPastingStepName(step.stepName)
                     ? "sideFlapPasting"
+                    : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                    ? "qualityDept"
                     : step.stepName.toLowerCase();
                 
                 const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
@@ -2040,8 +2389,12 @@ const ProductionHeadDashboard: React.FC = () => {
               const stepDetailProp =
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
+                  : isFlapPastingStepName(step.stepName)
                   ? "sideFlapPasting"
+                  : step.stepName === "PrintingDetails"
+                  ? "printingDetails"
+                  : step.stepName === "QualityDept"
+                  ? "qualityDept"
                   : step.stepName.toLowerCase();
               
               const stepDetails = (step as any)[stepDetailProp];
@@ -2058,6 +2411,12 @@ const ProductionHeadDashboard: React.FC = () => {
             if (status === "completed") {
               // step.status can be "accept" but not "completed" (TypeScript type)
               if (step.status === "accept") {
+                return true;
+              }
+              if (
+                step.stepName === "PrintingDetails" &&
+                printingAcceptedStepIds.has(Number(step.id))
+              ) {
                 return true;
               }
               if (step.status === "stop" && hasAcceptStatus()) {
@@ -2098,6 +2457,8 @@ const ProductionHeadDashboard: React.FC = () => {
         title = `${stepName} - ${
           status.charAt(0).toUpperCase() + status.slice(1)
         } Jobs`;
+        }
+
       }
 
       // 🔥 DEBUG: Log before completed/stopped filtering
@@ -2139,8 +2500,8 @@ const ProductionHeadDashboard: React.FC = () => {
       }
 
       // Apply additional filtering to ensure completed/stopped logic matches the counting logic
-      // This is a safety check to ensure the detail view matches the card counts
-      if (status === "completed") {
+      // Skip when we already used completedJobsByStep (card count and modal list are already in sync)
+      if (status === "completed" && !usedCompletedList) {
         // Filter to only include steps that should be counted as completed
         // This includes: status === "accept", status === "completed", or status === "stop" with accept
         const beforeFilterCount = jobData.length;
@@ -2151,14 +2512,23 @@ const ProductionHeadDashboard: React.FC = () => {
           
           // Check if step has accept status using the EXACT same logic as counting in filteredAggregatedData
           const hasAcceptStatus = () => {
+            // If the step.status itself is "accept", always treat as completed (matches counting logic)
+            if ((step.status as any) === "accept") {
+              return true;
+            }
+
             // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
             // This is the most direct way to check accept status for each step
             if ((step as any).stepDetails?.data) {
               const stepDataKey =
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
+                  : isFlapPastingStepName(step.stepName)
                   ? "sideFlapPasting"
+                  : step.stepName === "PrintingDetails"
+                  ? "printingDetails"
+                  : step.stepName === "QualityDept"
+                  ? "qualityDept"
                   : step.stepName.toLowerCase();
               
               const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
@@ -2181,7 +2551,7 @@ const ProductionHeadDashboard: React.FC = () => {
               const stepDetailKey =
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
+                  : isFlapPastingStepName(step.stepName)
                   ? "sideFlapPasting"
                   : step.stepName.toLowerCase();
               
@@ -2197,7 +2567,7 @@ const ProductionHeadDashboard: React.FC = () => {
             const stepDetailProp =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
-                : step.stepName === "SideFlapPasting"
+                : isFlapPastingStepName(step.stepName)
                 ? "sideFlapPasting"
                 : step.stepName.toLowerCase();
             
@@ -2269,8 +2639,12 @@ const ProductionHeadDashboard: React.FC = () => {
               const stepDataKey =
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
-                  : step.stepName === "SideFlapPasting"
+                  : isFlapPastingStepName(step.stepName)
                   ? "sideFlapPasting"
+                  : step.stepName === "PrintingDetails"
+                  ? "printingDetails"
+                  : step.stepName === "QualityDept"
+                  ? "qualityDept"
                   : step.stepName.toLowerCase();
               
               const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
@@ -2314,11 +2688,9 @@ const ProductionHeadDashboard: React.FC = () => {
       });
 
       // Apply date filter to the results - filter based on the specific step's date
-      // This ensures the detail view matches the count shown on the card
-      // IMPORTANT: Use the same date filtering logic as filteredJobPlansData
-      // 🔥 SPECIAL: For completed Corrugation steps, use stepDetails.data.corrugation.date (the actual completion date)
+      // Skip when we used completedJobsByStep (that list is already date-filtered in filteredAggregatedData)
       const dateRange = getDateRange(dateFilter, customDateRange);
-      if (dateRange) {
+      if (dateRange && !usedCompletedList) {
         const { startDate, endDate } = dateRange;
         const beforeFilterCount = jobData.length;
         const filteredOutJobs: any[] = [];
@@ -2559,9 +2931,15 @@ const ProductionHeadDashboard: React.FC = () => {
             <div className="flex-1 min-w-0">
               <DateFilterComponent
                 dateFilter={dateFilter}
-                setDateFilter={setDateFilter}
+                setDateFilter={(filter) => {
+                  setDateFilter(filter);
+                  handleProductionFilterChange(filter);
+                }}
                 customDateRange={customDateRange}
-                setCustomDateRange={setCustomDateRange}
+                setCustomDateRange={(range) => {
+                  setCustomDateRange(range);
+                  handleProductionFilterChange("custom", range);
+                }}
                 className="w-full"
               />
             </div>
@@ -2602,7 +2980,7 @@ const ProductionHeadDashboard: React.FC = () => {
             completedJobs={filteredJobStats.completedJobs}
             inProgressJobs={filteredJobStats.inProgressJobs}
             plannedJobs={filteredJobStats.plannedJobs}
-            activeUsers={0}
+            activeUsers={filteredJobStats.activeUsers}
             heldJobs={heldJobsCount}
             onTotalJobsClick={undefined}
             onCompletedJobsClick={handleCompletedJobsClick}
@@ -2612,6 +2990,178 @@ const ProductionHeadDashboard: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Completed Jobs Summary — same visibility as Admin: only when date-filtered completed jobs exist */}
+      {!isLoadingJobStats && filteredCompletedJobsData.length > 0 && (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+          <div className="bg-[#00AEEF] px-6 py-4">
+            <div className="flex items-center gap-3">
+              <CurrencyRupeeIcon className="h-8 w-8 shrink-0 text-white" />
+              <div>
+                <h2 className="text-2xl font-bold text-white">
+                  Completed Jobs Summary
+                </h2>
+                <p className="text-blue-100 text-sm">
+                  Daily Production &amp; Revenue Tracking
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="relative">
+              <CalendarDaysIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filter by date..."
+                value={completedSummaryDateFilter}
+                onChange={(e) => setCompletedSummaryDateFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filter by customer..."
+                value={completedSummaryCustomerFilter}
+                onChange={(e) =>
+                  setCompletedSummaryCustomerFilter(e.target.value)
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="relative">
+              <BuildingOfficeIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filter by unit..."
+                value={completedSummaryUnitFilter}
+                onChange={(e) => setCompletedSummaryUnitFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+            <table className="w-full min-w-full">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  {(
+                    [
+                      ["recordDateIso", "Date"],
+                      ["customerName", "Customer Name"],
+                      ["unitLabel", "Unit"],
+                      ["dispatchDateIso", "Dispatch Date"],
+                      ["dispatchQty", "Dispatch Qty"],
+                      ["totalValue", "Total Value"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <th
+                      key={key}
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-200"
+                      onClick={() =>
+                        handleCompletedSummarySort(key as keyof CompletedJobSummaryRow)
+                      }
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {label}
+                        <span className="text-gray-400 font-normal">
+                          {completedSummarySort.key === key
+                            ? completedSummarySort.dir === "asc"
+                              ? "↑"
+                              : "↓"
+                            : "↕"}
+                        </span>
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {completedJobsSummaryFilteredSorted.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-8 text-center text-sm text-gray-500"
+                    >
+                      No completed jobs match these filters
+                      {completedSummaryDateFilter ||
+                      completedSummaryCustomerFilter ||
+                      completedSummaryUnitFilter
+                        ? " — try adjusting filters"
+                        : ""}
+                      .
+                    </td>
+                  </tr>
+                ) : (
+                  completedJobsSummaryFilteredSorted.map((row, index) => {
+                    /** Same row/value styling as Admin CompletedJobsTable */
+                    const rowBg =
+                      row.totalValue > 10000
+                        ? "bg-green-50"
+                        : row.totalValue > 5000
+                          ? "bg-yellow-50"
+                          : "";
+                    const valueClass =
+                      row.totalValue > 10000
+                        ? "text-green-600 font-bold"
+                        : row.totalValue > 5000
+                          ? "text-yellow-600 font-bold"
+                          : "text-gray-900 font-bold";
+                    return (
+                      <tr
+                        key={`${row.id}-${row.nrcJobNo}-${index}`}
+                        className={`hover:bg-gray-50 transition-colors ${rowBg}`}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {row.recordDateDisplay}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate" title={row.customerName}>
+                          {row.customerName}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {row.unitLabel}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {row.dispatchDateDisplay}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 tabular-nums">
+                          {row.dispatchQty.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                          <span className={`text-sm ${valueClass}`}>
+                            {formatInr(row.totalValue)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+            <span>
+              Showing {completedJobsSummaryFilteredSorted.length} of{" "}
+              {completedJobsSummaryRows.length} completed jobs
+            </span>
+            <span className="font-semibold text-gray-900 tabular-nums">
+              Total Revenue: {formatInr(completedJobsSummaryTotalRevenue)}
+            </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* Main Tables Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-center">
@@ -2981,8 +3531,8 @@ const ProductionHeadDashboard: React.FC = () => {
                     const statusFilter = printingDetailsStatusFilter.trim();
                     let filteredPrinting =
                       searchLower === ""
-                        ? printingDetails
-                        : printingDetails.filter((p) => {
+                        ? filteredPrintingDetails
+                        : filteredPrintingDetails.filter((p) => {
                             const nrc = (p.jobNrcJobNo ?? "").toLowerCase();
                             const code = (p.jobPlanCode ?? "").toLowerCase();
                             return nrc.includes(searchLower) || code.includes(searchLower);
@@ -3458,11 +4008,6 @@ const ProductionHeadDashboard: React.FC = () => {
                             (total, step) => total + step.total,
                             0
                           )
-                        : aggregatedData
-                        ? Object.values(aggregatedData.stepSummary).reduce(
-                            (total, step) => total + step.total,
-                            0
-                          )
                         : 0}
                     </p>
                   </div>
@@ -3485,11 +4030,6 @@ const ProductionHeadDashboard: React.FC = () => {
                             (total, step) => total + step.inProgress,
                             0
                           )
-                        : aggregatedData
-                        ? Object.values(aggregatedData.stepSummary).reduce(
-                            (total, step) => total + step.inProgress,
-                            0
-                          )
                         : 0}
                     </p>
                   </div>
@@ -3509,8 +4049,14 @@ const ProductionHeadDashboard: React.FC = () => {
               <h2 className="text-xl font-semibold text-gray-900 mb-6">
                 Production Steps Status Overview
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
+                  {
+                    name: "Printing",
+                    key: "printing",
+                    color: "cyan",
+                    icon: PrinterIcon,
+                  },
                   {
                     name: "Corrugation",
                     key: "corrugation",
@@ -3535,9 +4081,15 @@ const ProductionHeadDashboard: React.FC = () => {
                     color: "orange",
                     icon: TruckIcon,
                   },
+                  {
+                    name: "Quality Checks",
+                    key: "qualityDept",
+                    color: "indigo",
+                    icon: CheckCircleIcon,
+                  },
                 ].map((step, index) => {
-                  const dataSource = filteredAggregatedData || aggregatedData;
-                  const stepKey = step.key as "corrugation" | "fluteLamination" | "punching" | "flapPasting";
+                  const dataSource = filteredAggregatedData;
+                  const stepKey = step.key as "corrugation" | "fluteLamination" | "punching" | "flapPasting" | "printing" | "qualityDept";
                   const stepData = dataSource?.stepSummary[stepKey];
 
                   return (

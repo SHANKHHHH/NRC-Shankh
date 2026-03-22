@@ -5,6 +5,7 @@ import { ArrowLeft, PauseCircle } from "lucide-react";
 import JobSearchBar from "./JobDetailsComponents/JobSearchBar";
 import JobBarsChart from "./JobDetailsComponents/JobBarsChart";
 import DetailedJobModal from "./JobDetailsComponents/DetailedJobModal";
+import { fetchJobsWithPODetailsBatch } from "../../../utils/fetchJobsWithPODetailsBatch";
 
 interface CompletedJob {
   id: number;
@@ -397,49 +398,6 @@ const HeldJobs: React.FC = () => {
     };
   };
 
-  // Use the same fetchJobWithPODetails function from your InProgressJobs component
-  const fetchJobWithPODetails = async (
-    nrcJobNo: string,
-    accessToken: string
-  ) => {
-    try {
-      const response = await fetch(
-        `https://nrprod.nrcontainers.com/api/jobs/${encodeURIComponent(
-          nrcJobNo
-        )}/with-po-details`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          const data = result.data || {};
-          return {
-            jobDetails: data,
-            purchaseOrderDetails: data.purchaseOrders || data.purchaseOrderDetails || [],
-            poJobPlannings: data.poJobPlannings || [],
-            steps: data.steps,
-            jobPlanningDetails: data.jobPlanningDetails,
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching job+PO details for ${nrcJobNo}:`, error);
-    }
-    return {
-      jobDetails: null,
-      purchaseOrderDetails: [],
-      poJobPlannings: [],
-      steps: undefined,
-      jobPlanningDetails: undefined,
-    };
-  };
-
   // Fetch held jobs with details
   const fetchHeldJobsWithDetails = async () => {
     try {
@@ -519,20 +477,22 @@ const HeldJobs: React.FC = () => {
         console.log(`🔍 Total jobs from API: ${jobPlanningResult.data.length}`);
         console.log(`🔍 Filtered held jobs: ${heldJobsData.length}`);
 
-        // Fetch additional details for each held job using the combined API
-        const jobsWithDetails = await Promise.all(
-          heldJobsData.map(async (job: JobPlan) => {
-            const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-              await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-
-            return {
-              ...job,
-              jobDetails,
-              purchaseOrderDetails,
-              poJobPlannings,
-            };
-          })
+        const baseUrl =
+          import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+        const poBatch = await fetchJobsWithPODetailsBatch(
+          baseUrl,
+          accessToken,
+          heldJobsData.map((j: JobPlan) => j.nrcJobNo)
         );
+        const jobsWithDetails = heldJobsData.map((job: JobPlan) => {
+          const po = poBatch[job.nrcJobNo];
+          return {
+            ...job,
+            jobDetails: po?.jobDetails ?? null,
+            purchaseOrderDetails: po?.purchaseOrderDetails ?? [],
+            poJobPlannings: po?.poJobPlannings ?? [],
+          };
+        });
 
         console.log(
           `🔍 Final held jobs with details: ${jobsWithDetails.length}`
@@ -628,60 +588,75 @@ const HeldJobs: React.FC = () => {
         );
       }
 
-      const jobsWithDetails = await Promise.all(
-        filteredJobs.map(async (job: JobPlan) => {
-          // Check if job already has complete details to avoid unnecessary API calls
-          if (
-            job.jobDetails &&
-            job.purchaseOrderDetails &&
-            job.poJobPlannings
-          ) {
-            return job;
-          }
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const needPo = filteredJobs.filter(
+        (j) =>
+          !j.jobDetails || !j.purchaseOrderDetails || !j.poJobPlannings
+      );
+      const poBatch = await fetchJobsWithPODetailsBatch(
+        baseUrl,
+        accessToken,
+        needPo.map((j) => {
+          const id =
+            j.nrcJobNo ||
+            j.jobDetails?.nrcJobNo ||
+            j.id?.toString() ||
+            j.jobPlanningId?.toString();
+          return id || "";
+        }).filter(Boolean)
+      );
 
-          // Debug: Check job structure
-          console.log(`🔍 Processing job:`, {
-            nrcJobNo: job.nrcJobNo,
-            jobDetailsNrcJobNo: job.jobDetails?.nrcJobNo,
-            id: job.id,
-            jobPlanningId: job.jobPlanningId,
-            fullJob: job,
-          });
+      const jobsWithDetails = filteredJobs.map((job: JobPlan) => {
+        if (job.jobDetails && job.purchaseOrderDetails && job.poJobPlannings) {
+          return job;
+        }
 
-          // Use the correct job identifier - check multiple possible locations
-          const jobIdentifier =
-            job.nrcJobNo ||
-            job.jobDetails?.nrcJobNo ||
-            job.id?.toString() ||
-            job.jobPlanningId?.toString();
+        console.log(`🔍 Processing job:`, {
+          nrcJobNo: job.nrcJobNo,
+          jobDetailsNrcJobNo: job.jobDetails?.nrcJobNo,
+          id: job.id,
+          jobPlanningId: job.jobPlanningId,
+          fullJob: job,
+        });
 
-          console.log(`🔍 Selected job identifier: ${jobIdentifier}`);
+        const jobIdentifier =
+          job.nrcJobNo ||
+          job.jobDetails?.nrcJobNo ||
+          job.id?.toString() ||
+          job.jobPlanningId?.toString();
 
-          if (!jobIdentifier) {
-            console.error(`❌ No valid job identifier found for job:`, job);
-            return job; // Return job as-is if no identifier
-          }
+        console.log(`🔍 Selected job identifier: ${jobIdentifier}`);
 
-          // Fetch complete details using the new combined API
-          const { jobDetails, purchaseOrderDetails, poJobPlannings, steps: apiSteps, jobPlanningDetails: apiJobPlanningDetails } =
-            await fetchJobWithPODetails(jobIdentifier, accessToken);
+        if (!jobIdentifier) {
+          console.error(`❌ No valid job identifier found for job:`, job);
+          return job;
+        }
 
-          // Prefer API steps when they include held-machines format (hasHeldMachines, stepStatus, etc.)
-          const steps = Array.isArray(apiSteps) && apiSteps.length > 0
+        const po =
+          poBatch[job.nrcJobNo] ||
+          poBatch[jobIdentifier] ||
+          poBatch[String(jobIdentifier)];
+
+        const apiSteps = po?.steps;
+        const steps =
+          Array.isArray(apiSteps) && apiSteps.length > 0
             ? apiSteps
             : job.steps;
+        const apiJobPlanningDetails = po?.jobPlanningDetails;
 
-          return {
-            ...job,
-            jobDetails: jobDetails || job.jobDetails,
-            purchaseOrderDetails:
-              purchaseOrderDetails || job.purchaseOrderDetails || [],
-            poJobPlannings: poJobPlannings || job.poJobPlannings || [],
-            steps,
-            ...(apiJobPlanningDetails && { jobPlanningDetails: apiJobPlanningDetails }),
-          };
-        })
-      );
+        return {
+          ...job,
+          jobDetails: po?.jobDetails ?? job.jobDetails,
+          purchaseOrderDetails:
+            po?.purchaseOrderDetails ?? job.purchaseOrderDetails ?? [],
+          poJobPlannings: po?.poJobPlannings ?? job.poJobPlannings ?? [],
+          steps,
+          ...(apiJobPlanningDetails && {
+            jobPlanningDetails: apiJobPlanningDetails,
+          }),
+        };
+      });
 
       console.log(
         `🔍 Final result: ${jobsWithDetails.length} held jobs after processing`

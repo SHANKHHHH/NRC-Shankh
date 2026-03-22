@@ -117,6 +117,8 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
             ? "flutelam"
             : step.stepName === "SideFlapPasting"
             ? "sideFlapPasting"
+            : step.stepName === "PrintingDetails"
+            ? "printingDetails"
             : step.stepName.toLowerCase();
         
         const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
@@ -141,6 +143,8 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
             ? "flutelam"
             : step.stepName === "SideFlapPasting"
             ? "sideFlapPasting"
+            : step.stepName === "PrintingDetails"
+            ? "printingDetails"
             : step.stepName.toLowerCase();
         
         const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
@@ -157,6 +161,8 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
           ? "flutelam"
           : step.stepName === "SideFlapPasting"
           ? "sideFlapPasting"
+          : step.stepName === "PrintingDetails"
+          ? "printingDetails"
           : step.stepName.toLowerCase();
       
       const stepDetails = (step as any)[stepDetailProp];
@@ -523,6 +529,18 @@ const ProductionDetailModal: React.FC<JobDetailsModalProps> = ({
                           <span className="text-gray-500">Started:</span>
                           <span className="font-medium text-gray-900">
                             {formatDate(step.startDate)}
+                          </span>
+                        </div>
+                      )}
+
+                      {((step as any).updatedAt || (step as any).stepUpdatedAt) && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Updated:</span>
+                          <span className="font-medium text-gray-900">
+                            {formatDate(
+                              ((step as any).updatedAt ||
+                                (step as any).stepUpdatedAt) as string
+                            )}
                           </span>
                         </div>
                       )}

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft } from "lucide-react";
 import JobSearchBar from "./JobDetailsComponents/JobSearchBar";
 import JobBarsChart from "./JobDetailsComponents/JobBarsChart";
 import DetailedJobModal from "./JobDetailsComponents/DetailedJobModal";
+import { fetchJobsWithPODetailsBatch } from "../../../utils/fetchJobsWithPODetailsBatch";
 
 interface JobPlanStep {
   id: number;
@@ -122,47 +123,7 @@ const MajorHoldJobs: React.FC = () => {
   const [majorHoldJobs, setMajorHoldJobs] = useState<JobPlan[]>([]);
   const [isResumingJob, setIsResumingJob] = useState(false);
 
-  // Fetch job details with PO details using the new combined API
-  const fetchJobWithPODetails = async (
-    nrcJobNo: string,
-    accessToken: string
-  ) => {
-    try {
-      const response = await fetch(
-        `https://nrprod.nrcontainers.com/api/jobs/${encodeURIComponent(
-          nrcJobNo
-        )}/with-po-details`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          return {
-            jobDetails: result.data,
-            purchaseOrderDetails: result.data.purchaseOrders || [],
-            poJobPlannings: result.data.poJobPlannings || [],
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching job+PO details for ${nrcJobNo}:`, error);
-    }
-    return {
-      jobDetails: null,
-      purchaseOrderDetails: [],
-      poJobPlannings: [],
-    };
-  };
-
-  // Fetch major hold jobs: single API returns list with full step details, then add PO details per job
+  // Fetch major hold jobs: single API returns list with full step details, then add PO details via batch
   const fetchMajorHoldJobsWithDetails = async () => {
     try {
       setLoading(true);
@@ -190,19 +151,20 @@ const MajorHoldJobs: React.FC = () => {
       }
 
       const majorHoldList = result.data as JobPlan[];
-      // Add job + PO details for card display (client name, etc.) – only for these jobs, not all
-      const jobsWithDetails = await Promise.all(
-        majorHoldList.map(async (job: JobPlan) => {
-          const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-            await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-          return {
-            ...job,
-            jobDetails,
-            purchaseOrderDetails,
-            poJobPlannings,
-          };
-        })
+      const poBatch = await fetchJobsWithPODetailsBatch(
+        baseUrl,
+        accessToken,
+        majorHoldList.map((j) => j.nrcJobNo)
       );
+      const jobsWithDetails = majorHoldList.map((job: JobPlan) => {
+        const po = poBatch[job.nrcJobNo];
+        return {
+          ...job,
+          jobDetails: po?.jobDetails ?? null,
+          purchaseOrderDetails: po?.purchaseOrderDetails ?? [],
+          poJobPlannings: po?.poJobPlannings ?? [],
+        };
+      });
       setMajorHoldJobs(jobsWithDetails);
     } catch (err) {
       setError(
@@ -221,21 +183,30 @@ const MajorHoldJobs: React.FC = () => {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) throw new Error("Authentication token not found.");
 
-      const jobsWithDetails = await Promise.all(
-        jobs.map(async (job: JobPlan) => {
-          if (job.jobDetails && job.purchaseOrderDetails && job.poJobPlannings) {
-            return job;
-          }
-          const { jobDetails, purchaseOrderDetails, poJobPlannings } =
-            await fetchJobWithPODetails(job.nrcJobNo, accessToken);
-          return {
-            ...job,
-            jobDetails: jobDetails || job.jobDetails,
-            purchaseOrderDetails: purchaseOrderDetails || job.purchaseOrderDetails || [],
-            poJobPlannings: poJobPlannings || job.poJobPlannings || [],
-          };
-        })
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const needPo = jobs.filter(
+        (j) =>
+          !j.jobDetails || !j.purchaseOrderDetails || !j.poJobPlannings
       );
+      const poBatch = await fetchJobsWithPODetailsBatch(
+        baseUrl,
+        accessToken,
+        needPo.map((j) => j.nrcJobNo)
+      );
+      const jobsWithDetails = jobs.map((job: JobPlan) => {
+        if (job.jobDetails && job.purchaseOrderDetails && job.poJobPlannings) {
+          return job;
+        }
+        const po = poBatch[job.nrcJobNo];
+        return {
+          ...job,
+          jobDetails: po?.jobDetails ?? job.jobDetails,
+          purchaseOrderDetails:
+            po?.purchaseOrderDetails ?? job.purchaseOrderDetails ?? [],
+          poJobPlannings: po?.poJobPlannings ?? job.poJobPlannings ?? [],
+        };
+      });
       setMajorHoldJobs(jobsWithDetails);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to enhance job details");

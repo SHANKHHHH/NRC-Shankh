@@ -15,6 +15,7 @@ import LoadingSpinner from "../../common/LoadingSpinner";
 // import MachineUtilizationDashboard from "./MachineUtilization"; // Machine utilization section commented out
 import ActiveUsersModal from "./Modals/ActiveUsersModal";
 import PDAAnnouncements from "./PDAAnnouncements";
+import { fetchStepDetailsBatch } from "../../../utils/dashboardStepDetailsBatch";
 
 // Types based on the API response structure
 interface JobPlanStep {
@@ -175,6 +176,10 @@ interface HeldJob {
 
 interface AdminDashboardData {
   jobPlans: JobPlan[];
+  /** Planned job plans (excludes hold/major_hold); count = length so card matches list page */
+  plannedJobPlans?: JobPlan[];
+  /** In-progress job plans; count = length so card matches list page */
+  inProgressJobPlans?: JobPlan[];
   totalJobs: number;
   completedJobs: number;
   inProgressJobs: number;
@@ -367,171 +372,28 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
-  // Handle In Progress Jobs card click
-  // Handle In Progress Jobs card click
+  // Handle In Progress Jobs card click - use same array as card count so numbers always match
   const handleInProgressJobsClick = () => {
-    console.log(
-      "In Progress Jobs card clicked - navigating to in-progress jobs view"
-    );
-
-    // 🔥 UPDATED: Use the same logic as processJobPlanData
-    const inProgressJobPlans =
-      filteredData?.jobPlans?.filter((jobPlan) => {
-        let jobInProgress = false;
-        let jobOnHold = false;
-
-        // Check each step to determine if job is in progress
-        jobPlan.steps.forEach((step) => {
-          const stepStatus = getStepActualStatus(step);
-
-          if (stepStatus === "hold") {
-            jobOnHold = true;
-          } else if (stepStatus === "in_progress") {
-            jobInProgress = true;
-          }
-        });
-
-        // Only return true if in progress AND not on hold
-        return jobInProgress && !jobOnHold;
-      }) || [];
-
+    const list = filteredData?.inProgressJobPlans ?? [];
     navigate("/dashboard/in-progress-jobs", {
       state: {
-        inProgressJobs: inProgressJobPlans,
+        inProgressJobs: list,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
     });
   };
 
-  // Handle Planned Jobs card click
-  // Handle Planned Jobs card click
+  // Handle Planned Jobs card click - use same array as card count so numbers always match
   const handlePlannedJobsClick = () => {
-    console.log("Planned Jobs card clicked - navigating to planned jobs view");
-
-    // 🔥 UPDATED: Use the same logic as processJobPlanData
-    const plannedJobPlans =
-      filteredData?.jobPlans?.filter((jobPlan) => {
-        let jobCompleted = true;
-        let jobInProgress = false;
-        let jobOnHold = false;
-
-        // Check each step to determine job status
-        jobPlan.steps.forEach((step) => {
-          const stepStatus = getStepActualStatus(step);
-
-          if (stepStatus === "hold") {
-            jobOnHold = true;
-            jobCompleted = false;
-          } else if (stepStatus === "completed") {
-            // This step is completed - continue checking other steps
-          } else if (stepStatus === "in_progress") {
-            // This step is in progress
-            jobInProgress = true;
-            jobCompleted = false;
-          } else {
-            // This step is planned (not started)
-            jobCompleted = false;
-          }
-        });
-
-        // 🔥 FIXED: A job is "planned" if it's not completed AND not in progress AND not on hold
-        // This matches the logic from processJobPlanData
-        return !jobCompleted && !jobInProgress && !jobOnHold;
-      }) || [];
-
+    const list = filteredData?.plannedJobPlans ?? [];
     navigate("/dashboard/planned-jobs", {
       state: {
-        plannedJobs: plannedJobPlans,
+        plannedJobs: list,
         dateFilter: dateFilter,
         customDateRange: customDateRange,
       },
     });
-  };
-
-  // Fetch step-specific details for a job
-  const fetchStepDetails = async (
-    stepName: string,
-    stepId: number,
-    accessToken: string
-  ) => {
-    try {
-      let endpoint = "";
-      switch (stepName) {
-        case "PaperStore":
-          endpoint = `https://nrprod.nrcontainers.com/api/paper-store/by-step-id/${stepId}`;
-          break;
-        case "PrintingDetails":
-          endpoint = `https://nrprod.nrcontainers.com/api/printing-details/by-step-id/${stepId}`;
-          break;
-        case "Corrugation":
-          endpoint = `https://nrprod.nrcontainers.com/api/corrugation/by-step-id/${stepId}`;
-          break;
-        case "FluteLaminateBoardConversion":
-          endpoint = `https://nrprod.nrcontainers.com/api/flute-laminate-board-conversion/by-step-id/${stepId}`;
-          break;
-        case "Punching":
-          endpoint = `https://nrprod.nrcontainers.com/api/punching/by-step-id/${stepId}`;
-          break;
-        case "SideFlapPasting":
-          endpoint = `https://nrprod.nrcontainers.com/api/side-flap-pasting/by-step-id/${stepId}`;
-          break;
-        case "QualityDept":
-          endpoint = `https://nrprod.nrcontainers.com/api/quality-dept/by-step-id/${stepId}`;
-          break;
-        case "DispatchProcess":
-          endpoint = `https://nrprod.nrcontainers.com/api/dispatch-process/by-step-id/${stepId}`;
-          break;
-        default:
-          return null;
-      }
-
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) return null;
-        console.warn(
-          `Failed to fetch ${stepName} details for step ${stepId}: ${response.status}`
-        );
-        return null;
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        // Extract only the actual step details, not the wrapper
-        // Backend returns: { jobStepId, stepName, status, printingDetails: {...} }
-        // We only want the nested details object
-        switch (stepName) {
-          case "PaperStore":
-            return result.data.paperStore;
-          case "Corrugation":
-            return result.data.corrugation;
-          case "PrintingDetails":
-            return result.data.printingDetails;
-          case "FluteLaminateBoardConversion":
-            return result.data.flutelam;
-          case "Punching":
-            return result.data.punching;
-          case "SideFlapPasting":
-            return result.data.sideFlapPasting;
-          case "QualityDept":
-            return result.data.qualityDept;
-          case "DispatchProcess":
-            return result.data.dispatchProcess;
-          default:
-            return result.data;
-        }
-      }
-      return null;
-    } catch (err) {
-      console.warn(
-        `Error fetching ${stepName} details for step ${stepId}:`,
-        err
-      );
-      return null;
-    }
   };
 
   // Add this new function to fetch machine data
@@ -779,87 +641,74 @@ const AdminDashboard: React.FC = () => {
         queryParams.append("endDate", customRange.end);
       }
 
-      // Fetch filtered job planning data
-      const jobPlanningUrl = `https://nrprod.nrcontainers.com/api/job-planning/?${queryParams.toString()}`;
-      const jobPlanningResponse = await fetch(jobPlanningUrl, {
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const bundleUrl = `${baseUrl}/api/dashboard/role-bundle?${queryParams.toString()}`;
+      const bundleResponse = await fetch(bundleUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (!jobPlanningResponse.ok) {
+      if (!bundleResponse.ok) {
         throw new Error(
-          `Failed to fetch job planning data: ${jobPlanningResponse.status}`
+          `Failed to fetch dashboard bundle: ${bundleResponse.status}`
         );
       }
 
-      const jobPlanningResult = await jobPlanningResponse.json();
-
-      // Fetch filtered completed jobs data
-      const completedJobsUrl = `https://nrprod.nrcontainers.com/api/completed-jobs?${queryParams.toString()}`;
-      const completedJobsResponse = await fetch(completedJobsUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      let completedJobsData: CompletedJob[] = [];
-      if (completedJobsResponse.ok) {
-        const completedJobsResult = await completedJobsResponse.json();
-        if (
-          completedJobsResult.success &&
-          Array.isArray(completedJobsResult.data)
-        ) {
-          completedJobsData = completedJobsResult.data;
-        }
+      const bundle = await bundleResponse.json();
+      if (!bundle.success || !bundle.data?.jobPlanning) {
+        throw new Error("Invalid dashboard bundle response");
       }
 
-      // Fetch held machines data
-      const heldMachinesUrl = `https://nrprod.nrcontainers.com/api/job-step-machines/held-machines`;
-      const heldMachinesResponse = await fetch(heldMachinesUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const jobPlanningResult = bundle.data.jobPlanning;
+
+      let completedJobsData: CompletedJob[] = [];
+      const completedJobsResult = bundle.data.completedJobs;
+      if (
+        completedJobsResult?.success &&
+        Array.isArray(completedJobsResult.data)
+      ) {
+        completedJobsData = completedJobsResult.data;
+      }
 
       let heldJobsData: HeldJob[] = [];
-      if (heldMachinesResponse.ok) {
-        const heldMachinesResult = await heldMachinesResponse.json();
-        if (
-          heldMachinesResult.success &&
-          heldMachinesResult.data &&
-          Array.isArray(heldMachinesResult.data.heldJobs)
-        ) {
-          heldJobsData = heldMachinesResult.data.heldJobs;
-        }
+      const heldMachinesResult = bundle.data.heldMachines;
+      if (
+        heldMachinesResult?.success &&
+        heldMachinesResult.data &&
+        Array.isArray(heldMachinesResult.data.heldJobs)
+      ) {
+        heldJobsData = heldMachinesResult.data.heldJobs;
+      }
+
+      const majorHold = bundle.data.majorHoldCount;
+      if (majorHold?.success && typeof majorHold.count === "number") {
+        setMajorHoldJobsCount(majorHold.count);
+      } else {
+        setMajorHoldJobsCount(0);
       }
 
       if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
         const jobPlans = jobPlanningResult.data;
 
-        // Fetch step details for every step so overview progress/status matches the "View Steps" detail (API often returns planned until details are fetched)
-        const jobPlansWithDetails = await Promise.all(
-          jobPlans.map(async (jobPlan: JobPlan) => {
-            const stepsWithDetails = await Promise.all(
-              jobPlan.steps.map(async (step: JobPlanStep) => {
-                let stepDetails = null;
-                try {
-                  stepDetails = await fetchStepDetails(
-                    step.stepName,
-                    step.id,
-                    accessToken
-                  );
-                } catch (e) {
-                  console.warn(`Step details failed for step ${step.id}:`, e);
-                }
-
-                return {
-                  ...step,
-                  stepDetails,
-                };
-              })
-            );
-
-            return {
-              ...jobPlan,
-              steps: stepsWithDetails,
-            };
-          })
+        // Step details: one batched POST (same rows as per-step by-step-id APIs) instead of N HTTP calls
+        const stepIndexList = jobPlans.flatMap((jp: JobPlan) =>
+          jp.steps.map((s: JobPlanStep) => ({
+            stepId: s.id,
+            stepName: s.stepName,
+          }))
         );
+        const detailsByStepId = await fetchStepDetailsBatch(
+          baseUrl,
+          accessToken,
+          stepIndexList
+        );
+        const jobPlansWithDetails = jobPlans.map((jobPlan: JobPlan) => ({
+          ...jobPlan,
+          steps: jobPlan.steps.map((step: JobPlanStep) => ({
+            ...step,
+            stepDetails: detailsByStepId[String(step.id)] ?? null,
+          })),
+        }));
 
         console.log("completedJobsData", completedJobsData);
         console.log("heldJobsData from API", heldJobsData);
@@ -884,7 +733,6 @@ const AdminDashboard: React.FC = () => {
         };
         setLastRefreshedAt(refreshedAt);
         setPdaRefreshTrigger(Date.now());
-        fetchMajorHoldCount();
       } else {
         throw new Error("Invalid API response format");
       }
@@ -1364,9 +1212,11 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData(dateFilter, customDateRange);
   }, []);
 
-  // Fetch major hold count from API on mount (same as Planner / Production / Printing)
+  // When restoring from session cache we don't refetch the bundle; refresh major-hold badge only
   useEffect(() => {
-    fetchMajorHoldCount();
+    if (dashboardDataCache) {
+      fetchMajorHoldCount();
+    }
   }, []);
 
   // Clear location state after it's been read to prevent stale data
@@ -1388,12 +1238,133 @@ const AdminDashboard: React.FC = () => {
     endDate: Date
   ): boolean => {
     const checkDate = new Date(date);
-    // Reset time to start of day for accurate comparison
     checkDate.setHours(0, 0, 0, 0);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-    return checkDate >= startDate && checkDate <= endDate;
+    return checkDate >= start && checkDate <= end;
+  };
+
+  /** Local calendar YYYY-MM-DD (avoids UTC-only ISO date skew vs "today" filter). */
+  const formatLocalDateKey = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  /** One row per calendar day in [start, end] for line chart. */
+  const buildTimeSeriesForFilteredRange = (
+    jobPlans: JobPlan[],
+    completedJobs: CompletedJob[],
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Array<{
+    date: string;
+    jobsStarted: number;
+    jobsCompleted: number;
+    totalSteps: number;
+    completedSteps: number;
+  }> => {
+    const start = new Date(rangeStart);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(rangeEnd);
+    end.setHours(0, 0, 0, 0);
+
+    const days: string[] = [];
+    const cur = new Date(start);
+    while (cur.getTime() <= end.getTime()) {
+      days.push(formatLocalDateKey(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const map = new Map<
+      string,
+      {
+        jobsStarted: number;
+        jobsCompleted: number;
+        totalSteps: number;
+        completedSteps: number;
+      }
+    >();
+    days.forEach((d) =>
+      map.set(d, {
+        jobsStarted: 0,
+        jobsCompleted: 0,
+        totalSteps: 0,
+        completedSteps: 0,
+      })
+    );
+
+    completedJobs.forEach((cj) => {
+      if (!cj.completedAt) return;
+      const key = formatLocalDateKey(new Date(cj.completedAt));
+      const row = map.get(key);
+      if (row) row.jobsCompleted++;
+    });
+
+    const getBucketDayForInProgressJob = (jobPlan: JobPlan): string | null => {
+      const candidates: Date[] = [];
+      jobPlan.steps.forEach((step) => {
+        const raw =
+          step.updatedAt ||
+          (step.stepDetails && step.stepDetails.updatedAt) ||
+          step.startDate ||
+          step.endDate;
+        if (!raw) return;
+        const d = new Date(raw as string);
+        if (isNaN(d.getTime())) return;
+        if (isDateInRange(d, new Date(rangeStart), new Date(rangeEnd))) {
+          candidates.push(d);
+        }
+      });
+      const jobTs = (jobPlan as any).updatedAt ?? jobPlan.createdAt;
+      if (jobTs) {
+        const jd = new Date(jobTs);
+        if (
+          !isNaN(jd.getTime()) &&
+          isDateInRange(jd, new Date(rangeStart), new Date(rangeEnd))
+        ) {
+          candidates.push(jd);
+        }
+      }
+      if (candidates.length === 0) return null;
+      const newest = candidates.reduce((a, b) =>
+        a.getTime() > b.getTime() ? a : b
+      );
+      return formatLocalDateKey(newest);
+    };
+
+    jobPlans.forEach((jobPlan) => {
+      let jobInProgress = false;
+      let jobOnHold = false;
+      let completedStepsInJob = 0;
+      const totalStepsInJob = jobPlan.steps.length;
+
+      jobPlan.steps.forEach((step) => {
+        const st = getStepActualStatus(step);
+        if (st === "hold") jobOnHold = true;
+        else if (st === "completed") completedStepsInJob++;
+        else if (st === "in_progress") jobInProgress = true;
+      });
+
+      if (!jobInProgress || jobOnHold) return;
+
+      const bucketDay = getBucketDayForInProgressJob(jobPlan);
+      if (!bucketDay || !map.has(bucketDay)) return;
+
+      const row = map.get(bucketDay)!;
+      row.jobsStarted++;
+      row.totalSteps += totalStepsInJob;
+      row.completedSteps += completedStepsInJob;
+    });
+
+    return days.map((date) => ({
+      date,
+      ...map.get(date)!,
+    }));
   };
 
   // Calculate date range based on your filter options
@@ -1461,95 +1432,91 @@ const AdminDashboard: React.FC = () => {
   };
 
   // Filter the data based on selected dates
-  // 🔥 FIXED: filteredData useMemo with consistent logic
+  // 🔥 FIXED: Build plannedJobPlans/inProgressJobPlans so card count = list length (single source of truth)
   const filteredData = useMemo(() => {
     if (!data) return null;
 
-    // If no date filter is applied, return all data
-    if (!dateFilter) return data;
+    let filteredJobPlans: JobPlan[];
+    let filteredCompletedJobsData: CompletedJob[];
+    let filteredTimeSeriesData: typeof data.timeSeriesData;
 
-    const dateRange = getDateRange(dateFilter, customDateRange);
-
-    // If no date range specified, return all data
-    if (!dateRange) return data;
-
-    const { startDate, endDate } = dateRange;
-
-    console.log(
-      "Filtering data from:",
-      startDate.toDateString(),
-      "to:",
-      endDate.toDateString()
-    );
-
-    // Helper: get step activity date from step.updatedAt, stepDetails.updatedAt, or startDate
-    const getStepActivityDate = (step: any): Date | null => {
-      const raw =
-        step.updatedAt ||
-        (step.stepDetails && step.stepDetails.updatedAt) ||
-        step.startDate;
-      if (!raw) return null;
-      const d = new Date(raw);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    // Filter jobPlans based on step activity (updatedAt dates) or job plan updatedAt
-    const filteredJobPlans = data.jobPlans.filter((jobPlan) => {
-      const hasRecentStepActivity = jobPlan.steps.some((step) => {
-        const stepUpdateDate = getStepActivityDate(step);
-        if (!stepUpdateDate) return false;
-        return isDateInRange(
-          stepUpdateDate,
-          new Date(startDate),
-          new Date(endDate)
+    if (!dateFilter) {
+      // No date filter: use all data (still recalc counts so they match list page logic)
+      filteredJobPlans = data.jobPlans;
+      filteredCompletedJobsData = data.completedJobsData;
+      filteredTimeSeriesData = data.timeSeriesData;
+    } else {
+      const dateRange = getDateRange(dateFilter, customDateRange);
+      if (!dateRange) {
+        filteredJobPlans = data.jobPlans;
+        filteredCompletedJobsData = data.completedJobsData;
+        filteredTimeSeriesData = data.timeSeriesData;
+      } else {
+        const { startDate, endDate } = dateRange;
+        console.log(
+          "Filtering data from:",
+          startDate.toDateString(),
+          "to:",
+          endDate.toDateString()
         );
-      });
-
-      if (!hasRecentStepActivity) {
-        // Fallback: use job plan updatedAt (last plan update) when available, else createdAt
-        const jobTimestamp = (jobPlan as any).updatedAt ?? jobPlan.createdAt;
-        const jobDate = new Date(jobTimestamp);
-        return isDateInRange(jobDate, new Date(startDate), new Date(endDate));
-      }
-
-      return hasRecentStepActivity;
-    });
-
-    // Filter completedJobsData based on completedAt date
-    const filteredCompletedJobsData = data.completedJobsData.filter(
-      (completedJob) => {
-        const completedAt = completedJob.completedAt;
-        if (!completedAt) return false;
-        return isDateInRange(
-          completedAt,
-          new Date(startDate),
-          new Date(endDate)
+        const getStepActivityDate = (step: any): Date | null => {
+          const raw =
+            step.updatedAt ||
+            (step.stepDetails && step.stepDetails.updatedAt) ||
+            step.startDate;
+          if (!raw) return null;
+          const d = new Date(raw);
+          return isNaN(d.getTime()) ? null : d;
+        };
+        filteredJobPlans = data.jobPlans.filter((jobPlan) => {
+          const hasRecentStepActivity = jobPlan.steps.some((step) => {
+            const stepUpdateDate = getStepActivityDate(step);
+            if (!stepUpdateDate) return false;
+            return isDateInRange(
+              stepUpdateDate,
+              new Date(startDate),
+              new Date(endDate)
+            );
+          });
+          if (!hasRecentStepActivity) {
+            const jobTimestamp = (jobPlan as any).updatedAt ?? jobPlan.createdAt;
+            if (!jobTimestamp) return false;
+            const jobDate = new Date(jobTimestamp);
+            return isDateInRange(jobDate, new Date(startDate), new Date(endDate));
+          }
+          return hasRecentStepActivity;
+        });
+        filteredCompletedJobsData = data.completedJobsData.filter(
+          (completedJob) => {
+            const completedAt = completedJob.completedAt;
+            if (!completedAt) return false;
+            return isDateInRange(
+              completedAt,
+              new Date(startDate),
+              new Date(endDate)
+            );
+          }
+        );
+        // Rebuild series from filtered jobs — slicing pre-aggregated timeSeriesData left "today" empty
+        // when jobs were created on earlier days but had activity today (cards/step chart still showed data).
+        filteredTimeSeriesData = buildTimeSeriesForFilteredRange(
+          filteredJobPlans,
+          filteredCompletedJobsData,
+          startDate,
+          endDate
         );
       }
-    );
+    }
 
-    // Filter timeSeriesData based on date
-    const filteredTimeSeriesData = data.timeSeriesData.filter((timeData) => {
-      return isDateInRange(
-        timeData.date,
-        new Date(startDate),
-        new Date(endDate)
-      );
-    });
-
-    // 🔥 RECALCULATE USING THE SAME LOGIC AS processJobPlanData
     const totalJobs = filteredJobPlans.length;
     const completedJobs = filteredCompletedJobsData.length;
-
-    let inProgressJobs = 0;
-    let plannedJobs = 0;
-    let totalSteps = 0;
-    // Use held jobs count from the API data, not recalculated
     const heldJobs = data.heldJobs;
+    const plannedJobPlans: JobPlan[] = [];
+    const inProgressJobPlans: JobPlan[] = [];
+    let totalSteps = 0;
     let completedSteps = 0;
     const uniqueUsers = new Set<string>();
 
-    // 🔥 UPDATED: Process each job plan using the exact same logic
     filteredJobPlans.forEach((jobPlan) => {
       let jobCompleted = true;
       let jobInProgress = false;
@@ -1559,47 +1526,36 @@ const AdminDashboard: React.FC = () => {
 
       totalSteps += totalStepsInJob;
 
-      // 🔥 IMPORTANT: Use the exact same step processing logic
       jobPlan.steps.forEach((step) => {
-        // Track unique users
-        if (step.user) {
-          uniqueUsers.add(step.user);
-        }
-
-        // Use helper function to get actual step status
+        if (step.user) uniqueUsers.add(step.user);
         const stepStatus = getStepActualStatus(step);
-
         if (stepStatus === "hold") {
           jobOnHold = true;
           jobCompleted = false;
         } else if (stepStatus === "completed") {
-          // This step is completed
           completedStepsInJob++;
           completedSteps++;
         } else if (stepStatus === "in_progress") {
-          // This step is in progress (only if not on hold)
           jobInProgress = true;
           jobCompleted = false;
         } else {
-          // This step is planned (not started)
           jobCompleted = false;
         }
       });
 
-      // 🔥 FIXED: Use the same job categorization logic
       if (jobCompleted) {
-        // This job is completed, but we're not counting it here since it comes from completed jobs API
-        // NOTE: This case should not happen for job plans
-      }
-      // Don't increment heldJobs here - we use the count from the API
-      if (jobOnHold) {
-        // Job is on hold - don't count it as in progress or planned
+        // completed jobs come from completed jobs API
+      } else if (jobOnHold) {
+        // don't count as in progress or planned
       } else if (jobInProgress) {
-        inProgressJobs++;
+        inProgressJobPlans.push(jobPlan);
       } else {
-        plannedJobs++;
+        plannedJobPlans.push(jobPlan);
       }
     });
+
+    const plannedJobs = plannedJobPlans.length;
+    const inProgressJobs = inProgressJobPlans.length;
 
     // 🔥 RECALCULATE STEP STATS USING SAME LOGIC (if needed for step completion stats)
     const stepCompletionStats: Record<
@@ -1730,18 +1686,12 @@ const AdminDashboard: React.FC = () => {
     // Use your existing mergeStepCompletionStats function
     const mergedStepStats = mergeStepCompletionStats(stepCompletionStats);
 
-    console.log("🔍 Filtered Data Results:");
-    console.log("Total filtered jobPlans:", filteredJobPlans.length);
-    console.log("Completed jobs:", completedJobs);
-    console.log("In progress jobs:", inProgressJobs);
-    console.log("Planned jobs:", plannedJobs);
-    console.log("Held jobs (from API):", heldJobs);
-    console.log("Total jobs:", totalJobs + completedJobs);
-
     return {
-      ...data, // Keep machine utilization and other non-date-dependent data
+      ...data,
       jobPlans: filteredJobPlans,
-      totalJobs: totalJobs + completedJobs, // Total includes both in-progress and completed
+      plannedJobPlans,
+      inProgressJobPlans,
+      totalJobs: totalJobs + completedJobs,
       completedJobs,
       inProgressJobs,
       plannedJobs,
@@ -1754,9 +1704,76 @@ const AdminDashboard: React.FC = () => {
       timeSeriesData: filteredTimeSeriesData,
       completedJobsData: filteredCompletedJobsData,
       heldJobs,
-      heldJobsData: data.heldJobsData, // Keep the original held jobs data as it's not date-filtered
+      heldJobsData: data.heldJobsData,
     };
   }, [data, dateFilter, customDateRange]);
+
+  /**
+   * Demand pie must match status logic: planned + in-progress + regular held (exclude major hold).
+   * Key by jobPlanId (not nrcJobNo): the same NRC can have multiple job plans — deduping by NRC
+   * collapsed cards (e.g. 30 plans → 21 rows) and broke the total vs KPI cards.
+   */
+  const jobDemandDistributionData = useMemo(() => {
+    if (!filteredData) return [];
+
+    const planned = filteredData.plannedJobPlans ?? [];
+    const inProg = filteredData.inProgressJobPlans ?? [];
+    const heldNonMajor = (filteredData.heldJobsData ?? []).filter(
+      (h) => !heldJobHasMajorHold(h)
+    );
+
+    const byKey = new Map<string, "low" | "medium" | "high">();
+
+    const addFromPlan = (jp: JobPlan) => {
+      const d = jp.jobDemand;
+      const norm: "low" | "medium" | "high" =
+        d === "high" ? "high" : d === "low" ? "low" : "medium";
+      byKey.set(`jp:${jp.jobPlanId}`, norm);
+    };
+
+    planned.forEach(addFromPlan);
+    inProg.forEach(addFromPlan);
+
+    heldNonMajor.forEach((h) => {
+      const jpid = h.jobPlanningId;
+      const nrc = h.jobDetails?.nrcJobNo;
+      const key =
+        jpid != null && jpid !== undefined
+          ? `jp:${jpid}`
+          : nrc
+            ? `held-nrc:${nrc}`
+            : null;
+      if (!key || byKey.has(key)) return;
+
+      const raw = String(h.jobDetails?.jobDemand ?? "medium").toLowerCase();
+      let norm: "low" | "medium" | "high" = "medium";
+      if (raw === "high" || raw === "urgent") norm = "high";
+      else if (raw === "low") norm = "low";
+      byKey.set(key, norm);
+    });
+
+    let low = 0;
+    let medium = 0;
+    let high = 0;
+    byKey.forEach((v) => {
+      if (v === "high") high++;
+      else if (v === "low") low++;
+      else medium++;
+    });
+
+    return [
+      {
+        name: "Regular",
+        value: medium + low,
+        color: colors.warning,
+      },
+      {
+        name: "Urgent",
+        value: high,
+        color: colors.danger,
+      },
+    ];
+  }, [filteredData]);
 
   if (loading) {
     return (
@@ -2353,30 +2370,13 @@ const AdminDashboard: React.FC = () => {
       {/* Job Demand Distribution Pie Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <PieChartComponent
-          data={(() => {
-            const nonHeldJobs = filteredData.jobPlans.filter(
-              (jp) => !isMajorHold(jp)
-            );
-            return [
-              {
-                name: "Regular",
-                value: nonHeldJobs.filter((jp) => jp.jobDemand === "medium")
-                  .length,
-                color: colors.warning,
-              },
-              {
-                name: "Urgent",
-                value: nonHeldJobs.filter((jp) => jp.jobDemand === "high")
-                  .length,
-                color: colors.danger,
-              },
-            ];
-          })()}
+          data={jobDemandDistributionData}
           title="Job Demand Distribution"
           height={300}
           maxDataPoints={50}
           showPercentage={true}
           showValues={true}
+          centerNote="Excluding major hold and completed jobs"
         />
 
         <PieChartComponent

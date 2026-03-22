@@ -31,6 +31,8 @@ interface PieChartComponentProps {
   maxDataPoints?: number;
   showPercentage?: boolean;
   showValues?: boolean;
+  /** Optional note rendered below the Regular/Urgent counts in the card */
+  centerNote?: string;
 }
 
 const PieChartComponent: React.FC<PieChartComponentProps> = ({
@@ -42,7 +44,8 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
   className = '',
   maxDataPoints = 20,
   showPercentage = true,
-  showValues = true
+  showValues = true,
+  centerNote,
 }) => {
   // Optimize data for large datasets
   const optimizedData = useMemo(() => {
@@ -198,7 +201,7 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
         </div>
         <div className="text-sm text-gray-500">Total</div>
       </div>
-      
+
       <div style={{ height: height }} className="relative">
         <Pie data={chartData} options={options} />
         {optimizedData.length === 0 && (
@@ -226,6 +229,11 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
               </div>
             ))}
           </div>
+          {centerNote && (
+            <p className="text-sm text-gray-500 mt-3 text-center">
+              {centerNote}
+            </p>
+          )}
         </div>
       )}
     </div>
