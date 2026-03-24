@@ -161,6 +161,8 @@ const PrintingDashboard: React.FC = () => {
   const [loadingJobDetails, setLoadingJobDetails] = useState(false);
   const [jobDetailsError, setJobDetailsError] = useState<string | null>(null);
   const [activeJobTab, setActiveJobTab] = useState<"job" | "po">("job");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const manualRefreshPendingRef = useRef(false);
   const [completedSummaryDateFilter, setCompletedSummaryDateFilter] =
     useState("");
   const [completedSummaryCustomerFilter, setCompletedSummaryCustomerFilter] =
@@ -201,7 +203,20 @@ const PrintingDashboard: React.FC = () => {
   useEffect(() => {
     const key = getDashboardCacheKey(dashboardDateFilter, dashboardCustomDateRange);
     refreshCompletionRef.current = { key, main: false, bundle: false };
-  }, [dashboardDateFilter, dashboardCustomDateRange]);
+  }, [dashboardDateFilter, dashboardCustomDateRange, refreshNonce]);
+
+  // Guarantee timestamp update on explicit Refresh click
+  useEffect(() => {
+    if (!manualRefreshPendingRef.current) return;
+    if (loading || bundleLoading) return;
+
+    const refreshedAt = new Date().toISOString();
+    setLastRefreshedAt(refreshedAt);
+    if (printingDashboardCache) {
+      printingDashboardCache.lastRefreshedAt = refreshedAt;
+    }
+    manualRefreshPendingRef.current = false;
+  }, [loading, bundleLoading]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -244,6 +259,8 @@ const PrintingDashboard: React.FC = () => {
         ]);
 
         setPrintingData(data);
+        // Main refresh should be considered successful once printing details API responds.
+        mainApisLoaded = true;
 
         // Process completed jobs data
         if (completedJobsResponse.ok) {
@@ -284,7 +301,6 @@ const PrintingDashboard: React.FC = () => {
               }
             );
             setCompletedJobs(printingCompletedJobs);
-            mainApisLoaded = true;
             printingDashboardCache = {
               cacheKey: currentCacheKey,
               dateFilter: dashboardDateFilter,
@@ -299,7 +315,23 @@ const PrintingDashboard: React.FC = () => {
             };
           } else {
             setCompletedJobs([]);
+            // Keep cache in sync even when completed-jobs payload is empty/shape-different.
+            printingDashboardCache = {
+              cacheKey: currentCacheKey,
+              dateFilter: dashboardDateFilter,
+              customDateRange: dashboardCustomDateRange,
+              lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
+              printingData: data,
+              completedJobs: [],
+              bundleJobPlans: printingDashboardCache?.bundleJobPlans ?? [],
+              bundleCompletedJobs:
+                printingDashboardCache?.bundleCompletedJobs ?? [],
+              bundleHeldJobs: printingDashboardCache?.bundleHeldJobs ?? [],
+            };
           }
+        } else {
+          // Still treat refresh as successful for "Last updated" when printing API succeeded.
+          setCompletedJobs([]);
         }
       } catch (error) {
         console.error("Error loading printing data:", error);
@@ -311,7 +343,7 @@ const PrintingDashboard: React.FC = () => {
       }
     };
     loadData();
-  }, [dashboardDateFilter, dashboardCustomDateRange]);
+  }, [dashboardDateFilter, dashboardCustomDateRange, refreshNonce]);
 
   // Fetch major hold jobs count (lightweight single API call)
   useEffect(() => {
@@ -1037,15 +1069,12 @@ const PrintingDashboard: React.FC = () => {
 
   // Refresh data
   const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const data = await printingService.getAllPrintingDetails();
-      setPrintingData(data);
-    } catch (error) {
-      console.error("Error refreshing printing data:", error);
-    } finally {
-      setLoading(false);
-    }
+    // Force full dashboard refresh (all APIs/effects), not only printing details.
+    printingDashboardCache = null;
+    const key = getDashboardCacheKey(dashboardDateFilter, dashboardCustomDateRange);
+    refreshCompletionRef.current = { key, main: false, bundle: false };
+    manualRefreshPendingRef.current = true;
+    setRefreshNonce((n) => n + 1);
   };
 
   if (loading) {
@@ -1087,7 +1116,8 @@ const PrintingDashboard: React.FC = () => {
           <button
             type="button"
             onClick={handleRefresh}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+            disabled={loading || bundleLoading}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
           >
             Refresh Data
           </button>
@@ -1134,10 +1164,10 @@ const PrintingDashboard: React.FC = () => {
             <button
               type="button"
               onClick={handleRefresh}
-              disabled={loading}
+              disabled={loading || bundleLoading}
               className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
             >
-            {loading ? (
+            {loading || bundleLoading ? (
               <LoadingSpinner
                 size="sm"
                 variant="button"
