@@ -347,6 +347,57 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                             }
                           }
 
+                          if (Array.isArray(fieldValue)) {
+                            if (fieldValue.length === 0) return "N/A";
+                            // Special renderer for Dispatch History rows from dispatchProcess payload
+                            if (fieldName === "dispatchHistory") {
+                              return fieldValue
+                                .map((entry: any, index: number) => {
+                                  const dispatchNo =
+                                    entry?.dispatchNo || "N/A";
+                                  const dispatchDate = entry?.dispatchDate
+                                    ? formatDateOnly(entry.dispatchDate)
+                                    : "N/A";
+                                  const dispatchedQty =
+                                    entry?.dispatchedQty ?? "N/A";
+                                  const operatorName =
+                                    entry?.operatorName || "N/A";
+                                  const remarks =
+                                    entry?.remarks && String(entry.remarks).trim()
+                                      ? entry.remarks
+                                      : "N/A";
+                                  return `${index + 1}. ${dispatchNo} | Date: ${dispatchDate} | Qty: ${dispatchedQty} | Operator: ${operatorName} | Remarks: ${remarks}`;
+                                })
+                                .join("\n");
+                            }
+
+                            // Generic array formatter (objects -> key:value pairs)
+                            return fieldValue
+                              .map((item) => {
+                                if (
+                                  item &&
+                                  typeof item === "object" &&
+                                  !Array.isArray(item)
+                                ) {
+                                  return Object.entries(item)
+                                    .map(([k, v]) => `${k}: ${v ?? "N/A"}`)
+                                    .join(", ");
+                                }
+                                return String(item);
+                              })
+                              .join("\n");
+                          }
+
+                          if (
+                            fieldValue &&
+                            typeof fieldValue === "object" &&
+                            !Array.isArray(fieldValue)
+                          ) {
+                            return Object.entries(fieldValue)
+                              .map(([k, v]) => `${k}: ${v ?? "N/A"}`)
+                              .join(", ");
+                          }
+
                           return String(fieldValue);
                         };
 
@@ -355,7 +406,7 @@ const JobStepDetailsPopup: React.FC<JobStepDetailsPopupProps> = ({
                             <span className="text-xs font-medium text-gray-600 capitalize">
                               {key.replace(/([A-Z])/g, " $1").trim()}:
                             </span>
-                            <p className="text-xs text-gray-800 break-all">
+                            <p className="text-xs text-gray-800 whitespace-pre-line break-words">
                               {formatValue(key, value)}
                             </p>
                           </div>

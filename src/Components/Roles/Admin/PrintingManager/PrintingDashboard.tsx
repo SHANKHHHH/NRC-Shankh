@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CheckCircleIcon,
+  BuildingOfficeIcon,
+  CalendarDaysIcon,
   XCircleIcon,
   ClockIcon,
   MagnifyingGlassIcon,
@@ -13,20 +15,107 @@ import {
   ArrowPathIcon,
   PlayCircleIcon,
   PauseCircleIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 import {
   printingService,
   type PrintingDetails,
-  type PrintingSummary,
 } from "./printingService";
 import LoadingSpinner from "../../../common/LoadingSpinner";
+import JobAndPODetailsModal from "../../../common/JobAndPODetailsModal";
+import {
+  fetchJobWithPODetails,
+  type JobDetailsWithPOData,
+} from "../../../../utils/jobPoDetailsFetch";
+import { fetchStepDetailsBatch } from "../../../../utils/dashboardStepDetailsBatch";
 import { useUsers } from "../../../../context/UsersContext";
+import StatisticsGrid from "../StatisticsCards/StatisticsGrid";
+import DateFilterComponent, {
+  type DateFilterType,
+} from "../FilterComponents/DateFilterComponent";
+
+type BundleStep = {
+  id?: number;
+  stepNo?: number;
+  stepName?: string;
+  status?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  user?: string | null;
+  machineDetails?: Array<{
+    machineCode?: string | null;
+    machine?: { capacity?: number | string | null } | null;
+  }>;
+  stepDetails?: { data?: { status?: string }; status?: string } | null;
+};
+
+type BundleJobPlan = {
+  jobPlanId: number;
+  nrcJobNo: string;
+  jobDemand?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  steps: BundleStep[];
+  [key: string]: any;
+};
+
+type BundleCompletedJob = {
+  id: number;
+  nrcJobNo: string;
+  completedAt: string;
+  jobDetails?: any;
+  purchaseOrderDetails?: any;
+  allSteps?: any[];
+  allStepDetails?: any;
+  [key: string]: any;
+};
+
+type PrintingDashboardCache = {
+  cacheKey: string;
+  dateFilter: DateFilterType;
+  customDateRange: { start: string; end: string };
+  lastRefreshedAt: string | null;
+  printingData: PrintingDetails[];
+  completedJobs: any[];
+  bundleJobPlans: BundleJobPlan[];
+  bundleCompletedJobs: BundleCompletedJob[];
+  bundleHeldJobs: any[];
+};
+
+let printingDashboardCache: PrintingDashboardCache | null = null;
+
+const formatDdMmYyyy = (dateString: string | null | undefined): string => {
+  if (!dateString) return "—";
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const formatInr = (value: number): string =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
 
 const PrintingDashboard: React.FC = () => {
   const { getUserName } = useUsers();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnedState = (location.state ||
+    {}) as Partial<{
+    dateFilter: DateFilterType;
+    customDateRange: { start: string; end: string };
+  }>;
+  const defaultCustomRange = {
+    start: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
+    end: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()).padStart(2, "0")}`,
+  };
   const [printingData, setPrintingData] = useState<PrintingDetails[]>([]);
-  const [summaryData, setSummaryData] = useState<PrintingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -38,32 +127,113 @@ const PrintingDashboard: React.FC = () => {
   const [majorHoldJobsCount, setMajorHoldJobsCount] = useState<number>(0);
   const [isLoadingMajorHoldJobs, setIsLoadingMajorHoldJobs] = useState(false);
 
+  // Added block (bundle-backed) for Printing dashboard header cards + completed summary + job cards overview.
+  const [bundleLoading, setBundleLoading] = useState(false);
+  const [bundleJobPlans, setBundleJobPlans] = useState<BundleJobPlan[]>([]);
+  const [bundleCompletedJobs, setBundleCompletedJobs] = useState<
+    BundleCompletedJob[]
+  >([]);
+  const [bundleHeldJobs, setBundleHeldJobs] = useState<any[]>([]);
+  const [dashboardDateFilter, setDashboardDateFilter] =
+    useState<DateFilterType>(
+      () =>
+        returnedState.dateFilter ??
+        printingDashboardCache?.dateFilter ??
+        "today"
+    );
+  const [dashboardCustomDateRange, setDashboardCustomDateRange] = useState<{
+    start: string;
+    end: string;
+  }>(() => returnedState.customDateRange ?? printingDashboardCache?.customDateRange ?? defaultCustomRange);
+
+  const [jobCardsSearchTerm, setJobCardsSearchTerm] = useState("");
+  const [jobCardsDemandFilter, setJobCardsDemandFilter] = useState<
+    "all" | "medium" | "high"
+  >("all");
+  const [jobCardsStatusFilter, setJobCardsStatusFilter] = useState<
+    "all" | "completed" | "inProgress" | "planned"
+  >("all");
+  const [isJobStepsModalOpen, setIsJobStepsModalOpen] = useState(false);
+  const [selectedJobPlanForModal, setSelectedJobPlanForModal] =
+    useState<BundleJobPlan | null>(null);
+  const [jobDetailsWithPO, setJobDetailsWithPO] =
+    useState<JobDetailsWithPOData | null>(null);
+  const [loadingJobDetails, setLoadingJobDetails] = useState(false);
+  const [jobDetailsError, setJobDetailsError] = useState<string | null>(null);
+  const [activeJobTab, setActiveJobTab] = useState<"job" | "po">("job");
+  const [completedSummaryDateFilter, setCompletedSummaryDateFilter] =
+    useState("");
+  const [completedSummaryCustomerFilter, setCompletedSummaryCustomerFilter] =
+    useState("");
+  const [completedSummaryUnitFilter, setCompletedSummaryUnitFilter] =
+    useState("");
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(
+    () => printingDashboardCache?.lastRefreshedAt ?? null
+  );
+
+  const getDashboardCacheKey = (
+    filter: DateFilterType,
+    customRange: { start: string; end: string }
+  ) => `${filter}-${customRange.start}-${customRange.end}`;
+
+  const refreshCompletionRef = useRef<{
+    key: string;
+    main: boolean;
+    bundle: boolean;
+  }>({
+    key: "",
+    main: false,
+    bundle: false,
+  });
+
+  const markApisCompleted = (source: "main" | "bundle", key: string) => {
+    if (refreshCompletionRef.current.key !== key) return;
+    refreshCompletionRef.current[source] = true;
+    if (refreshCompletionRef.current.main && refreshCompletionRef.current.bundle) {
+      const refreshedAt = new Date().toISOString();
+      setLastRefreshedAt(refreshedAt);
+      if (printingDashboardCache && printingDashboardCache.cacheKey === key) {
+        printingDashboardCache.lastRefreshedAt = refreshedAt;
+      }
+    }
+  };
+
+  useEffect(() => {
+    const key = getDashboardCacheKey(dashboardDateFilter, dashboardCustomDateRange);
+    refreshCompletionRef.current = { key, main: false, bundle: false };
+  }, [dashboardDateFilter, dashboardCustomDateRange]);
+
   useEffect(() => {
     const loadData = async () => {
+      const currentCacheKey = getDashboardCacheKey(
+        dashboardDateFilter,
+        dashboardCustomDateRange
+      );
+      if (printingDashboardCache?.cacheKey === currentCacheKey) {
+        setPrintingData(printingDashboardCache.printingData);
+        setCompletedJobs(printingDashboardCache.completedJobs);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
+      let mainApisLoaded = false;
       try {
         const accessToken = localStorage.getItem("accessToken");
         if (!accessToken) {
           throw new Error("Authentication token not found");
         }
-
-        // Fetch completed jobs from current month
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
+        const baseUrl = (import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com").replace(/\/$/, "");
+        const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
         const queryParams = new URLSearchParams();
-        queryParams.append(
-          "startDate",
-          startOfMonth.toISOString().split("T")[0]
-        );
-        queryParams.append("endDate", endOfMonth.toISOString().split("T")[0]);
+        if (range) {
+          queryParams.append("startDate", range.start);
+          queryParams.append("endDate", range.end);
+        }
 
-        const [data, summary, completedJobsResponse] = await Promise.all([
+        const [data, completedJobsResponse] = await Promise.all([
           printingService.getAllPrintingDetails(),
-          printingService.getPrintingStatistics(),
           fetch(
-            `https://nrprod.nrcontainers.com/api/completed-jobs?${queryParams.toString()}`,
+            `${baseUrl}/api/completed-jobs${queryParams.toString() ? `?${queryParams.toString()}` : ""}`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -74,37 +244,18 @@ const PrintingDashboard: React.FC = () => {
         ]);
 
         setPrintingData(data);
-        setSummaryData(summary);
 
         // Process completed jobs data
         if (completedJobsResponse.ok) {
           const completedJobsResult = await completedJobsResponse.json();
-          console.log(
-            "Printing - Completed jobs API response:",
-            completedJobsResult
-          );
-
           if (
             completedJobsResult.success &&
             Array.isArray(completedJobsResult.data)
           ) {
-            console.log(
-              "Printing - Completed jobs data:",
-              completedJobsResult.data
-            );
-
             // Filter for PrintingDetails steps and map to PrintingDetails format
             const printingCompletedJobs = completedJobsResult.data.flatMap(
               (job: any) => {
-                console.log(
-                  "Printing - Processing job:",
-                  job.nrcJobNo,
-                  "allStepDetails:",
-                  job.allStepDetails
-                );
                 const printingSteps = job.allStepDetails?.printingDetails || [];
-                console.log("Printing - Printing steps found:", printingSteps);
-
                 return printingSteps.map((step: any) => ({
                   id: step.id || 0,
                   jobNrcJobNo: step.jobNrcJobNo || job.nrcJobNo || "-",
@@ -132,28 +283,35 @@ const PrintingDashboard: React.FC = () => {
                 }));
               }
             );
-            console.log(
-              "Printing - Processed completed jobs:",
-              printingCompletedJobs
-            );
             setCompletedJobs(printingCompletedJobs);
+            mainApisLoaded = true;
+            printingDashboardCache = {
+              cacheKey: currentCacheKey,
+              dateFilter: dashboardDateFilter,
+              customDateRange: dashboardCustomDateRange,
+              lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
+              printingData: data,
+              completedJobs: printingCompletedJobs,
+              bundleJobPlans: printingDashboardCache?.bundleJobPlans ?? [],
+              bundleCompletedJobs:
+                printingDashboardCache?.bundleCompletedJobs ?? [],
+              bundleHeldJobs: printingDashboardCache?.bundleHeldJobs ?? [],
+            };
           } else {
-            console.log("Printing - No completed jobs data or invalid format");
+            setCompletedJobs([]);
           }
-        } else {
-          console.log(
-            "Printing - Completed jobs API failed:",
-            completedJobsResponse.status
-          );
         }
       } catch (error) {
         console.error("Error loading printing data:", error);
       } finally {
         setLoading(false);
+        if (mainApisLoaded) {
+          markApisCompleted("main", currentCacheKey);
+        }
       }
     };
     loadData();
-  }, []);
+  }, [dashboardDateFilter, dashboardCustomDateRange]);
 
   // Fetch major hold jobs count (lightweight single API call)
   useEffect(() => {
@@ -184,19 +342,285 @@ const PrintingDashboard: React.FC = () => {
     fetchMajorHoldJobsCount();
   }, []);
 
-  // Combine printingData with completed jobs
+  const getDateRange = (
+    filter: DateFilterType,
+    customRange?: { start: string; end: string }
+  ) => {
+    const today = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const toDateKey = (d: Date) =>
+      `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    switch (filter) {
+      case "today":
+        return {
+          start: toDateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate())),
+          end: toDateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate())),
+        };
+      case "yesterday": {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 1);
+        return { start: toDateKey(d), end: toDateKey(d) };
+      }
+      case "week": {
+        const start = new Date(today);
+        const dow = today.getDay();
+        const mondayDiff = dow === 0 ? -6 : 1 - dow;
+        start.setDate(today.getDate() + mondayDiff);
+        return { start: toDateKey(start), end: toDateKey(today) };
+      }
+      case "month": {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return { start: toDateKey(start), end: toDateKey(end) };
+      }
+      case "quarter": {
+        const qStartMonth = Math.floor(today.getMonth() / 3) * 3;
+        const start = new Date(today.getFullYear(), qStartMonth, 1);
+        const end = new Date(today.getFullYear(), qStartMonth + 3, 0);
+        return { start: toDateKey(start), end: toDateKey(end) };
+      }
+      case "year": {
+        const start = new Date(today.getFullYear(), 0, 1);
+        const end = new Date(today.getFullYear(), 11, 31);
+        return { start: toDateKey(start), end: toDateKey(end) };
+      }
+      case "custom":
+        if (customRange?.start && customRange?.end) return customRange;
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  const isDateInRange = (
+    dateLike: string | null | undefined,
+    startKey: string,
+    endKey: string
+  ): boolean => {
+    if (!dateLike) return false;
+    const d = new Date(dateLike);
+    if (Number.isNaN(d.getTime())) return false;
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    return key >= startKey && key <= endKey;
+  };
+
+  const getStepActualStatus = (step: BundleStep): "completed" | "in_progress" | "hold" | "planned" => {
+    if (
+      step.stepDetails?.data?.status === "major_hold" ||
+      step.stepDetails?.status === "major_hold" ||
+      step.status === "major_hold"
+    ) {
+      return "hold";
+    }
+    if (
+      step.stepDetails?.data?.status === "hold" ||
+      step.stepDetails?.status === "hold"
+    ) {
+      return "hold";
+    }
+
+    // Keep same PaperStore handling as Admin dashboard
+    if (step.stepName === "PaperStore") {
+      const paperStore = (step as any).paperStore;
+      if (paperStore?.status) {
+        if (paperStore.status === "accept") return "completed";
+        if (paperStore.status === "in_progress") return "in_progress";
+        if (paperStore.status === "hold") return "hold";
+      }
+    }
+
+    // Priority 1: stepDetails.data.status
+    if (step.stepDetails?.data?.status) {
+      if (step.stepDetails.data.status === "accept") {
+        if (step.status === "stop") return "completed";
+        if (step.status === "start") return "in_progress";
+      }
+      if (step.stepDetails.data.status === "in_progress") return "in_progress";
+      if (step.stepDetails.data.status === "hold") return "hold";
+    }
+
+    // Priority 2: stepDetails.status
+    if (step.stepDetails?.status) {
+      if (step.stepDetails.status === "accept") {
+        if (step.status === "stop") return "completed";
+        if (step.status === "start") return "in_progress";
+      }
+      if (step.stepDetails.status === "in_progress") return "in_progress";
+      if (step.stepDetails.status === "hold") return "hold";
+    }
+
+    // Priority 3/4: direct step status (same as Admin)
+    if ((step.status as any) === "accept") return "completed";
+    if ((step.status as any) === "in_progress") return "in_progress";
+    if (step.status === "stop") return "completed";
+    if (step.status === "start") return "in_progress";
+    return "planned";
+  };
+
+  const isMajorHoldJob = (jobPlan: BundleJobPlan): boolean =>
+    (jobPlan.steps || []).some((step: any) => {
+      if (step.status === "major_hold") return true;
+      if (
+        step.paperStore?.status === "major_hold" ||
+        step.printingDetails?.status === "major_hold" ||
+        step.corrugation?.status === "major_hold" ||
+        step.flutelam?.status === "major_hold" ||
+        step.fluteLaminateBoardConversion?.status === "major_hold" ||
+        step.punching?.status === "major_hold" ||
+        step.sideFlapPasting?.status === "major_hold" ||
+        step.qualityDept?.status === "major_hold" ||
+        step.dispatchProcess?.status === "major_hold"
+      ) {
+        return true;
+      }
+      if (
+        step.stepDetails?.data?.status === "major_hold" ||
+        step.stepDetails?.status === "major_hold"
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+  useEffect(() => {
+    const loadRoleBundle = async () => {
+      const currentCacheKey = getDashboardCacheKey(
+        dashboardDateFilter,
+        dashboardCustomDateRange
+      );
+      let bundleApisLoaded = false;
+      if (printingDashboardCache?.cacheKey === currentCacheKey) {
+        setBundleJobPlans(printingDashboardCache.bundleJobPlans);
+        setBundleCompletedJobs(printingDashboardCache.bundleCompletedJobs);
+        setBundleHeldJobs(printingDashboardCache.bundleHeldJobs);
+        setBundleLoading(false);
+        return;
+      }
+      try {
+        setBundleLoading(true);
+        const accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) return;
+        const baseUrl = (import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com").replace(/\/$/, "");
+        const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
+        const query = new URLSearchParams();
+        if (range) {
+          query.set("startDate", range.start);
+          query.set("endDate", range.end);
+        }
+        const response = await fetch(
+          `${baseUrl}/api/dashboard/role-bundle${query.toString() ? `?${query.toString()}` : ""}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!response.ok) return;
+        const json = await response.json();
+        if (!json?.success || !json?.data) return;
+        bundleApisLoaded = true;
+        const jobPlanning = json.data.jobPlanning;
+        const completed = json.data.completedJobs;
+        const held = json.data.heldMachines;
+        if (jobPlanning?.success && Array.isArray(jobPlanning.data)) {
+          const jobPlans = jobPlanning.data as BundleJobPlan[];
+          const stepIndexList = jobPlans.flatMap((jp: BundleJobPlan) =>
+            (jp.steps || []).map((s: BundleStep) => ({
+              stepId: Number(s.id),
+              stepName: String(s.stepName || ""),
+            }))
+          );
+          const detailsByStepId = await fetchStepDetailsBatch(
+            baseUrl,
+            accessToken,
+            stepIndexList.filter(
+              (s) => Number.isFinite(s.stepId) && s.stepId > 0 && !!s.stepName
+            )
+          );
+          const jobPlansWithDetails = jobPlans.map((jobPlan: BundleJobPlan) => ({
+            ...jobPlan,
+            steps: (jobPlan.steps || []).map((step: BundleStep) => ({
+              ...step,
+              stepDetails:
+                (detailsByStepId[String(step.id)] as
+                  | { data?: { status?: string }; status?: string }
+                  | null
+                  | undefined) ?? null,
+            })),
+          }));
+          setBundleJobPlans(jobPlansWithDetails);
+          printingDashboardCache = {
+            cacheKey: currentCacheKey,
+            dateFilter: dashboardDateFilter,
+            customDateRange: dashboardCustomDateRange,
+            lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
+            printingData: printingDashboardCache?.printingData ?? [],
+            completedJobs: printingDashboardCache?.completedJobs ?? [],
+            bundleJobPlans: jobPlansWithDetails,
+            bundleCompletedJobs: completed?.success && Array.isArray(completed.data) ? completed.data : [],
+            bundleHeldJobs:
+              held?.success && Array.isArray(held.data?.heldJobs)
+                ? held.data.heldJobs
+                : held?.success && Array.isArray(held.data)
+                  ? held.data
+                  : Array.isArray(json.data?.heldJobs)
+                    ? json.data.heldJobs
+                    : [],
+          };
+        } else {
+          setBundleJobPlans([]);
+        }
+        if (completed?.success && Array.isArray(completed.data)) {
+          setBundleCompletedJobs(completed.data);
+        } else {
+          setBundleCompletedJobs([]);
+        }
+        if (held?.success) {
+          if (Array.isArray(held.data?.heldJobs)) {
+            setBundleHeldJobs(held.data.heldJobs);
+          } else if (Array.isArray(held.data)) {
+            setBundleHeldJobs(held.data);
+          } else {
+            setBundleHeldJobs([]);
+          }
+        } else if (Array.isArray(json.data?.heldJobs)) {
+          setBundleHeldJobs(json.data.heldJobs);
+        } else {
+          setBundleHeldJobs([]);
+        }
+      } catch (e) {
+        console.warn("Printing dashboard role-bundle load failed:", e);
+      } finally {
+        setBundleLoading(false);
+        if (bundleApisLoaded) {
+          markApisCompleted("bundle", currentCacheKey);
+        }
+      }
+    };
+    loadRoleBundle();
+  }, [dashboardDateFilter, dashboardCustomDateRange]);
+
+  // Combine printingData with completed jobs, then apply the top dashboard date filter.
   const allPrintingData = useMemo(() => {
     const combined = [...printingData, ...completedJobs];
-    console.log("Printing - Original printing data:", printingData);
-    console.log("Printing - Completed jobs data:", completedJobs);
-    console.log("Printing - Combined all printing data:", combined);
-    return combined;
-  }, [printingData, completedJobs]);
+    const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
+    if (!range) return combined;
+    const filtered = combined.filter((item) => {
+      const main = isDateInRange(item.date, range.start, range.end);
+      const delivery = isDateInRange(
+        (item as any).deliveryDate as string | null | undefined,
+        range.start,
+        range.end
+      );
+      return main || delivery;
+    });
+    return filtered;
+  }, [
+    printingData,
+    completedJobs,
+    dashboardDateFilter,
+    dashboardCustomDateRange,
+  ]);
 
   // Calculate updated summary data including completed jobs
   const updatedSummaryData = useMemo(() => {
-    if (!summaryData) return null;
-
     const totalPrintJobs = allPrintingData.length;
     const totalQuantityPrinted = allPrintingData.reduce(
       (sum, item) => sum + (item.quantity || 0),
@@ -234,7 +658,6 @@ const PrintingDashboard: React.FC = () => {
         : 0;
 
     return {
-      ...summaryData,
       totalPrintJobs,
       totalQuantityPrinted,
       totalWastage,
@@ -246,7 +669,7 @@ const PrintingDashboard: React.FC = () => {
       plannedJobs,
       averageWastagePercentage,
     };
-  }, [summaryData, allPrintingData]);
+  }, [allPrintingData]);
 
   // Filter data based on search and status
   const filteredData = useMemo(() => {
@@ -267,7 +690,6 @@ const PrintingDashboard: React.FC = () => {
 
       return matchesSearch && matchesStatus;
     });
-    console.log("Printing - Filtered data:", filtered.length, "items");
     return filtered;
   }, [allPrintingData, searchTerm, statusFilter]);
 
@@ -276,21 +698,196 @@ const PrintingDashboard: React.FC = () => {
     const sorted = [...filteredData].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-    console.log("Printing - Sorted data:", sorted.length, "items");
     return sorted;
   }, [filteredData]);
 
   // Show all data or limit to 5 based on state
   const displayData = useMemo(() => {
-    const data = showAllData ? sortedData : sortedData.slice(0, 5);
-    console.log(
-      "Printing - Display data:",
-      data.length,
-      "items",
-      showAllData ? "(all)" : "(latest 5)"
-    );
-    return data;
+    return showAllData ? sortedData : sortedData.slice(0, 5);
   }, [sortedData, showAllData]);
+
+  const filteredBundleData = useMemo(() => {
+    const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
+    if (!range) {
+      return {
+        jobPlans: bundleJobPlans,
+        completedJobs: bundleCompletedJobs,
+      };
+    }
+    const inRange = (raw: string | null | undefined) =>
+      isDateInRange(raw, range.start, range.end);
+
+    const jobPlans = bundleJobPlans.filter((jp) => {
+      const steps = Array.isArray(jp.steps) ? jp.steps : [];
+      const hasStepActivity = steps.some((s: any) => {
+        const sd = s?.stepDetails?.data;
+        return (
+          inRange(s?.updatedAt) ||
+          inRange(s?.startDate) ||
+          inRange(s?.endDate) ||
+          inRange(sd?.date) ||
+          inRange(sd?.updatedAt)
+        );
+      });
+      if (hasStepActivity) return true;
+      return inRange((jp as any).updatedAt) || inRange((jp as any).createdAt);
+    });
+
+    const completedJobs = bundleCompletedJobs.filter((cj) =>
+      inRange(cj.completedAt)
+    );
+
+    return { jobPlans, completedJobs };
+  }, [
+    bundleJobPlans,
+    bundleCompletedJobs,
+    dashboardDateFilter,
+    dashboardCustomDateRange,
+  ]);
+
+  const bundleDerivedStats = useMemo(() => {
+    const planned: BundleJobPlan[] = [];
+    const inProgress: BundleJobPlan[] = [];
+    const uniqueUsers = new Set<string>();
+    filteredBundleData.jobPlans.forEach((jp) => {
+      let jobCompleted = true;
+      let jobInProgress = false;
+      let jobOnHold = false;
+      (jp.steps || []).forEach((step) => {
+        if (step.user) uniqueUsers.add(step.user);
+        const st = getStepActualStatus(step);
+        if (st === "hold") {
+          jobOnHold = true;
+          jobCompleted = false;
+        } else if (st === "in_progress") {
+          jobInProgress = true;
+          jobCompleted = false;
+        } else if (st !== "completed") {
+          jobCompleted = false;
+        }
+      });
+      if (jobCompleted) {
+        // counted in completedJobs list from bundle
+      } else if (jobOnHold && !isMajorHoldJob(jp)) {
+        // held count comes from held API; don't double-count
+      } else if (jobInProgress) {
+        inProgress.push(jp);
+      } else {
+        planned.push(jp);
+      }
+    });
+    const completed = filteredBundleData.completedJobs.length;
+    const held = bundleHeldJobs.length;
+    return {
+      planned,
+      inProgress,
+      completed,
+      held,
+      activeUsers: uniqueUsers.size,
+      total: planned.length + inProgress.length + completed + held,
+    };
+  }, [filteredBundleData, bundleHeldJobs]);
+
+  const completedSummaryRows = useMemo(() => {
+    return filteredBundleData.completedJobs.map((job) => {
+      const dispatch = Array.isArray(job.allStepDetails?.dispatchProcess)
+        ? job.allStepDetails.dispatchProcess[0]
+        : null;
+      const dispatchQty = Number(
+        dispatch?.totalDispatchedQty ?? dispatch?.quantity ?? 0
+      );
+      const rate = Number(job.jobDetails?.latestRate ?? 0);
+      const unit =
+        (Array.isArray(job.allSteps)
+          ? job.allSteps.find((s: any) => s?.stepName === "DispatchProcess")
+              ?.machineDetails?.[0]?.unit
+          : null) || "N/A";
+      const dispatchDate =
+        dispatch?.dispatchDate ?? dispatch?.date ?? job.purchaseOrderDetails?.deliveryDate ?? null;
+      return {
+        id: job.id,
+        date: formatDdMmYyyy(job.completedAt),
+        customer:
+          job.jobDetails?.customerName || job.purchaseOrderDetails?.customer || "—",
+        unit,
+        dispatchDate: formatDdMmYyyy(dispatchDate),
+        dispatchQty,
+        totalValue: rate > 0 && dispatchQty > 0 ? rate * dispatchQty : 0,
+      };
+    });
+  }, [filteredBundleData.completedJobs]);
+
+  const completedSummaryRevenue = useMemo(
+    () => completedSummaryRows.reduce((s, r) => s + r.totalValue, 0),
+    [completedSummaryRows]
+  );
+
+  const completedSummaryFilteredRows = useMemo(() => {
+    const df = completedSummaryDateFilter.trim().toLowerCase();
+    const cf = completedSummaryCustomerFilter.trim().toLowerCase();
+    const uf = completedSummaryUnitFilter.trim().toLowerCase();
+
+    return completedSummaryRows.filter((r) => {
+      const matchesDate = !df
+        ? true
+        : `${r.date} ${r.dispatchDate}`.toLowerCase().includes(df);
+      const matchesCustomer = !cf ? true : String(r.customer).toLowerCase().includes(cf);
+      const matchesUnit = !uf ? true : String(r.unit).toLowerCase().includes(uf);
+      return matchesDate && matchesCustomer && matchesUnit;
+    });
+  }, [
+    completedSummaryRows,
+    completedSummaryDateFilter,
+    completedSummaryCustomerFilter,
+    completedSummaryUnitFilter,
+  ]);
+
+  const completedSummaryFilteredRevenue = useMemo(
+    () => completedSummaryFilteredRows.reduce((s, r) => s + r.totalValue, 0),
+    [completedSummaryFilteredRows]
+  );
+
+  const jobCardsRows = useMemo(() => {
+    const getProgress = (jp: BundleJobPlan) => {
+      const steps = jp.steps || [];
+      const done = steps.filter((s) => getStepActualStatus(s) === "completed").length;
+      return steps.length > 0 ? Math.round((done / steps.length) * 100) : 0;
+    };
+    const getJobStatus = (jp: BundleJobPlan) => {
+      const statuses = (jp.steps || []).map((s) => getStepActualStatus(s));
+      const hasInProgress = statuses.includes("in_progress");
+      const hasHold = statuses.includes("hold");
+      const allCompleted = statuses.length > 0 && statuses.every((s) => s === "completed");
+      if (allCompleted) return "completed";
+      if (hasInProgress || hasHold) return "inProgress";
+      return "planned";
+    };
+    return filteredBundleData.jobPlans
+      .filter((jp) => {
+        const matchesSearch = jp.nrcJobNo
+          ?.toLowerCase()
+          .includes(jobCardsSearchTerm.toLowerCase());
+        const rawDemand = String(jp.jobDemand || "").toLowerCase();
+        const demand = rawDemand === "low" ? "medium" : rawDemand;
+        const matchesDemand =
+          jobCardsDemandFilter === "all" || demand === jobCardsDemandFilter;
+        const status = getJobStatus(jp);
+        const matchesStatus =
+          jobCardsStatusFilter === "all" || status === jobCardsStatusFilter;
+        return !!matchesSearch && matchesDemand && matchesStatus;
+      })
+      .sort((a, b) => getProgress(b) - getProgress(a))
+      .map((jp) => ({
+        jobPlan: jp,
+        progress: getProgress(jp),
+        status: getJobStatus(jp),
+      }));
+  }, [
+    filteredBundleData.jobPlans,
+    jobCardsSearchTerm,
+    jobCardsDemandFilter,
+    jobCardsStatusFilter,
+  ]);
 
   // Get status color and label
   const getStatusInfo = (status: string) => {
@@ -340,6 +937,82 @@ const PrintingDashboard: React.FC = () => {
     }
   };
 
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "-";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
+  const handleViewSteps = (jobPlan: BundleJobPlan) => {
+    setSelectedJobPlanForModal(jobPlan);
+    setIsJobStepsModalOpen(true);
+  };
+
+  const handleJobCardClick = async (nrcJobNo: string) => {
+    setLoadingJobDetails(true);
+    setJobDetailsError(null);
+    setActiveJobTab("job");
+    try {
+      const details = await fetchJobWithPODetails(nrcJobNo);
+      setJobDetailsWithPO(details);
+    } catch (error) {
+      setJobDetailsError("Failed to fetch job details. Please try again.");
+      console.error("Error fetching job details:", error);
+    } finally {
+      setLoadingJobDetails(false);
+    }
+  };
+
+  const getStepDisplayStatus = (step: BundleStep): string => {
+    const raw =
+      (step as any).stepSpecificData?.status ??
+      (step as any).paperStore?.status ??
+      (step as any).printingDetails?.status ??
+      (step as any).corrugation?.status ??
+      (step as any).flutelam?.status ??
+      (step as any).fluteLaminateBoardConversion?.status ??
+      (step as any).punching?.status ??
+      (step as any).sideFlapPasting?.status ??
+      (step as any).qualityDept?.status ??
+      (step as any).dispatchProcess?.status ??
+      step.stepDetails?.data?.status ??
+      step.stepDetails?.status ??
+      step.status ??
+      "planned";
+    return typeof raw === "string" ? raw : "planned";
+  };
+
+  const formatStepStatusLabel = (status: string): string =>
+    String(status)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const getStepStatusBadgeClass = (status: string): string => {
+    const base = "inline-block px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap";
+    switch (status) {
+      case "stop":
+      case "accept":
+        return `${base} bg-green-100 text-green-800`;
+      case "start":
+      case "in_progress":
+        return `${base} bg-blue-100 text-blue-800`;
+      case "planned":
+        return `${base} bg-gray-100 text-gray-600`;
+      case "major_hold":
+        return `${base} bg-red-100 text-red-800`;
+      case "hold":
+        return `${base} bg-orange-100 text-orange-800`;
+      default:
+        return `${base} bg-gray-100 text-gray-600`;
+    }
+  };
+
   // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-GB", {
@@ -366,12 +1039,8 @@ const PrintingDashboard: React.FC = () => {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const [data, summary] = await Promise.all([
-        printingService.getAllPrintingDetails(),
-        printingService.getPrintingStatistics(),
-      ]);
+      const data = await printingService.getAllPrintingDetails();
       setPrintingData(data);
-      setSummaryData(summary);
     } catch (error) {
       console.error("Error refreshing printing data:", error);
     } finally {
@@ -416,6 +1085,7 @@ const PrintingDashboard: React.FC = () => {
             No printing jobs found in the system.
           </p>
           <button
+            type="button"
             onClick={handleRefresh}
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
           >
@@ -425,8 +1095,6 @@ const PrintingDashboard: React.FC = () => {
       </div>
     );
   }
-
-  console.log("printing data", printingData);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -464,10 +1132,11 @@ const PrintingDashboard: React.FC = () => {
               )}
             </button>
             <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
-          >
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+            >
             {loading ? (
               <LoadingSpinner
                 size="sm"
@@ -498,14 +1167,336 @@ const PrintingDashboard: React.FC = () => {
         </div>
         <p className="text-sm text-gray-500">
           Last updated:{" "}
-          {new Date().toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          {lastRefreshedAt
+            ? new Date(lastRefreshedAt).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "-"}
         </p>
+      </div>
+
+      {/* Added sections (keeps existing printing dashboard intact below) */}
+      <div className="mb-8 space-y-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <DateFilterComponent
+            dateFilter={dashboardDateFilter}
+            setDateFilter={setDashboardDateFilter}
+            customDateRange={dashboardCustomDateRange}
+            setCustomDateRange={setDashboardCustomDateRange}
+          />
+        </div>
+
+        {bundleLoading ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <LoadingSpinner size="md" text="Loading bundled dashboard data..." />
+          </div>
+        ) : (
+          <>
+            <StatisticsGrid
+              totalJobs={bundleDerivedStats.total}
+              completedJobs={bundleDerivedStats.completed}
+              inProgressJobs={bundleDerivedStats.inProgress.length}
+              plannedJobs={bundleDerivedStats.planned.length}
+              activeUsers={bundleDerivedStats.activeUsers}
+              heldJobs={bundleDerivedStats.held}
+              onCompletedJobsClick={() =>
+                navigate("/dashboard/completed-jobs", {
+                  state: {
+                    completedJobs: filteredBundleData.completedJobs,
+                    dateFilter: dashboardDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                    fromPrintingDashboard: true,
+                  },
+                })
+              }
+              onInProgressJobsClick={() =>
+                navigate("/dashboard/in-progress-jobs", {
+                  state: {
+                    inProgressJobs: bundleDerivedStats.inProgress,
+                    dateFilter: dashboardDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                    fromPrintingDashboard: true,
+                  },
+                })
+              }
+              onPlannedJobsClick={() =>
+                navigate("/dashboard/planned-jobs", {
+                  state: {
+                    plannedJobs: bundleDerivedStats.planned,
+                    dateFilter: dashboardDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                    fromPrintingDashboard: true,
+                  },
+                })
+              }
+              onHeldJobsClick={() =>
+                navigate("/dashboard/held-jobs", {
+                  state: {
+                    heldJobs: bundleHeldJobs,
+                    dateFilter: dashboardDateFilter,
+                    customDateRange: dashboardCustomDateRange,
+                    fromPrintingDashboard: true,
+                  },
+                })
+              }
+            />
+
+            {completedSummaryRows.length > 0 && (
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+                <div className="bg-[#00AEEF] px-6 py-4">
+                  <h2 className="text-2xl font-bold text-white">Completed Jobs Summary</h2>
+                  <p className="text-blue-100 text-sm">Daily Production & Revenue Tracking</p>
+                </div>
+                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="relative">
+                      <CalendarDaysIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Filter by date..."
+                        value={completedSummaryDateFilter}
+                        onChange={(e) => setCompletedSummaryDateFilter(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Filter by customer..."
+                        value={completedSummaryCustomerFilter}
+                        onChange={(e) =>
+                          setCompletedSummaryCustomerFilter(e.target.value)
+                        }
+                        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="relative">
+                      <BuildingOfficeIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Filter by unit..."
+                        value={completedSummaryUnitFilter}
+                        onChange={(e) => setCompletedSummaryUnitFilter(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
+                  <table className="w-full min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["Date", "Customer Name", "Unit", "Dispatch Date", "Dispatch Qty", "Total Value"].map((h) => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {completedSummaryFilteredRows.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-8 text-center text-sm text-gray-500"
+                          >
+                            No completed jobs match these filters.
+                          </td>
+                        </tr>
+                      ) : (
+                        completedSummaryFilteredRows.map((r, idx) => (
+                          <tr
+                            key={`${r.id}-${idx}`}
+                            className={`hover:bg-gray-50 ${
+                              r.totalValue > 10000 ? "bg-green-50" : r.totalValue > 5000 ? "bg-yellow-50" : ""
+                            }`}
+                          >
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{r.date}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">{r.customer}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {r.unit}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{r.dispatchDate}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{r.dispatchQty.toLocaleString("en-IN")}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900">{formatInr(r.totalValue)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 flex items-center justify-between text-sm text-gray-600">
+                  <span>Showing {completedSummaryFilteredRows.length} of {completedSummaryRows.length} completed jobs</span>
+                  <span className="font-semibold text-gray-900">Total Revenue: {formatInr(completedSummaryFilteredRevenue)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 sm:mb-0">
+                  Job Cards Overview
+                </h3>
+
+                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Search job plans..."
+                      value={jobCardsSearchTerm}
+                      onChange={(e) => setJobCardsSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] w-full sm:w-64"
+                    />
+                  </div>
+
+                  <select
+                    value={jobCardsDemandFilter}
+                    onChange={(e) => setJobCardsDemandFilter(e.target.value as any)}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+                  >
+                    <option value="all">All Demands</option>
+                    <option value="high">Urgent</option>
+                    <option value="medium">Regular</option>
+                  </select>
+
+                  <select
+                    value={jobCardsStatusFilter}
+                    onChange={(e) => setJobCardsStatusFilter(e.target.value as any)}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="completed">Completed</option>
+                    <option value="inProgress">In Progress</option>
+                    <option value="planned">Planned</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Job No
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Demand
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Progress
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {jobCardsRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                          No job plans found matching your filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      jobCardsRows.map(({ jobPlan, progress, status }) => {
+                        const demand = String(jobPlan.jobDemand || "").toLowerCase();
+                        const normalizedDemand = demand === "low" ? "medium" : demand;
+                        return (
+                          <tr key={jobPlan.jobPlanId} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {jobPlan.nrcJobNo}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Id: {(jobPlan as any).jobPlanCode || jobPlan.jobPlanId}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  normalizedDemand === "high"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {normalizedDemand === "high" ? "Urgent" : "Regular"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                                  <div
+                                    className="bg-[#00AEEF] h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${progress}%` }}
+                                  ></div>
+                                </div>
+                                <span className="text-sm text-gray-500">{progress}%</span>
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                {
+                                  (jobPlan.steps || []).filter(
+                                    (step) => getStepActualStatus(step) === "completed"
+                                  ).length
+                                }
+                                /{(jobPlan.steps || []).length} steps
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  status === "completed"
+                                    ? "bg-green-100 text-green-800"
+                                    : status === "inProgress"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {status === "inProgress"
+                                  ? "In Progress"
+                                  : status === "completed"
+                                    ? "Completed"
+                                    : "Planned"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDdMmYyyy(jobPlan.createdAt)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                type="button"
+                                onClick={() => handleViewSteps(jobPlan)}
+                                className="text-[#00AEEF] hover:text-[#0099cc] transition-colors duration-200 inline-flex items-center gap-1"
+                              >
+                                <EyeIcon className="h-4 w-4" />
+                                <span>View Steps</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Summary KPI Cards */}
@@ -824,6 +1815,161 @@ const PrintingDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {isJobStepsModalOpen && selectedJobPlanForModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-7xl p-6 relative overflow-y-auto max-h-[90vh]">
+            <button
+              type="button"
+              onClick={() => setIsJobStepsModalOpen(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+
+            <h2 className="text-3xl font-semibold mb-4">
+              Job Card Steps - {selectedJobPlanForModal.nrcJobNo}
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="flex flex-col p-4 rounded-md shadow-sm border-l-4 border-blue-500 bg-white">
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                  Job Card No
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleJobCardClick(selectedJobPlanForModal.nrcJobNo)}
+                  className="text-base font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer mt-0.5 text-left"
+                >
+                  {selectedJobPlanForModal.nrcJobNo} <span className="ml-1">›</span>
+                </button>
+              </div>
+              <div className="flex flex-col p-4 rounded-md shadow-sm border-l-4 border-green-500 bg-white">
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                  Job Plan Code
+                </span>
+                <span className="text-base font-semibold text-gray-900 mt-0.5">
+                  {(selectedJobPlanForModal as any).jobPlanCode ??
+                    selectedJobPlanForModal.jobPlanId}
+                </span>
+              </div>
+              <div className="flex flex-col p-4 rounded-md shadow-sm border-l-4 border-black bg-white">
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                  Demand
+                </span>
+                <span className="text-base font-semibold text-gray-900 mt-0.5">
+                  {String(selectedJobPlanForModal.jobDemand || "").toLowerCase() ===
+                  "high"
+                    ? "Urgent"
+                    : "Regular"}
+                </span>
+              </div>
+              <div className="flex flex-col p-4 rounded-md shadow-sm border-l-4 border-orange-500 bg-white">
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                  Created
+                </span>
+                <span className="text-base font-semibold text-gray-900 mt-0.5">
+                  {formatDateTime(selectedJobPlanForModal.createdAt)}
+                </span>
+              </div>
+            </div>
+
+            <h3 className="text-xl font-semibold mb-2">Steps</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-emerald-50 to-green-100 sticky top-0">
+                  <tr>
+                    {[
+                      "Step No",
+                      "Step Name",
+                      "Status",
+                      "Machine",
+                      "Capacity",
+                      "Start Date",
+                      "End Date",
+                      "User",
+                    ].map((col) => (
+                      <th
+                        key={col}
+                        className="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200 uppercase tracking-wide"
+                      >
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {(selectedJobPlanForModal.steps || []).map((step, idx) => {
+                    const stepStatus = getStepDisplayStatus(step);
+                    const isSelectedStep = String(step.stepName || "") === "PrintingDetails";
+                    return (
+                      <tr
+                        key={step.id ?? `${selectedJobPlanForModal.jobPlanId}-${idx}`}
+                        className={isSelectedStep ? "bg-indigo-50" : "hover:bg-indigo-50 transition-colors"}
+                      >
+                        <td className="px-6 py-4 text-sm font-semibold text-gray-800">
+                          {step.stepNo ?? idx + 1}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-800">
+                          {String(step.stepName || "-").replace(/([a-z])([A-Z])/g, "$1 $2")}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={getStepStatusBadgeClass(stepStatus)}>
+                            {formatStepStatusLabel(stepStatus)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700">
+                          {step.machineDetails?.[0]?.machineCode || "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700">
+                          {step.machineDetails?.[0]?.machine?.capacity || "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {formatDdMmYyyy(step.startDate)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {formatDdMmYyyy(step.endDate)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700">
+                          {step.user ? getUserName(step.user) : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <JobAndPODetailsModal
+        open={!!(jobDetailsWithPO || loadingJobDetails)}
+        onClose={() => {
+          setJobDetailsWithPO(null);
+          setLoadingJobDetails(false);
+          setJobDetailsError(null);
+        }}
+        loadingJobDetails={loadingJobDetails}
+        jobDetailsError={jobDetailsError}
+        jobDetailsWithPO={jobDetailsWithPO}
+        activeJobTab={activeJobTab}
+        setActiveJobTab={setActiveJobTab}
+        selectedJobPlan={
+          selectedJobPlanForModal
+            ? ({ jobPlanId: selectedJobPlanForModal.jobPlanId } as {
+                jobPlanId: number;
+              })
+            : null
+        }
+        zIndexClass="z-[60]"
+      />
 
       {/* Detail Side Panel */}
       {showDetailPanel && selectedPrinting && (

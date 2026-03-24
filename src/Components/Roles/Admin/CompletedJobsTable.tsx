@@ -425,7 +425,7 @@ console.log("sorted data", sortedData)
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
         <table className="w-full">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>

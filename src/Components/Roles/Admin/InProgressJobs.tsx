@@ -476,6 +476,10 @@ const InProgressJobs: React.FC = () => {
   };
 
   const handleBackToDashboard = () => {
+    if ((location.state as any)?.fromPrintingDashboard) {
+      navigate(-1);
+      return;
+    }
     navigate("/dashboard", {
       state: {
         dateFilter: dateFilter,

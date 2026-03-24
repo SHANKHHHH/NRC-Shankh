@@ -1127,6 +1127,53 @@ const AdminDashboard: React.FC = () => {
 
     // Process completed jobs data for time series
     completedJobsData.forEach((completedJob) => {
+      // Count Dispatch completed from Completed Jobs API.
+      // Completed jobs are removed from jobPlanning, so Dispatch completion
+      // must also be sourced here to keep Step Completion Status accurate.
+      const dispatchDetailsRow = Array.isArray(
+        (completedJob as any).allStepDetails?.dispatchProcess
+      )
+        ? (completedJob as any).allStepDetails.dispatchProcess[0]
+        : null;
+      const hasDispatchInCompletedJob =
+        (Array.isArray((completedJob as any).allSteps) &&
+          (completedJob as any).allSteps.some((s: any) =>
+            isStepVariant("DispatchProcess", String(s?.stepName ?? ""))
+          )) ||
+        !!dispatchDetailsRow;
+      if (hasDispatchInCompletedJob) {
+        stepStats.DispatchProcess.completed++;
+        // Also add row data so StepDetailsPopup can render job cards under "Completed" tab.
+        stepStats.DispatchProcess.completedData.push({
+          jobPlanId: (completedJob as any).jobPlanId ?? (completedJob as any).id,
+          jobPlanCode: (completedJob as any).jobPlanCode,
+          nrcJobNo: (completedJob as any).nrcJobNo,
+          jobDemand: ((completedJob as any).jobDemand ?? "medium") as
+            | "low"
+            | "medium"
+            | "high",
+          createdAt:
+            (completedJob as any).createdAt ?? (completedJob as any).completedAt,
+          updatedAt:
+            (completedJob as any).updatedAt ?? (completedJob as any).completedAt,
+          steps: (Array.isArray((completedJob as any).allSteps)
+            ? (completedJob as any).allSteps
+            : []
+          ).map((s: any) => ({
+            ...s,
+            status:
+              s?.status ??
+              (s?.stepName === "DispatchProcess" && dispatchDetailsRow?.status === "accept"
+                ? "stop"
+                : "planned"),
+            stepDetails:
+              s?.stepName === "DispatchProcess" && dispatchDetailsRow
+                ? { data: dispatchDetailsRow }
+                : s?.stepDetails ?? null,
+          })),
+        } as JobPlan);
+      }
+
       const completedAt = completedJob.completedAt;
 
       if (completedAt) {
@@ -1677,6 +1724,50 @@ const AdminDashboard: React.FC = () => {
           }
         }
       });
+    });
+
+    // Same fix for filtered view: completed jobs are not in jobPlanning,
+    // so Dispatch completed must be sourced from filtered completed-jobs API data.
+    filteredCompletedJobsData.forEach((completedJob: any) => {
+      const dispatchDetailsRow = Array.isArray(
+        completedJob?.allStepDetails?.dispatchProcess
+      )
+        ? completedJob.allStepDetails.dispatchProcess[0]
+        : null;
+      const hasDispatchInCompletedJob =
+        (Array.isArray(completedJob?.allSteps) &&
+          completedJob.allSteps.some((s: any) =>
+            isStepVariant("DispatchProcess", String(s?.stepName ?? ""))
+          )) ||
+        !!dispatchDetailsRow;
+      if (hasDispatchInCompletedJob) {
+        stepCompletionStats.DispatchProcess.completed++;
+        stepCompletionStats.DispatchProcess.completedData.push({
+          jobPlanId: completedJob?.jobPlanId ?? completedJob?.id,
+          jobPlanCode: completedJob?.jobPlanCode,
+          nrcJobNo: completedJob?.nrcJobNo,
+          jobDemand: (completedJob?.jobDemand ?? "medium") as
+            | "low"
+            | "medium"
+            | "high",
+          createdAt: completedJob?.createdAt ?? completedJob?.completedAt,
+          updatedAt: completedJob?.updatedAt ?? completedJob?.completedAt,
+          steps: (Array.isArray(completedJob?.allSteps) ? completedJob.allSteps : []).map(
+            (s: any) => ({
+              ...s,
+              status:
+                s?.status ??
+                (s?.stepName === "DispatchProcess" && dispatchDetailsRow?.status === "accept"
+                  ? "stop"
+                  : "planned"),
+              stepDetails:
+                s?.stepName === "DispatchProcess" && dispatchDetailsRow
+                  ? { data: dispatchDetailsRow }
+                  : s?.stepDetails ?? null,
+            })
+          ),
+        });
+      }
     });
 
     // Calculate efficiency

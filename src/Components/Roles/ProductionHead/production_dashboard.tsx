@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   ChartBarIcon,
@@ -118,9 +124,7 @@ function extractUnitFromCompletedJobAllSteps(allSteps: unknown): string {
     machineDetails?: Array<{ unit?: string | null }>;
   }>;
   const dispatchStep = steps.find(
-    (s) =>
-      s.stepName === "DispatchProcess" ||
-      s.stepName === "Dispatch"
+    (s) => s.stepName === "DispatchProcess" || s.stepName === "Dispatch",
   );
   const u0 = dispatchStep?.machineDetails?.[0]?.unit;
   if (u0 != null && String(u0).trim() !== "") return String(u0).trim();
@@ -131,7 +135,9 @@ function extractUnitFromCompletedJobAllSteps(allSteps: unknown): string {
   return "N/A";
 }
 
-function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow {
+function extractCompletedJobSummaryRow(
+  cj: CompletedJob,
+): CompletedJobSummaryRow {
   const jd = (cj as any).jobDetails ?? {};
   const po = (cj as any).purchaseOrderDetails;
   const asd = (cj as any).allStepDetails;
@@ -140,8 +146,7 @@ function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow
 
   const dispatchStepFromPlan = Array.isArray(allSteps)
     ? (allSteps as { stepName?: string; dispatchProcess?: any }[]).find(
-        (s) =>
-          s.stepName === "DispatchProcess" || s.stepName === "Dispatch"
+        (s) => s.stepName === "DispatchProcess" || s.stepName === "Dispatch",
       )
     : undefined;
 
@@ -149,7 +154,7 @@ function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow
   let dispatchQty = Number(
     dispatchStepFromPlan?.dispatchProcess?.totalDispatchedQty ??
       dispatchStepFromPlan?.dispatchProcess?.quantity ??
-      0
+      0,
   );
 
   let bestTs = 0;
@@ -188,7 +193,7 @@ function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow
       dps.reduce(
         (s: number, dp: any) =>
           s + (Number(dp?.quantity) || Number(dp?.totalDispatchedQty) || 0),
-        0
+        0,
       );
   }
 
@@ -207,8 +212,7 @@ function extractCompletedJobSummaryRow(cj: CompletedJob): CompletedJobSummaryRow
   }
 
   const rate = Number(jd.latestRate ?? 0);
-  const totalValue =
-    rate > 0 && dispatchQty > 0 ? rate * dispatchQty : 0;
+  const totalValue = rate > 0 && dispatchQty > 0 ? rate * dispatchQty : 0;
 
   const customerName =
     String(jd.customerName ?? po?.customer ?? "").trim() || "—";
@@ -249,7 +253,7 @@ interface HeldJob {
 
 function getProductionDashboardCacheKey(
   filter: DateFilterType,
-  customRange?: { start: string; end: string } | null
+  customRange?: { start: string; end: string } | null,
 ): string {
   if (filter === "custom" && customRange) {
     return `custom|${customRange.start}|${customRange.end}`;
@@ -327,7 +331,7 @@ const ProductionHeadDashboard: React.FC = () => {
   } | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [selectedJobDetails, setSelectedJobDetails] = useState<JobPlan | null>(
-    null
+    null,
   );
   const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
   const [modalJobData, setModalJobData] = useState<
@@ -338,7 +342,8 @@ const ProductionHeadDashboard: React.FC = () => {
 
   // Job Steps Modal state
   const [isJobStepsModalOpen, setIsJobStepsModalOpen] = useState(false);
-  const [selectedJobPlanForModal, setSelectedJobPlanForModal] = useState<JobPlanForStats | null>(null);
+  const [selectedJobPlanForModal, setSelectedJobPlanForModal] =
+    useState<JobPlanForStats | null>(null);
 
   // Job Cards Overview filters
   const [jobCardsSearchTerm, setJobCardsSearchTerm] = useState("");
@@ -348,7 +353,7 @@ const ProductionHeadDashboard: React.FC = () => {
   const [jobCardsStatusFilter, setJobCardsStatusFilter] = useState<
     "all" | "completed" | "inProgress" | "majorHold" | "planned"
   >("all");
-  
+
   // Job statistics state (kept for initial loading, but filteredJobStats is used for display)
   const [jobStats, setJobStats] = useState({
     totalJobs: 0,
@@ -357,33 +362,45 @@ const ProductionHeadDashboard: React.FC = () => {
     completedJobs: 0,
   });
   const [isLoadingJobStats, setIsLoadingJobStats] = useState(false);
-  
+
   // Store job plans and completed jobs data for navigation
   const [jobPlansData, setJobPlansData] = useState<JobPlanForStats[]>([]);
-  const [completedJobsData, setCompletedJobsData] = useState<CompletedJob[]>([]);
+  const [completedJobsData, setCompletedJobsData] = useState<CompletedJob[]>(
+    [],
+  );
 
-  // Date filter state (from returned state, cache, or default "month")
+  // Date filter state (from returned state, cache, or default "today")
   const [dateFilter, setDateFilter] = useState<DateFilterType>(
     () =>
       returnedState?.dateFilter ??
       productionDashboardCache?.dateFilter ??
-      "month"
+      "today",
   );
   const [heldJobsData, setHeldJobsData] = useState<HeldJob[]>([]);
-  
+
   // Printing Details state
   const [printingDetails, setPrintingDetails] = useState<PrintingDetails[]>([]);
   // Track steps that have already been continued to production (frontend-only flag)
-  const [continuedSteps, setContinuedSteps] = useState<Record<number, boolean>>({});
+  const [continuedSteps, setContinuedSteps] = useState<Record<number, boolean>>(
+    {},
+  );
   // UI: which main table/tab is active: 'jobCards' | 'printing'
-  const [activeMainTab, setActiveMainTab] = useState<"jobCards" | "printing">("jobCards");
-  const [isLoadingPrintingDetails, setIsLoadingPrintingDetails] = useState(false);
-  const [printingDetailsError, setPrintingDetailsError] = useState<string | null>(null);
-  const [printingDetailsSearchTerm, setPrintingDetailsSearchTerm] = useState("");
-  const [printingDetailsStatusFilter, setPrintingDetailsStatusFilter] = useState<string>("");
+  const [activeMainTab, setActiveMainTab] = useState<"jobCards" | "printing">(
+    "jobCards",
+  );
+  const [isLoadingPrintingDetails, setIsLoadingPrintingDetails] =
+    useState(false);
+  const [printingDetailsError, setPrintingDetailsError] = useState<
+    string | null
+  >(null);
+  const [printingDetailsSearchTerm, setPrintingDetailsSearchTerm] =
+    useState("");
+  const [printingDetailsStatusFilter, setPrintingDetailsStatusFilter] =
+    useState<string>("");
 
   /** Completed Jobs Summary (below KPI cards): local filters + sort */
-  const [completedSummaryDateFilter, setCompletedSummaryDateFilter] = useState("");
+  const [completedSummaryDateFilter, setCompletedSummaryDateFilter] =
+    useState("");
   const [completedSummaryCustomerFilter, setCompletedSummaryCustomerFilter] =
     useState("");
   const [completedSummaryUnitFilter, setCompletedSummaryUnitFilter] =
@@ -403,14 +420,10 @@ const ProductionHeadDashboard: React.FC = () => {
         start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
           .toISOString()
           .split("T")[0],
-        end: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0
-        )
+        end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
           .toISOString()
           .split("T")[0],
-      }
+      },
   );
 
   // Major hold jobs count (for blinking icon + navigate to major-hold-jobs)
@@ -437,20 +450,16 @@ const ProductionHeadDashboard: React.FC = () => {
     setJobPlansData(productionDashboardCache.jobPlansData);
     setCompletedJobsData(productionDashboardCache.completedJobsData);
     setHeldJobsData(productionDashboardCache.heldJobsData);
-    setDateFilter(productionDashboardCache.dateFilter ?? "month");
+    setDateFilter(productionDashboardCache.dateFilter ?? "today");
     setCustomDateRange(
       productionDashboardCache.customDateRange ?? {
         start: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
           .toISOString()
           .split("T")[0],
-        end: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0
-        )
+        end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
           .toISOString()
           .split("T")[0],
-      }
+      },
     );
     if (productionDashboardCache.aggregatedData !== undefined) {
       setAggregatedData(productionDashboardCache.aggregatedData);
@@ -473,7 +482,7 @@ const ProductionHeadDashboard: React.FC = () => {
       productionDashboardCache.customDateRange = customDateRange;
       productionDashboardCache.cacheKey = getProductionDashboardCacheKey(
         dateFilter,
-        customDateRange
+        customDateRange,
       );
     }
   }, [dateFilter, customDateRange]);
@@ -510,7 +519,7 @@ const ProductionHeadDashboard: React.FC = () => {
 
   // Helper function to get step actual status (same as AdminDashboard)
   const getStepActualStatus = (
-    step: JobPlanStep
+    step: JobPlanStep,
   ): "completed" | "in_progress" | "hold" | "planned" => {
     // Check for major_hold first (same as AdminDashboard) - must not count as in-progress
     if (
@@ -606,13 +615,13 @@ const ProductionHeadDashboard: React.FC = () => {
       (step) =>
         step.stepDetails?.data?.status === "major_hold" ||
         step.stepDetails?.status === "major_hold" ||
-        step.status === "major_hold"
+        step.status === "major_hold",
     );
 
   // Helper function to get date range based on filter
   const getDateRange = (
     filter: DateFilterType,
-    customRange?: { start: string; end: string }
+    customRange?: { start: string; end: string },
   ) => {
     const today = new Date();
     let startDate: Date;
@@ -659,22 +668,22 @@ const ProductionHeadDashboard: React.FC = () => {
         if (customRange && customRange.start && customRange.end) {
           // Parse custom dates and ensure proper time boundaries
           // Parse as local date to avoid timezone issues
-          const startParts = customRange.start.split('-');
-          const endParts = customRange.end.split('-');
-          
+          const startParts = customRange.start.split("-");
+          const endParts = customRange.end.split("-");
+
           if (startParts.length === 3 && endParts.length === 3) {
             // Create dates in local timezone
             startDate = new Date(
               parseInt(startParts[0]),
               parseInt(startParts[1]) - 1, // Month is 0-indexed
-              parseInt(startParts[2])
+              parseInt(startParts[2]),
             );
             startDate.setHours(0, 0, 0, 0); // Start of day
-            
+
             endDate = new Date(
               parseInt(endParts[0]),
               parseInt(endParts[1]) - 1, // Month is 0-indexed
-              parseInt(endParts[2])
+              parseInt(endParts[2]),
             );
             endDate.setHours(23, 59, 59, 999); // End of day
           } else {
@@ -702,7 +711,7 @@ const ProductionHeadDashboard: React.FC = () => {
   const isDateInRange = (
     date: Date | string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
   ): boolean => {
     const checkDate = typeof date === "string" ? new Date(date) : date;
     const start = new Date(startDate);
@@ -727,9 +736,7 @@ const ProductionHeadDashboard: React.FC = () => {
         isDateInRange(p.date, startDate, endDate);
       const del = p.deliveryDate;
       const byDelivery =
-        del != null &&
-        del !== "" &&
-        isDateInRange(del, startDate, endDate);
+        del != null && del !== "" && isDateInRange(del, startDate, endDate);
       return byMainDate || byDelivery;
     });
   }, [printingDetails, dateFilter, customDateRange]);
@@ -748,7 +755,9 @@ const ProductionHeadDashboard: React.FC = () => {
             step.updatedAt ||
             // ProductionHead wraps stepDetails as { data: <stepDetails> }
             // while other places may store updatedAt directly under stepDetails.
-            (step.stepDetails && (step.stepDetails.updatedAt ?? step.stepDetails.data?.updatedAt)) ||
+            (step.stepDetails &&
+              (step.stepDetails.updatedAt ??
+                step.stepDetails.data?.updatedAt)) ||
             step.startDate;
           if (!raw) return null;
           const d = new Date(raw);
@@ -761,7 +770,8 @@ const ProductionHeadDashboard: React.FC = () => {
             return isDateInRange(stepUpdateDate, startDate, endDate);
           });
           if (!hasRecentStepActivity) {
-            const jobTimestamp = (jobPlan as any).updatedAt ?? (jobPlan as any).createdAt;
+            const jobTimestamp =
+              (jobPlan as any).updatedAt ?? (jobPlan as any).createdAt;
             if (!jobTimestamp) return false;
             const jobDate = new Date(jobTimestamp);
             return isDateInRange(jobDate, startDate, endDate);
@@ -841,7 +851,7 @@ const ProductionHeadDashboard: React.FC = () => {
   /** Completed Jobs Summary table: same date-filtered completed jobs as KPI “Completed” */
   const completedJobsSummaryRows = useMemo(
     () => filteredCompletedJobsData.map(extractCompletedJobSummaryRow),
-    [filteredCompletedJobsData]
+    [filteredCompletedJobsData],
   );
 
   const completedJobsSummaryFilteredSorted = useMemo(() => {
@@ -853,18 +863,14 @@ const ProductionHeadDashboard: React.FC = () => {
       rows = rows.filter((r) =>
         `${r.recordDateDisplay} ${r.recordDateIso} ${r.dispatchDateDisplay}`
           .toLowerCase()
-          .includes(df)
+          .includes(df),
       );
     }
     if (cf) {
-      rows = rows.filter((r) =>
-        r.customerName.toLowerCase().includes(cf)
-      );
+      rows = rows.filter((r) => r.customerName.toLowerCase().includes(cf));
     }
     if (uf) {
-      rows = rows.filter((r) =>
-        r.unitLabel.toLowerCase().includes(uf)
-      );
+      rows = rows.filter((r) => r.unitLabel.toLowerCase().includes(uf));
     }
 
     const { key, dir } = completedSummarySort;
@@ -872,12 +878,8 @@ const ProductionHeadDashboard: React.FC = () => {
     const sortKey = key as keyof CompletedJobSummaryRow;
     return [...rows].sort((a, b) => {
       if (sortKey === "dispatchDateIso" || sortKey === "recordDateIso") {
-        const ta = a[sortKey]
-          ? new Date(a[sortKey] as string).getTime()
-          : 0;
-        const tb = b[sortKey]
-          ? new Date(b[sortKey] as string).getTime()
-          : 0;
+        const ta = a[sortKey] ? new Date(a[sortKey] as string).getTime() : 0;
+        const tb = b[sortKey] ? new Date(b[sortKey] as string).getTime() : 0;
         const aMissing = !a[sortKey];
         const bMissing = !b[sortKey];
         if (aMissing && bMissing) return 0;
@@ -908,9 +910,9 @@ const ProductionHeadDashboard: React.FC = () => {
     () =>
       completedJobsSummaryFilteredSorted.reduce(
         (s, r) => s + (Number.isFinite(r.totalValue) ? r.totalValue : 0),
-        0
+        0,
       ),
-    [completedJobsSummaryFilteredSorted]
+    [completedJobsSummaryFilteredSorted],
   );
 
   const handleCompletedSummarySort = useCallback(
@@ -918,10 +920,10 @@ const ProductionHeadDashboard: React.FC = () => {
       setCompletedSummarySort((prev) =>
         prev.key === key
           ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-          : { key, dir: "desc" }
+          : { key, dir: "desc" },
       );
     },
-    []
+    [],
   );
 
   // Calculate filtered aggregated data based on filtered job plans
@@ -1057,7 +1059,9 @@ const ProductionHeadDashboard: React.FC = () => {
 
       // Get completed job data if available (for allStepDetails)
       const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
-      const allStepDetails = (completedJob as any)?.allStepDetails || (jobPlan as any).allStepDetails;
+      const allStepDetails =
+        (completedJob as any)?.allStepDetails ||
+        (jobPlan as any).allStepDetails;
 
       // Filter only the 6 production steps
       const productionSteps = jobPlan.steps.filter(
@@ -1067,7 +1071,7 @@ const ProductionHeadDashboard: React.FC = () => {
           step.stepName === "Punching" ||
           isFlapPastingStepName(step.stepName) ||
           step.stepName === "PrintingDetails" ||
-          step.stepName === "QualityDept"
+          step.stepName === "QualityDept",
       );
 
       // Count statuses for each step - use the SAME logic as productionService.getAggregatedProductionData
@@ -1078,10 +1082,14 @@ const ProductionHeadDashboard: React.FC = () => {
         if (dateRange) {
           const { startDate, endDate } = dateRange;
           stepInDateRange = false;
-          
+
           // 🔥 SPECIAL HANDLING: For completed Corrugation steps, check stepDetails.data.corrugation.date first
           // This is the actual completion date when status is "accept"
-          if (step.stepName === "Corrugation" && step.status === "stop" && (step.stepDetails as any)?.data?.corrugation?.date) {
+          if (
+            step.stepName === "Corrugation" &&
+            step.status === "stop" &&
+            (step.stepDetails as any)?.data?.corrugation?.date
+          ) {
             // Check if this step has accept status (completed)
             const stepData = (step.stepDetails as any).data.corrugation;
             if (stepData.status === "accept") {
@@ -1091,7 +1099,7 @@ const ProductionHeadDashboard: React.FC = () => {
               }
             }
           }
-          
+
           // Use the same logic as handleStatusCardClick: check step updatedAt first
           if (!stepInDateRange && (step as any).updatedAt) {
             const stepUpdateDate = new Date((step as any).updatedAt);
@@ -1099,7 +1107,7 @@ const ProductionHeadDashboard: React.FC = () => {
               stepInDateRange = true;
             }
           }
-          
+
           // Also check the job plan's step updatedAt (in case step.updatedAt is not available)
           if (!stepInDateRange) {
             const jobPlanStep = jobPlan.steps.find((s) => s.id === step.id);
@@ -1110,7 +1118,7 @@ const ProductionHeadDashboard: React.FC = () => {
               }
             }
           }
-          
+
           // Check step start date
           if (!stepInDateRange && step.startDate) {
             const stepStartDate = new Date(step.startDate);
@@ -1118,7 +1126,7 @@ const ProductionHeadDashboard: React.FC = () => {
               stepInDateRange = true;
             }
           }
-          
+
           // Check step end date (for completed/stopped steps)
           if (!stepInDateRange && step.endDate) {
             const stepEndDate = new Date(step.endDate);
@@ -1160,7 +1168,7 @@ const ProductionHeadDashboard: React.FC = () => {
               }
             }
           }
-          
+
           // Fall back to job creation date if step dates are not available
           if (!stepInDateRange) {
             const jobDate = new Date((jobPlan as any).createdAt || Date.now());
@@ -1176,7 +1184,7 @@ const ProductionHeadDashboard: React.FC = () => {
         ) {
           stepInDateRange = true;
         }
-        
+
         // Skip this step if it's not in the date range
         if (!stepInDateRange) {
           return;
@@ -1220,12 +1228,12 @@ const ProductionHeadDashboard: React.FC = () => {
             step.stepName === "FluteLaminateBoardConversion"
               ? "flutelam"
               : isFlapPastingStepName(step.stepName)
-              ? "sideFlapPasting"
-              : step.stepName === "PrintingDetails"
-              ? "printingDetails"
-              : step.stepName === "QualityDept"
-              ? "qualityDept"
-              : step.stepName.toLowerCase();
+                ? "sideFlapPasting"
+                : step.stepName === "PrintingDetails"
+                  ? "printingDetails"
+                  : step.stepName === "QualityDept"
+                    ? "qualityDept"
+                    : step.stepName.toLowerCase();
 
           // Check allStepDetails from completed job or jobPlan
           if (allStepDetails) {
@@ -1234,7 +1242,7 @@ const ProductionHeadDashboard: React.FC = () => {
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
               // Check if any step detail has "accept" status
               const hasAcceptStatus = stepDetails.some(
-                (detail: any) => detail.status === "accept"
+                (detail: any) => detail.status === "accept",
               );
               if (hasAcceptStatus) {
                 isCompleted = true;
@@ -1248,24 +1256,24 @@ const ProductionHeadDashboard: React.FC = () => {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : isFlapPastingStepName(step.stepName)
-                ? "sideFlapPasting"
-                : step.stepName === "PrintingDetails"
-                ? "printingDetails"
-                : step.stepName === "QualityDept"
-                ? "qualityDept"
-                : step.stepName.toLowerCase();
+                  ? "sideFlapPasting"
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
 
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
               const hasAcceptStatus = stepDetails.some(
-                (detail: any) => detail.status === "accept"
+                (detail: any) => detail.status === "accept",
               );
               if (hasAcceptStatus) {
                 isCompleted = true;
               }
             }
           }
-          
+
           // Also check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
           // This is the most direct way to check accept status for each step
           if (!isCompleted) {
@@ -1274,26 +1282,29 @@ const ProductionHeadDashboard: React.FC = () => {
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : isFlapPastingStepName(step.stepName)
-                ? "sideFlapPasting"
-                : step.stepName === "PrintingDetails"
-                ? "printingDetails"
-                : step.stepName === "QualityDept"
-                ? "qualityDept"
-                : step.stepName.toLowerCase();
-            
+                  ? "sideFlapPasting"
+                  : step.stepName === "PrintingDetails"
+                    ? "printingDetails"
+                    : step.stepName === "QualityDept"
+                      ? "qualityDept"
+                      : step.stepName.toLowerCase();
+
             // Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
-            if (step.stepDetails?.data && (step.stepDetails.data as any)[stepDataKey]) {
+            if (
+              step.stepDetails?.data &&
+              (step.stepDetails.data as any)[stepDataKey]
+            ) {
               const stepData = (step.stepDetails.data as any)[stepDataKey];
               if (stepData.status === "accept") {
                 isCompleted = true;
               }
             }
-            
+
             // Also check stepDetails.data.status (fallback)
             if (!isCompleted && step.stepDetails?.data?.status === "accept") {
               isCompleted = true;
             }
-            
+
             // Also check stepDetails.status (fallback)
             if (!isCompleted && step.stepDetails?.status === "accept") {
               isCompleted = true;
@@ -1314,7 +1325,7 @@ const ProductionHeadDashboard: React.FC = () => {
         if (step.status === "planned") {
           stepSummary[stepKey].planned++;
           finalStatus = "planned";
-          
+
           // 🔥 DEBUG: Collect Flute Lamination planned jobs with complete data
           if (stepKey === "fluteLamination") {
             fluteLaminationPlannedJobs.push({
@@ -1466,7 +1477,7 @@ const ProductionHeadDashboard: React.FC = () => {
           // Default to planned
           stepSummary[stepKey].planned++;
           finalStatus = "planned";
-          
+
           // 🔥 DEBUG: Collect Flute Lamination planned jobs with complete data (default case)
           if (stepKey === "fluteLamination") {
             fluteLaminationPlannedJobs.push({
@@ -1503,13 +1514,16 @@ const ProductionHeadDashboard: React.FC = () => {
         }
 
         // Console log for debugging
-        console.log(`[${stepKey.toUpperCase()}] Job: ${jobPlan.nrcJobNo}, Step: ${step.stepName}, Status: ${step.status}, FinalStatus: ${finalStatus}, isCompleted: ${isCompleted}`, {
-          stepStatus: step.status,
-          stepDetailsDataStatus: step.stepDetails?.data?.status,
-          stepDetailsStatus: step.stepDetails?.status,
-          allStepDetails: allStepDetails ? Object.keys(allStepDetails) : null,
-          jobPlanNrcJobNo: jobPlan.nrcJobNo
-        });
+        console.log(
+          `[${stepKey.toUpperCase()}] Job: ${jobPlan.nrcJobNo}, Step: ${step.stepName}, Status: ${step.status}, FinalStatus: ${finalStatus}, isCompleted: ${isCompleted}`,
+          {
+            stepStatus: step.status,
+            stepDetailsDataStatus: step.stepDetails?.data?.status,
+            stepDetailsStatus: step.stepDetails?.status,
+            allStepDetails: allStepDetails ? Object.keys(allStepDetails) : null,
+            jobPlanNrcJobNo: jobPlan.nrcJobNo,
+          },
+        );
       });
     });
 
@@ -1539,7 +1553,10 @@ const ProductionHeadDashboard: React.FC = () => {
         completeStep: item.step,
       })),
     });
-    console.log("=== FLUTE LAMINATION PLANNED JOBS - COMPLETE JSON ===", JSON.stringify(fluteLaminationPlannedJobs, null, 2));
+    console.log(
+      "=== FLUTE LAMINATION PLANNED JOBS - COMPLETE JSON ===",
+      JSON.stringify(fluteLaminationPlannedJobs, null, 2),
+    );
 
     // 🔥 DEBUG: Console log all Corrugation completed jobs with complete data
     console.log("=== CORRUGATION COMPLETED JOBS (6 jobs counted) ===", {
@@ -1563,14 +1580,18 @@ const ProductionHeadDashboard: React.FC = () => {
         jobCreatedAt: (item.jobPlan as any).createdAt,
         stepDetails: item.step.stepDetails,
         stepDetailsData: (item.step.stepDetails as any)?.data,
-        stepDetailsDataCorrugation: (item.step.stepDetails as any)?.data?.corrugation,
+        stepDetailsDataCorrugation: (item.step.stepDetails as any)?.data
+          ?.corrugation,
         machineDetails: item.step.machineDetails,
         allStepDetails: item.jobPlan.allStepDetails,
         completeJobPlan: item.jobPlan,
         completeStep: item.step,
       })),
     });
-    console.log("=== CORRUGATION COMPLETED JOBS - COMPLETE JSON ===", JSON.stringify(corrugationCompletedJobs, null, 2));
+    console.log(
+      "=== CORRUGATION COMPLETED JOBS - COMPLETE JSON ===",
+      JSON.stringify(corrugationCompletedJobs, null, 2),
+    );
 
     // Console log summary for debugging
     console.log("=== PRODUCTION STEPS STATUS OVERVIEW - SUMMARY ===", {
@@ -1643,13 +1664,16 @@ const ProductionHeadDashboard: React.FC = () => {
       heldJob.steps?.some(
         (step: HeldJobStep) =>
           (step as any).stepSpecificData?.status === "major_hold" ||
-          (step as any).status === "major_hold"
+          (step as any).status === "major_hold",
       ) ?? false
     );
   }, []);
 
   const fetchProductionDashboardData = useCallback(
-    async (filterType?: DateFilterType, customRange?: { start: string; end: string } | null) => {
+    async (
+      filterType?: DateFilterType,
+      customRange?: { start: string; end: string } | null,
+    ) => {
       if (!authStatus?.isAuthenticated) return;
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) return;
@@ -1699,7 +1723,8 @@ const ProductionHeadDashboard: React.FC = () => {
 
         const majorHoldPayload = bundle.data.majorHoldCount;
         const majorCount =
-          majorHoldPayload?.success && typeof majorHoldPayload.count === "number"
+          majorHoldPayload?.success &&
+          typeof majorHoldPayload.count === "number"
             ? majorHoldPayload.count
             : 0;
         setMajorHoldJobsCount(majorCount);
@@ -1721,34 +1746,41 @@ const ProductionHeadDashboard: React.FC = () => {
         let completedJobs: CompletedJob[] = [];
 
         const jobPlanningResult = bundle.data.jobPlanning;
-        if (jobPlanningResult.success && Array.isArray(jobPlanningResult.data)) {
+        if (
+          jobPlanningResult.success &&
+          Array.isArray(jobPlanningResult.data)
+        ) {
           jobPlans = jobPlanningResult.data;
           const stepIndexList = jobPlans.flatMap((jp: JobPlanForStats) =>
             jp.steps.map((s: JobPlanStep) => ({
               stepId: s.id,
               stepName: s.stepName,
-            }))
+            })),
           );
           const detailsByStepId = await fetchStepDetailsBatch(
             baseUrl,
             accessToken,
-            stepIndexList
+            stepIndexList,
           );
-          const jobPlansWithDetails = jobPlans.map((jobPlan: JobPlanForStats) => ({
-            ...jobPlan,
-            steps: jobPlan.steps.map((step: JobPlanStep) => {
-              const row = detailsByStepId[String(step.id)];
-              const stepDetails =
-                row != null ? { data: row } : undefined;
-              return { ...step, stepDetails };
+          const jobPlansWithDetails = jobPlans.map(
+            (jobPlan: JobPlanForStats) => ({
+              ...jobPlan,
+              steps: jobPlan.steps.map((step: JobPlanStep) => {
+                const row = detailsByStepId[String(step.id)];
+                const stepDetails = row != null ? { data: row } : undefined;
+                return { ...step, stepDetails };
+              }),
             }),
-          }));
+          );
           setJobPlansData(jobPlansWithDetails);
           jobPlans = jobPlansWithDetails;
         }
 
         const completedJobsResult = bundle.data.completedJobs;
-        if (completedJobsResult?.success && Array.isArray(completedJobsResult.data)) {
+        if (
+          completedJobsResult?.success &&
+          Array.isArray(completedJobsResult.data)
+        ) {
           completedJobs = completedJobsResult.data;
           setCompletedJobsData(completedJobs);
         }
@@ -1802,18 +1834,18 @@ const ProductionHeadDashboard: React.FC = () => {
         setIsLoadingJobStats(false);
       }
     },
-    [authStatus?.isAuthenticated, dateFilter, customDateRange]
+    [authStatus?.isAuthenticated, dateFilter, customDateRange],
   );
 
   /** Same as Admin: refetch role-bundle (job planning + completed jobs + held + major hold) when date filter changes */
   const handleProductionFilterChange = useCallback(
     (
       newFilter: DateFilterType,
-      customRange?: { start: string; end: string } | null
+      customRange?: { start: string; end: string } | null,
     ) => {
       fetchProductionDashboardData(newFilter, customRange ?? null);
     },
-    [fetchProductionDashboardData]
+    [fetchProductionDashboardData],
   );
 
   // When no cache, fetch job/held data (aggregated, printing, major hold are loaded by their own effects)
@@ -1869,7 +1901,7 @@ const ProductionHeadDashboard: React.FC = () => {
 
   const heldJobsDataExcludingMajorHold = useMemo(
     () => heldJobsData.filter((h) => !heldJobHasMajorHold(h)),
-    [heldJobsData, heldJobHasMajorHold]
+    [heldJobsData, heldJobHasMajorHold],
   );
   const heldJobsCount = heldJobsDataExcludingMajorHold.length;
 
@@ -1894,7 +1926,9 @@ const ProductionHeadDashboard: React.FC = () => {
   };
 
   // Search jobs with partial matching and suggestions
-  const searchJobsLocally = (term: string): Array<{
+  const searchJobsLocally = (
+    term: string,
+  ): Array<{
     nrcJobNo: string;
     jobDemand: string;
     totalSteps: number;
@@ -1907,15 +1941,15 @@ const ProductionHeadDashboard: React.FC = () => {
     }
 
     const searchLower = term.toLowerCase().trim();
-    
+
     // Use filteredJobPlansData and filteredCompletedJobsData for search
     const allJobNumbers = new Set<string>();
-    
+
     // Add job numbers from filtered job plans
     filteredJobPlansData.forEach((jobPlan) => {
       allJobNumbers.add(jobPlan.nrcJobNo);
     });
-    
+
     // Add job numbers from filtered completed jobs
     filteredCompletedJobsData.forEach((job) => {
       allJobNumbers.add(job.nrcJobNo);
@@ -1923,24 +1957,27 @@ const ProductionHeadDashboard: React.FC = () => {
 
     // Filter jobs that match the search term (partial match)
     const matchingJobs = Array.from(allJobNumbers)
-      .filter((nrcJobNo) => 
-        nrcJobNo.toLowerCase().includes(searchLower)
-      )
+      .filter((nrcJobNo) => nrcJobNo.toLowerCase().includes(searchLower))
       .slice(0, 10) // Limit to 10 suggestions
       .map((nrcJobNo) => {
         // Find the job plan to get additional details
-        const jobPlan = filteredJobPlansData.find((jp) => jp.nrcJobNo === nrcJobNo);
-        const completedJob = filteredCompletedJobsData.find((cj) => cj.nrcJobNo === nrcJobNo);
-        
-        const hasProductionSteps = jobPlan?.steps?.some(
-          (step) =>
-            step.stepName === "Corrugation" ||
-            step.stepName === "FluteLaminateBoardConversion" ||
-            step.stepName === "Punching" ||
-            isFlapPastingStepName(step.stepName) ||
-            step.stepName === "PrintingDetails" ||
-            step.stepName === "QualityDept"
-        ) || false;
+        const jobPlan = filteredJobPlansData.find(
+          (jp) => jp.nrcJobNo === nrcJobNo,
+        );
+        const completedJob = filteredCompletedJobsData.find(
+          (cj) => cj.nrcJobNo === nrcJobNo,
+        );
+
+        const hasProductionSteps =
+          jobPlan?.steps?.some(
+            (step) =>
+              step.stepName === "Corrugation" ||
+              step.stepName === "FluteLaminateBoardConversion" ||
+              step.stepName === "Punching" ||
+              isFlapPastingStepName(step.stepName) ||
+              step.stepName === "PrintingDetails" ||
+              step.stepName === "QualityDept",
+          ) || false;
 
         return {
           nrcJobNo,
@@ -2022,7 +2059,9 @@ const ProductionHeadDashboard: React.FC = () => {
   // Handle View Steps button click - opens modal
   // Handler for Continue to Production button
   // Calls the continue-step API to mark the step as continued by Production Head
-  const handleContinueToProduction = async (printingDetail: PrintingDetails) => {
+  const handleContinueToProduction = async (
+    printingDetail: PrintingDetails,
+  ) => {
     const apiBase = (
       import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com"
     ).replace(/\/$/, "");
@@ -2048,33 +2087,42 @@ const ProductionHeadDashboard: React.FC = () => {
       const stepNo = 2;
 
       // Prefer jobPlanCode from API (no extra fetch); fallback to fetching by nrcJobNo to get jobPlanId
-      let continueBody: { stepNo: number; jobPlanCode?: string; jobPlanId?: number };
+      let continueBody: {
+        stepNo: number;
+        jobPlanCode?: string;
+        jobPlanId?: number;
+      };
       if (printingDetail.jobPlanCode) {
         continueBody = { stepNo, jobPlanCode: printingDetail.jobPlanCode };
       } else {
         const jobStepResponse = await fetch(
           `${apiBase}/api/job-planning/${encodeURIComponent(
-            printingDetail.jobNrcJobNo
+            printingDetail.jobNrcJobNo,
           )}/steps/${stepNo}?jobStepId=${printingDetail.jobStepId}`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
               "Content-Type": "application/json",
             },
-          }
+          },
         );
 
         if (!jobStepResponse.ok) {
-          throw new Error("Failed to fetch job step details for this printing job");
+          throw new Error(
+            "Failed to fetch job step details for this printing job",
+          );
         }
 
         const jobStepResult = await jobStepResponse.json();
         if (!jobStepResult.success || !jobStepResult.data) {
-          throw new Error("Invalid job step data received for this printing job");
+          throw new Error(
+            "Invalid job step data received for this printing job",
+          );
         }
 
         const jobStepData = jobStepResult.data;
-        const jobPlanId: number | undefined = jobStepData?.jobPlanning?.jobPlanId;
+        const jobPlanId: number | undefined =
+          jobStepData?.jobPlanning?.jobPlanId;
 
         if (!jobPlanId) {
           throw new Error("Job plan ID not found for this printing step");
@@ -2092,7 +2140,7 @@ const ProductionHeadDashboard: React.FC = () => {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify(continueBody),
-        }
+        },
       );
 
       let continueResult: { success?: boolean; message?: string } = {};
@@ -2107,7 +2155,8 @@ const ProductionHeadDashboard: React.FC = () => {
 
       if (!continueResponse.ok) {
         throw new Error(
-          (continueResult as { message?: string }).message || "Failed to continue step"
+          (continueResult as { message?: string }).message ||
+            "Failed to continue step",
         );
       }
       if (!continueResult.success) {
@@ -2129,7 +2178,7 @@ const ProductionHeadDashboard: React.FC = () => {
       setError(null);
       alert(
         continueResult.message ||
-          `Job ${printingDetail.jobNrcJobNo} has been continued to production successfully!`
+          `Job ${printingDetail.jobNrcJobNo} has been continued to production successfully!`,
       );
 
       void (async () => {
@@ -2143,7 +2192,8 @@ const ProductionHeadDashboard: React.FC = () => {
           console.warn("Refresh printing details after continue:", e);
         }
         try {
-          const aggregatedData = await productionService.getAggregatedProductionData();
+          const aggregatedData =
+            await productionService.getAggregatedProductionData();
           setAggregatedData(aggregatedData);
           if (productionDashboardCache) {
             productionDashboardCache.aggregatedData = aggregatedData;
@@ -2159,8 +2209,14 @@ const ProductionHeadDashboard: React.FC = () => {
       })();
     } catch (error) {
       console.error("Error continuing to production:", error);
-      setError(error instanceof Error ? error.message : "Failed to continue to production");
-      alert(`Error: ${error instanceof Error ? error.message : "Failed to continue to production"}`);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to continue to production",
+      );
+      alert(
+        `Error: ${error instanceof Error ? error.message : "Failed to continue to production"}`,
+      );
     }
   };
 
@@ -2268,7 +2324,7 @@ const ProductionHeadDashboard: React.FC = () => {
   const handleStatusCardClick = async (
     stepKey: string,
     status: string,
-    stepName: string
+    stepName: string,
   ) => {
     try {
       setIsLoadingModalData(true);
@@ -2307,196 +2363,231 @@ const ProductionHeadDashboard: React.FC = () => {
         }
 
         if (!usedCompletedList) {
-        // Use filteredJobPlansData directly (same as counting logic) to ensure stepDetails are available
-        const completedJobsMap = new Map<string, any>();
-        filteredCompletedJobsData.forEach((job: any) => {
-          completedJobsMap.set(job.nrcJobNo, job);
-        });
+          // Use filteredJobPlansData directly (same as counting logic) to ensure stepDetails are available
+          const completedJobsMap = new Map<string, any>();
+          filteredCompletedJobsData.forEach((job: any) => {
+            completedJobsMap.set(job.nrcJobNo, job);
+          });
 
-        const printingAcceptedStepIds = new Set<number>();
-        filteredPrintingDetails.forEach((p) => {
-          if (p.status !== "accept") return;
-          const jid = Number((p as { jobStepId?: number | string }).jobStepId);
-          if (Number.isFinite(jid) && jid > 0) {
-            printingAcceptedStepIds.add(jid);
-          }
-        });
-        
-        const localJobData: Array<{ jobPlan: JobPlan; step: ProductionStep }> = [];
-        
-        filteredJobPlansData.forEach((jobPlan) => {
-          const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
-          const allStepDetails = (completedJob as any)?.allStepDetails || (jobPlan as any).allStepDetails;
-          
-          const matchingSteps = jobPlan.steps.filter((step) => {
-            if (stepKey === "flapPasting") {
-              if (!isFlapPastingStepName(step.stepName)) return false;
-            } else if (step.stepName !== targetStepName) {
-              return false;
+          const printingAcceptedStepIds = new Set<number>();
+          filteredPrintingDetails.forEach((p) => {
+            if (p.status !== "accept") return;
+            const jid = Number(
+              (p as { jobStepId?: number | string }).jobStepId,
+            );
+            if (Number.isFinite(jid) && jid > 0) {
+              printingAcceptedStepIds.add(jid);
             }
-            
-            // Use the same hasAcceptStatus logic as counting
-            const hasAcceptStatus = () => {
-              // FIRST: Check stepDetails.data[stepName].status
-              if ((step as any).stepDetails?.data) {
-                const stepDataKey =
-                  step.stepName === "FluteLaminateBoardConversion"
-                    ? "flutelam"
-                    : isFlapPastingStepName(step.stepName)
-                    ? "sideFlapPasting"
-                    : step.stepName === "PrintingDetails"
-                    ? "printingDetails"
-                    : step.stepName === "QualityDept"
-                    ? "qualityDept"
-                    : step.stepName.toLowerCase();
-                
-                const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
-                if (stepData && stepData.status === "accept") {
-                  return true;
-                }
+          });
+
+          const localJobData: Array<{
+            jobPlan: JobPlan;
+            step: ProductionStep;
+          }> = [];
+
+          filteredJobPlansData.forEach((jobPlan) => {
+            const completedJob = completedJobsMap.get(jobPlan.nrcJobNo);
+            const allStepDetails =
+              (completedJob as any)?.allStepDetails ||
+              (jobPlan as any).allStepDetails;
+
+            const matchingSteps = jobPlan.steps.filter((step) => {
+              if (stepKey === "flapPasting") {
+                if (!isFlapPastingStepName(step.stepName)) return false;
+              } else if (step.stepName !== targetStepName) {
+                return false;
               }
-              
-              // SECOND: Check stepDetails.data.status
-              if ((step as any).stepDetails?.data?.status === "accept") {
-                return true;
-              }
-              if ((step as any).stepDetails?.status === "accept") {
-                return true;
-              }
-              
-              // THIRD: Check allStepDetails
-              if (allStepDetails) {
-                const stepDetailKey =
-                  step.stepName === "FluteLaminateBoardConversion"
-                    ? "flutelam"
-                    : isFlapPastingStepName(step.stepName)
-                    ? "sideFlapPasting"
-                    : step.stepName === "PrintingDetails"
-                    ? "printingDetails"
-                    : step.stepName === "QualityDept"
-                    ? "qualityDept"
-                    : step.stepName.toLowerCase();
-                
-                const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
-                if (Array.isArray(stepDetails) && stepDetails.length > 0) {
-                  if (stepDetails.some((detail: any) => detail.status === "accept")) {
+
+              // Use the same hasAcceptStatus logic as counting
+              const hasAcceptStatus = () => {
+                // FIRST: Check stepDetails.data[stepName].status
+                if ((step as any).stepDetails?.data) {
+                  const stepDataKey =
+                    step.stepName === "FluteLaminateBoardConversion"
+                      ? "flutelam"
+                      : isFlapPastingStepName(step.stepName)
+                        ? "sideFlapPasting"
+                        : step.stepName === "PrintingDetails"
+                          ? "printingDetails"
+                          : step.stepName === "QualityDept"
+                            ? "qualityDept"
+                            : step.stepName.toLowerCase();
+
+                  const stepData = ((step as any).stepDetails.data as any)[
+                    stepDataKey
+                  ];
+                  if (stepData && stepData.status === "accept") {
                     return true;
                   }
                 }
-              }
-              
-              // FOURTH: Check step-level details
-              const stepDetailProp =
-                step.stepName === "FluteLaminateBoardConversion"
-                  ? "flutelam"
-                  : isFlapPastingStepName(step.stepName)
-                  ? "sideFlapPasting"
-                  : step.stepName === "PrintingDetails"
-                  ? "printingDetails"
-                  : step.stepName === "QualityDept"
-                  ? "qualityDept"
-                  : step.stepName.toLowerCase();
-              
-              const stepDetails = (step as any)[stepDetailProp];
-              if (Array.isArray(stepDetails) && stepDetails.length > 0) {
-                if (stepDetails.some((detail: any) => detail.status === "accept")) {
+
+                // SECOND: Check stepDetails.data.status
+                if ((step as any).stepDetails?.data?.status === "accept") {
                   return true;
                 }
-              }
-              
-              return false;
-            };
-            
-            // Filter by status using the same logic as counting
-            if (status === "completed") {
-              // step.status can be "accept" but not "completed" (TypeScript type)
-              if (step.status === "accept") {
-                return true;
-              }
-              if (
-                step.stepName === "PrintingDetails" &&
-                printingAcceptedStepIds.has(Number(step.id))
-              ) {
-                return true;
-              }
-              if (step.status === "stop" && hasAcceptStatus()) {
-                return true;
-              }
-              return false;
-            }
-            
-            if (status === "stop") {
-              if (step.status === "stop" && !hasAcceptStatus()) {
-                return true;
-              }
-              return false;
-            }
-            
-            if (status === "start") {
-              // For Start Jobs view, show only true 'start' status steps
-              return step.status === "start";
-            }
+                if ((step as any).stepDetails?.status === "accept") {
+                  return true;
+                }
 
-            if (status === "in_progress") {
-              // For In Progress view, include 'start' and 'stop' without accept
-              if (step.status === "start") return true;
-              if (step.status === "stop" && !hasAcceptStatus()) return true;
-              return false;
-            }
-            
-            // For planned, return steps with planned status
-            return step.status === status;
+                // THIRD: Check allStepDetails
+                if (allStepDetails) {
+                  const stepDetailKey =
+                    step.stepName === "FluteLaminateBoardConversion"
+                      ? "flutelam"
+                      : isFlapPastingStepName(step.stepName)
+                        ? "sideFlapPasting"
+                        : step.stepName === "PrintingDetails"
+                          ? "printingDetails"
+                          : step.stepName === "QualityDept"
+                            ? "qualityDept"
+                            : step.stepName.toLowerCase();
+
+                  const stepDetails =
+                    allStepDetails[
+                      stepDetailKey as keyof typeof allStepDetails
+                    ];
+                  if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                    if (
+                      stepDetails.some(
+                        (detail: any) => detail.status === "accept",
+                      )
+                    ) {
+                      return true;
+                    }
+                  }
+                }
+
+                // FOURTH: Check step-level details
+                const stepDetailProp =
+                  step.stepName === "FluteLaminateBoardConversion"
+                    ? "flutelam"
+                    : isFlapPastingStepName(step.stepName)
+                      ? "sideFlapPasting"
+                      : step.stepName === "PrintingDetails"
+                        ? "printingDetails"
+                        : step.stepName === "QualityDept"
+                          ? "qualityDept"
+                          : step.stepName.toLowerCase();
+
+                const stepDetails = (step as any)[stepDetailProp];
+                if (Array.isArray(stepDetails) && stepDetails.length > 0) {
+                  if (
+                    stepDetails.some(
+                      (detail: any) => detail.status === "accept",
+                    )
+                  ) {
+                    return true;
+                  }
+                }
+
+                return false;
+              };
+
+              // Filter by status using the same logic as counting
+              if (status === "completed") {
+                // step.status can be "accept" but not "completed" (TypeScript type)
+                if (step.status === "accept") {
+                  return true;
+                }
+                if (
+                  step.stepName === "PrintingDetails" &&
+                  printingAcceptedStepIds.has(Number(step.id))
+                ) {
+                  return true;
+                }
+                if (step.status === "stop" && hasAcceptStatus()) {
+                  return true;
+                }
+                return false;
+              }
+
+              if (status === "stop") {
+                if (step.status === "stop" && !hasAcceptStatus()) {
+                  return true;
+                }
+                return false;
+              }
+
+              if (status === "start") {
+                // For Start Jobs view, show only true 'start' status steps
+                return step.status === "start";
+              }
+
+              if (status === "in_progress") {
+                // For In Progress view, include 'start' and 'stop' without accept
+                if (step.status === "start") return true;
+                if (step.status === "stop" && !hasAcceptStatus()) return true;
+                return false;
+              }
+
+              // For planned, return steps with planned status
+              return step.status === status;
+            });
+
+            matchingSteps.forEach((step) => {
+              localJobData.push({
+                jobPlan: jobPlan as JobPlan,
+                step: step as ProductionStep,
+              });
+            });
           });
-          
-          matchingSteps.forEach((step) => {
-            localJobData.push({ jobPlan: jobPlan as JobPlan, step: step as ProductionStep });
-          });
-        });
-        
-        jobData = localJobData;
-        title = `${stepName} - ${
-          status.charAt(0).toUpperCase() + status.slice(1)
-        } Jobs`;
+
+          jobData = localJobData;
+          title = `${stepName} - ${
+            status.charAt(0).toUpperCase() + status.slice(1)
+          } Jobs`;
         }
-
       }
 
       // 🔥 DEBUG: Log before completed/stopped filtering
       if (status === "completed" && stepKey === "corrugation") {
-        console.log(`[handleStatusCardClick] BEFORE COMPLETED FILTER - Corrugation Completed`, {
-          count: jobData.length,
-          jobs: jobData.map((item) => {
-            const step = item.step;
-            // Check accept status using the same logic
-            const hasAccept = (() => {
-              if (step.stepDetails?.data) {
-                const stepData = (step.stepDetails.data as any).corrugation;
-                if (stepData && stepData.status === "accept") return true;
-              }
-              if ((step.stepDetails as any)?.data?.status === "accept") return true;
-              if ((step.stepDetails as any)?.status === "accept") return true;
-              const allStepDetails = (item.jobPlan as any).allStepDetails;
-              if (allStepDetails?.corrugation) {
-                if (Array.isArray(allStepDetails.corrugation) && allStepDetails.corrugation.some((d: any) => d.status === "accept")) return true;
-              }
-              return false;
-            })();
-            
-            return {
-              nrcJobNo: item.jobPlan.nrcJobNo,
-              jobPlanId: item.jobPlan.jobPlanId,
-              stepId: step.id,
-              stepStatus: step.status,
-              hasAcceptStatus: hasAccept,
-              stepDetails: step.stepDetails,
-              stepDetailsData: (step.stepDetails as any)?.data,
-              stepDetailsDataCorrugation: (step.stepDetails as any)?.data?.corrugation,
-              stepDetailsDataCorrugationStatus: (step.stepDetails as any)?.data?.corrugation?.status,
-              allStepDetails: (item.jobPlan as any).allStepDetails,
-              allStepDetailsCorrugation: (item.jobPlan as any).allStepDetails?.corrugation,
-            };
-          }),
-        });
+        console.log(
+          `[handleStatusCardClick] BEFORE COMPLETED FILTER - Corrugation Completed`,
+          {
+            count: jobData.length,
+            jobs: jobData.map((item) => {
+              const step = item.step;
+              // Check accept status using the same logic
+              const hasAccept = (() => {
+                if (step.stepDetails?.data) {
+                  const stepData = (step.stepDetails.data as any).corrugation;
+                  if (stepData && stepData.status === "accept") return true;
+                }
+                if ((step.stepDetails as any)?.data?.status === "accept")
+                  return true;
+                if ((step.stepDetails as any)?.status === "accept") return true;
+                const allStepDetails = (item.jobPlan as any).allStepDetails;
+                if (allStepDetails?.corrugation) {
+                  if (
+                    Array.isArray(allStepDetails.corrugation) &&
+                    allStepDetails.corrugation.some(
+                      (d: any) => d.status === "accept",
+                    )
+                  )
+                    return true;
+                }
+                return false;
+              })();
+
+              return {
+                nrcJobNo: item.jobPlan.nrcJobNo,
+                jobPlanId: item.jobPlan.jobPlanId,
+                stepId: step.id,
+                stepStatus: step.status,
+                hasAcceptStatus: hasAccept,
+                stepDetails: step.stepDetails,
+                stepDetailsData: (step.stepDetails as any)?.data,
+                stepDetailsDataCorrugation: (step.stepDetails as any)?.data
+                  ?.corrugation,
+                stepDetailsDataCorrugationStatus: (step.stepDetails as any)
+                  ?.data?.corrugation?.status,
+                allStepDetails: (item.jobPlan as any).allStepDetails,
+                allStepDetailsCorrugation: (item.jobPlan as any).allStepDetails
+                  ?.corrugation,
+              };
+            }),
+          },
+        );
       }
 
       // Apply additional filtering to ensure completed/stopped logic matches the counting logic
@@ -2506,10 +2597,10 @@ const ProductionHeadDashboard: React.FC = () => {
         // This includes: status === "accept", status === "completed", or status === "stop" with accept
         const beforeFilterCount = jobData.length;
         const filteredOutJobs: any[] = [];
-        
+
         jobData = jobData.filter((item) => {
           const step = item.step;
-          
+
           // Check if step has accept status using the EXACT same logic as counting in filteredAggregatedData
           const hasAcceptStatus = () => {
             // If the step.status itself is "accept", always treat as completed (matches counting logic)
@@ -2524,19 +2615,21 @@ const ProductionHeadDashboard: React.FC = () => {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : isFlapPastingStepName(step.stepName)
-                  ? "sideFlapPasting"
-                  : step.stepName === "PrintingDetails"
-                  ? "printingDetails"
-                  : step.stepName === "QualityDept"
-                  ? "qualityDept"
-                  : step.stepName.toLowerCase();
-              
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+                    ? "sideFlapPasting"
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
+
+              const stepData = ((step as any).stepDetails.data as any)[
+                stepDataKey
+              ];
               if (stepData && stepData.status === "accept") {
                 return true;
               }
             }
-            
+
             // SECOND: Check stepDetails.data.status (fallback)
             if ((step as any).stepDetails?.data?.status === "accept") {
               return true;
@@ -2544,7 +2637,7 @@ const ProductionHeadDashboard: React.FC = () => {
             if ((step as any).stepDetails?.status === "accept") {
               return true;
             }
-            
+
             // THIRD: Check allStepDetails (same as counting logic)
             const allStepDetails = (item.jobPlan as any).allStepDetails;
             if (allStepDetails) {
@@ -2552,46 +2645,51 @@ const ProductionHeadDashboard: React.FC = () => {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : isFlapPastingStepName(step.stepName)
-                  ? "sideFlapPasting"
-                  : step.stepName.toLowerCase();
-              
-              const stepDetails = allStepDetails[stepDetailKey as keyof typeof allStepDetails];
+                    ? "sideFlapPasting"
+                    : step.stepName.toLowerCase();
+
+              const stepDetails =
+                allStepDetails[stepDetailKey as keyof typeof allStepDetails];
               if (Array.isArray(stepDetails) && stepDetails.length > 0) {
-                if (stepDetails.some((detail: any) => detail.status === "accept")) {
+                if (
+                  stepDetails.some((detail: any) => detail.status === "accept")
+                ) {
                   return true;
                 }
               }
             }
-            
+
             // FOURTH: Check step-level details (direct properties on step) - same as counting logic
             const stepDetailProp =
               step.stepName === "FluteLaminateBoardConversion"
                 ? "flutelam"
                 : isFlapPastingStepName(step.stepName)
-                ? "sideFlapPasting"
-                : step.stepName.toLowerCase();
-            
+                  ? "sideFlapPasting"
+                  : step.stepName.toLowerCase();
+
             const stepDetails = (step as any)[stepDetailProp];
             if (Array.isArray(stepDetails) && stepDetails.length > 0) {
-              if (stepDetails.some((detail: any) => detail.status === "accept")) {
+              if (
+                stepDetails.some((detail: any) => detail.status === "accept")
+              ) {
                 return true;
               }
             }
-            
+
             return false;
           };
-          
+
           // Include if status is accept (step.status type doesn't include "completed")
           if (step.status === "accept") {
             return true;
           }
-          
+
           // Include if status is stop but has accept status
           const hasAccept = hasAcceptStatus();
           if (step.status === "stop" && hasAccept) {
             return true;
           }
-          
+
           // Log filtered out jobs for debugging
           if (stepKey === "corrugation") {
             filteredOutJobs.push({
@@ -2602,36 +2700,43 @@ const ProductionHeadDashboard: React.FC = () => {
               hasAcceptStatus: hasAccept,
               stepDetails: step.stepDetails,
               stepDetailsData: (step.stepDetails as any)?.data,
-              stepDetailsDataCorrugation: (step.stepDetails as any)?.data?.corrugation,
+              stepDetailsDataCorrugation: (step.stepDetails as any)?.data
+                ?.corrugation,
               allStepDetails: (item.jobPlan as any).allStepDetails,
-              reason: step.status === "stop" && !hasAccept ? "stop without accept" : "other",
+              reason:
+                step.status === "stop" && !hasAccept
+                  ? "stop without accept"
+                  : "other",
             });
           }
-          
+
           return false;
         });
-        
+
         // 🔥 DEBUG: Log after completed filtering for Corrugation
         if (stepKey === "corrugation") {
-          console.log(`[handleStatusCardClick] AFTER COMPLETED FILTER - Corrugation Completed`, {
-            beforeFilterCount,
-            afterFilterCount: jobData.length,
-            filteredOutCount: filteredOutJobs.length,
-            filteredOutJobs,
-            remainingJobs: jobData.map((item) => ({
-              nrcJobNo: item.jobPlan.nrcJobNo,
-              jobPlanId: item.jobPlan.jobPlanId,
-              stepId: item.step.id,
-              stepStatus: item.step.status,
-            })),
-          });
+          console.log(
+            `[handleStatusCardClick] AFTER COMPLETED FILTER - Corrugation Completed`,
+            {
+              beforeFilterCount,
+              afterFilterCount: jobData.length,
+              filteredOutCount: filteredOutJobs.length,
+              filteredOutJobs,
+              remainingJobs: jobData.map((item) => ({
+                nrcJobNo: item.jobPlan.nrcJobNo,
+                jobPlanId: item.jobPlan.jobPlanId,
+                stepId: item.step.id,
+                stepStatus: item.step.status,
+              })),
+            },
+          );
         }
       } else if (status === "stop") {
         // Filter to only include steps that should be counted as stopped
         // This excludes steps with status === "stop" that have accept status
         jobData = jobData.filter((item) => {
           const step = item.step;
-          
+
           // Check if step has accept status using the same logic as counting
           const hasAcceptStatus = () => {
             // FIRST: Check stepDetails.data[stepName].status (e.g., stepDetails.data.corrugation.status)
@@ -2640,19 +2745,21 @@ const ProductionHeadDashboard: React.FC = () => {
                 step.stepName === "FluteLaminateBoardConversion"
                   ? "flutelam"
                   : isFlapPastingStepName(step.stepName)
-                  ? "sideFlapPasting"
-                  : step.stepName === "PrintingDetails"
-                  ? "printingDetails"
-                  : step.stepName === "QualityDept"
-                  ? "qualityDept"
-                  : step.stepName.toLowerCase();
-              
-              const stepData = ((step as any).stepDetails.data as any)[stepDataKey];
+                    ? "sideFlapPasting"
+                    : step.stepName === "PrintingDetails"
+                      ? "printingDetails"
+                      : step.stepName === "QualityDept"
+                        ? "qualityDept"
+                        : step.stepName.toLowerCase();
+
+              const stepData = ((step as any).stepDetails.data as any)[
+                stepDataKey
+              ];
               if (stepData && stepData.status === "accept") {
                 return true;
               }
             }
-            
+
             // SECOND: Check stepDetails.data.status (fallback)
             if ((step as any).stepDetails?.data?.status === "accept") {
               return true;
@@ -2660,32 +2767,35 @@ const ProductionHeadDashboard: React.FC = () => {
             if ((step as any).stepDetails?.status === "accept") {
               return true;
             }
-            
+
             return false;
           };
-          
+
           // Only include if status is stop AND does NOT have accept status
           if (step.status === "stop" && !hasAcceptStatus()) {
             return true;
           }
-          
+
           return false;
         });
       }
 
       // 🔥 DEBUG: Log before date filtering
-      console.log(`[handleStatusCardClick] BEFORE DATE FILTER - Status: ${status}, Step: ${stepName}, Count: ${jobData.length}`, {
-        jobs: jobData.map((item) => ({
-          nrcJobNo: item.jobPlan.nrcJobNo,
-          jobPlanId: item.jobPlan.jobPlanId,
-          stepId: item.step.id,
-          stepStatus: item.step.status,
-          stepUpdatedAt: (item.step as any).updatedAt,
-          stepStartDate: item.step.startDate,
-          stepEndDate: item.step.endDate,
-          jobCreatedAt: (item.jobPlan as any).createdAt,
-        })),
-      });
+      console.log(
+        `[handleStatusCardClick] BEFORE DATE FILTER - Status: ${status}, Step: ${stepName}, Count: ${jobData.length}`,
+        {
+          jobs: jobData.map((item) => ({
+            nrcJobNo: item.jobPlan.nrcJobNo,
+            jobPlanId: item.jobPlan.jobPlanId,
+            stepId: item.step.id,
+            stepStatus: item.step.status,
+            stepUpdatedAt: (item.step as any).updatedAt,
+            stepStartDate: item.step.startDate,
+            stepEndDate: item.step.endDate,
+            jobCreatedAt: (item.jobPlan as any).createdAt,
+          })),
+        },
+      );
 
       // Apply date filter to the results - filter based on the specific step's date
       // Skip when we used completedJobsByStep (that list is already date-filtered in filteredAggregatedData)
@@ -2694,20 +2804,26 @@ const ProductionHeadDashboard: React.FC = () => {
         const { startDate, endDate } = dateRange;
         const beforeFilterCount = jobData.length;
         const filteredOutJobs: any[] = [];
-        
+
         jobData = jobData.filter((item) => {
           const step = item.step;
           const jobPlan = item.jobPlan;
-          
+
           // 🔥 SPECIAL HANDLING: For completed Corrugation steps, check stepDetails.data.corrugation.date first
           // This is the actual completion date when status is "accept"
-          if (status === "completed" && step.stepName === "Corrugation" && (step.stepDetails as any)?.data?.corrugation?.date) {
-            const completionDate = new Date((step.stepDetails as any).data.corrugation.date);
+          if (
+            status === "completed" &&
+            step.stepName === "Corrugation" &&
+            (step.stepDetails as any)?.data?.corrugation?.date
+          ) {
+            const completionDate = new Date(
+              (step.stepDetails as any).data.corrugation.date,
+            );
             if (isDateInRange(completionDate, startDate, endDate)) {
               return true;
             }
           }
-          
+
           // Use the same logic as filteredJobPlansData: check step updatedAt first
           if ((step as any).updatedAt) {
             const stepUpdateDate = new Date((step as any).updatedAt);
@@ -2715,7 +2831,7 @@ const ProductionHeadDashboard: React.FC = () => {
               return true;
             }
           }
-          
+
           // Also check the job plan's step updatedAt (in case step.updatedAt is not available)
           const jobPlanStep = jobPlan.steps.find((s) => s.id === step.id);
           if (jobPlanStep && (jobPlanStep as any).updatedAt) {
@@ -2724,7 +2840,7 @@ const ProductionHeadDashboard: React.FC = () => {
               return true;
             }
           }
-          
+
           // Check step start date
           if (step.startDate) {
             const stepStartDate = new Date(step.startDate);
@@ -2732,7 +2848,7 @@ const ProductionHeadDashboard: React.FC = () => {
               return true;
             }
           }
-          
+
           // Check step end date (for completed/stopped steps)
           if (step.endDate) {
             const stepEndDate = new Date(step.endDate);
@@ -2740,12 +2856,12 @@ const ProductionHeadDashboard: React.FC = () => {
               return true;
             }
           }
-          
+
           // Fall back to job creation date if step dates are not available
           // This matches the logic in filteredJobPlansData
           const jobDate = new Date((jobPlan as any).createdAt || Date.now());
           const isInRange = isDateInRange(jobDate, startDate, endDate);
-          
+
           if (!isInRange) {
             filteredOutJobs.push({
               nrcJobNo: jobPlan.nrcJobNo,
@@ -2755,37 +2871,44 @@ const ProductionHeadDashboard: React.FC = () => {
               stepUpdatedAt: (step as any).updatedAt,
               stepStartDate: step.startDate,
               stepEndDate: step.endDate,
-              stepDetailsDataCorrugationDate: (step.stepDetails as any)?.data?.corrugation?.date,
+              stepDetailsDataCorrugationDate: (step.stepDetails as any)?.data
+                ?.corrugation?.date,
               jobCreatedAt: (jobPlan as any).createdAt,
               reason: "Date filter excluded",
             });
           }
-          
+
           return isInRange;
         });
-        
+
         // 🔥 DEBUG: Log after date filtering
-        console.log(`[handleStatusCardClick] AFTER DATE FILTER - Status: ${status}, Step: ${stepName}`, {
-          beforeFilterCount,
-          afterFilterCount: jobData.length,
-          filteredOutCount: filteredOutJobs.length,
-          dateRange: {
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            filterType: dateFilter,
+        console.log(
+          `[handleStatusCardClick] AFTER DATE FILTER - Status: ${status}, Step: ${stepName}`,
+          {
+            beforeFilterCount,
+            afterFilterCount: jobData.length,
+            filteredOutCount: filteredOutJobs.length,
+            dateRange: {
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              filterType: dateFilter,
+            },
+            filteredOutJobs,
+            remainingJobs: jobData.map((item) => ({
+              nrcJobNo: item.jobPlan.nrcJobNo,
+              jobPlanId: item.jobPlan.jobPlanId,
+              stepId: item.step.id,
+              stepStatus: item.step.status,
+            })),
           },
-          filteredOutJobs,
-          remainingJobs: jobData.map((item) => ({
-            nrcJobNo: item.jobPlan.nrcJobNo,
-            jobPlanId: item.jobPlan.jobPlanId,
-            stepId: item.step.id,
-            stepStatus: item.step.status,
-          })),
-        });
+        );
       }
-      
+
       // Console log for debugging
-      console.log(`[handleStatusCardClick] FINAL - Status: ${status}, Step: ${stepName}, Filtered Count: ${jobData.length}`, jobData);
+      console.log(
+        `[handleStatusCardClick] FINAL - Status: ${status}, Step: ${stepName}, Filtered Count: ${jobData.length}`,
+        jobData,
+      );
 
       setModalJobData(jobData);
       setModalTitle(title);
@@ -2866,7 +2989,7 @@ const ProductionHeadDashboard: React.FC = () => {
                       (async () => {
                         await fetchProductionDashboardData(
                           dateFilter,
-                          customDateRange
+                          customDateRange,
                         );
                       })(),
                     ]);
@@ -2877,7 +3000,7 @@ const ProductionHeadDashboard: React.FC = () => {
                   } catch (error) {
                     console.error("Error refreshing data:", error);
                     setError(
-                      "Failed to refresh production data. Please try again."
+                      "Failed to refresh production data. Please try again.",
                     );
                   } finally {
                     setIsLoadingAggregated(false);
@@ -2993,174 +3116,183 @@ const ProductionHeadDashboard: React.FC = () => {
 
       {/* Completed Jobs Summary — same visibility as Admin: only when date-filtered completed jobs exist */}
       {!isLoadingJobStats && filteredCompletedJobsData.length > 0 && (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
-          <div className="bg-[#00AEEF] px-6 py-4">
-            <div className="flex items-center gap-3">
-              <CurrencyRupeeIcon className="h-8 w-8 shrink-0 text-white" />
-              <div>
-                <h2 className="text-2xl font-bold text-white">
-                  Completed Jobs Summary
-                </h2>
-                <p className="text-blue-100 text-sm">
-                  Daily Production &amp; Revenue Tracking
-                </p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+            <div className="bg-[#00AEEF] px-6 py-4">
+              <div className="flex items-center gap-3">
+                <CurrencyRupeeIcon className="h-8 w-8 shrink-0 text-white" />
+                <div>
+                  <h2 className="text-2xl font-bold text-white">
+                    Completed Jobs Summary
+                  </h2>
+                  <p className="text-blue-100 text-sm">
+                    Daily Production &amp; Revenue Tracking
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="relative">
+                  <CalendarDaysIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter by date..."
+                    value={completedSummaryDateFilter}
+                    onChange={(e) =>
+                      setCompletedSummaryDateFilter(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter by customer..."
+                    value={completedSummaryCustomerFilter}
+                    onChange={(e) =>
+                      setCompletedSummaryCustomerFilter(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="relative">
+                  <BuildingOfficeIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter by unit..."
+                    value={completedSummaryUnitFilter}
+                    onChange={(e) =>
+                      setCompletedSummaryUnitFilter(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+              <table className="w-full min-w-full">
+                <thead className="bg-gray-50 sticky top-0 z-10">
+                  <tr>
+                    {(
+                      [
+                        ["recordDateIso", "Date"],
+                        ["customerName", "Customer Name"],
+                        ["unitLabel", "Unit"],
+                        ["dispatchDateIso", "Dispatch Date"],
+                        ["dispatchQty", "Dispatch Qty"],
+                        ["totalValue", "Total Value"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <th
+                        key={key}
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-200"
+                        onClick={() =>
+                          handleCompletedSummarySort(
+                            key as keyof CompletedJobSummaryRow,
+                          )
+                        }
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          <span className="text-gray-400 font-normal">
+                            {completedSummarySort.key === key
+                              ? completedSummarySort.dir === "asc"
+                                ? "↑"
+                                : "↓"
+                              : "↕"}
+                          </span>
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {completedJobsSummaryFilteredSorted.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-8 text-center text-sm text-gray-500"
+                      >
+                        No completed jobs match these filters
+                        {completedSummaryDateFilter ||
+                        completedSummaryCustomerFilter ||
+                        completedSummaryUnitFilter
+                          ? " — try adjusting filters"
+                          : ""}
+                        .
+                      </td>
+                    </tr>
+                  ) : (
+                    completedJobsSummaryFilteredSorted.map((row, index) => {
+                      /** Same row/value styling as Admin CompletedJobsTable */
+                      const rowBg =
+                        row.totalValue > 10000
+                          ? "bg-green-50"
+                          : row.totalValue > 5000
+                            ? "bg-yellow-50"
+                            : "";
+                      const valueClass =
+                        row.totalValue > 10000
+                          ? "text-green-600 font-bold"
+                          : row.totalValue > 5000
+                            ? "text-yellow-600 font-bold"
+                            : "text-gray-900 font-bold";
+                      return (
+                        <tr
+                          key={`${row.id}-${row.nrcJobNo}-${index}`}
+                          className={`hover:bg-gray-50 transition-colors ${rowBg}`}
+                        >
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {row.recordDateDisplay}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate"
+                            title={row.customerName}
+                          >
+                            {row.customerName}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {row.unitLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {row.dispatchDateDisplay}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 tabular-nums">
+                            {row.dispatchQty.toLocaleString("en-IN")}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                            <span className={`text-sm ${valueClass}`}>
+                              {formatInr(row.totalValue)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+                <span>
+                  Showing {completedJobsSummaryFilteredSorted.length} of{" "}
+                  {completedJobsSummaryRows.length} completed jobs
+                </span>
+                <span className="font-semibold text-gray-900 tabular-nums">
+                  Total Revenue: {formatInr(completedJobsSummaryTotalRevenue)}
+                </span>
               </div>
             </div>
           </div>
-
-          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="relative">
-              <CalendarDaysIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Filter by date..."
-                value={completedSummaryDateFilter}
-                onChange={(e) => setCompletedSummaryDateFilter(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Filter by customer..."
-                value={completedSummaryCustomerFilter}
-                onChange={(e) =>
-                  setCompletedSummaryCustomerFilter(e.target.value)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="relative">
-              <BuildingOfficeIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Filter by unit..."
-                value={completedSummaryUnitFilter}
-                onChange={(e) => setCompletedSummaryUnitFilter(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-            <table className="w-full min-w-full">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  {(
-                    [
-                      ["recordDateIso", "Date"],
-                      ["customerName", "Customer Name"],
-                      ["unitLabel", "Unit"],
-                      ["dispatchDateIso", "Dispatch Date"],
-                      ["dispatchQty", "Dispatch Qty"],
-                      ["totalValue", "Total Value"],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <th
-                      key={key}
-                      scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-200"
-                      onClick={() =>
-                        handleCompletedSummarySort(key as keyof CompletedJobSummaryRow)
-                      }
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {label}
-                        <span className="text-gray-400 font-normal">
-                          {completedSummarySort.key === key
-                            ? completedSummarySort.dir === "asc"
-                              ? "↑"
-                              : "↓"
-                            : "↕"}
-                        </span>
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {completedJobsSummaryFilteredSorted.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-8 text-center text-sm text-gray-500"
-                    >
-                      No completed jobs match these filters
-                      {completedSummaryDateFilter ||
-                      completedSummaryCustomerFilter ||
-                      completedSummaryUnitFilter
-                        ? " — try adjusting filters"
-                        : ""}
-                      .
-                    </td>
-                  </tr>
-                ) : (
-                  completedJobsSummaryFilteredSorted.map((row, index) => {
-                    /** Same row/value styling as Admin CompletedJobsTable */
-                    const rowBg =
-                      row.totalValue > 10000
-                        ? "bg-green-50"
-                        : row.totalValue > 5000
-                          ? "bg-yellow-50"
-                          : "";
-                    const valueClass =
-                      row.totalValue > 10000
-                        ? "text-green-600 font-bold"
-                        : row.totalValue > 5000
-                          ? "text-yellow-600 font-bold"
-                          : "text-gray-900 font-bold";
-                    return (
-                      <tr
-                        key={`${row.id}-${row.nrcJobNo}-${index}`}
-                        className={`hover:bg-gray-50 transition-colors ${rowBg}`}
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {row.recordDateDisplay}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate" title={row.customerName}>
-                          {row.customerName}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {row.unitLabel}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {row.dispatchDateDisplay}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 tabular-nums">
-                          {row.dispatchQty.toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap tabular-nums">
-                          <span className={`text-sm ${valueClass}`}>
-                            {formatInr(row.totalValue)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-            <span>
-              Showing {completedJobsSummaryFilteredSorted.length} of{" "}
-              {completedJobsSummaryRows.length} completed jobs
-            </span>
-            <span className="font-semibold text-gray-900 tabular-nums">
-              Total Revenue: {formatInr(completedJobsSummaryTotalRevenue)}
-            </span>
-            </div>
-          </div>
         </div>
-      </div>
       )}
 
       {/* Main Tables Tabs */}
@@ -3190,321 +3322,61 @@ const ProductionHeadDashboard: React.FC = () => {
         </div>
       </div>
 
-
       {/* Job Cards Overview */}
       {activeMainTab === "jobCards" && (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 sm:mb-0">
-              Job Cards Overview
-            </h3>
-
-            {/* Search and Filters */}
-            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              {/* Search */}
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Search job plans..."
-                  value={jobCardsSearchTerm}
-                  onChange={(e) => setJobCardsSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] w-full sm:w-64"
-                />
-              </div>
-
-              {/* Demand Filter */}
-              <select
-                value={jobCardsDemandFilter}
-                onChange={(e) => setJobCardsDemandFilter(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
-              >
-                <option value="all">All Demands</option>
-                <option value="high">Urgent</option>
-                <option value="medium">Regular</option>
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={jobCardsStatusFilter}
-                onChange={(e) => setJobCardsStatusFilter(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
-              >
-                <option value="all">All Status</option>
-                <option value="completed">Completed</option>
-                <option value="inProgress">In Progress</option>
-                <option value="majorHold">Major Hold</option>
-                <option value="planned">Planned</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Job No
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Demand
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Progress
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="bg-white divide-y divide-gray-200">
-                {(() => {
-                  // Filter job plans based on search and filters
-                  const filteredJobCards = filteredJobPlansData.filter((jobPlan) => {
-                    const matchesSearch = jobPlan.nrcJobNo
-                      .toLowerCase()
-                      .includes(jobCardsSearchTerm.toLowerCase());
-                    
-                    const jobDemand = (jobPlan as any).jobDemand?.toLowerCase() || "";
-                    const matchesDemand =
-                      jobCardsDemandFilter === "all" ||
-                      (jobCardsDemandFilter === "low" && jobDemand === "low") ||
-                      (jobCardsDemandFilter === "medium" && jobDemand === "medium") ||
-                      (jobCardsDemandFilter === "high" && jobDemand === "high");
-
-                    let matchesStatus = true;
-                    if (jobCardsStatusFilter !== "all") {
-                      const stepStatuses = jobPlan.steps.map((step) =>
-                        getStepActualStatus(step)
-                      );
-                      const hasInProgress = stepStatuses.some(
-                        (status) => status === "in_progress"
-                      );
-                      const hasHold = stepStatuses.some((status) => status === "hold");
-                      const allCompleted = stepStatuses.every(
-                        (status) => status === "completed"
-                      );
-
-                      if (jobCardsStatusFilter === "completed") matchesStatus = allCompleted;
-                      else if (jobCardsStatusFilter === "majorHold") matchesStatus = hasMajorHold(jobPlan);
-                      else if (jobCardsStatusFilter === "inProgress")
-                        matchesStatus = (hasInProgress || hasHold) && !hasMajorHold(jobPlan);
-                      else if (jobCardsStatusFilter === "planned")
-                        matchesStatus = !hasInProgress && !hasHold && !allCompleted;
-                    }
-
-                    return matchesSearch && matchesDemand && matchesStatus;
-                  });
-
-                  const getProgressPercentage = (jobPlan: JobPlanForStats) => {
-                    const completedSteps = jobPlan.steps.filter(
-                      (step) => getStepActualStatus(step) === "completed"
-                    ).length;
-                    const totalSteps = jobPlan.steps.length;
-                    return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-                  };
-
-                  // Sort by progress descending (highest progress first), same as Admin Dashboard
-                  const sortedJobCards = [...filteredJobCards].sort(
-                    (a, b) => getProgressPercentage(b) - getProgressPercentage(a)
-                  );
-
-                  const getJobStatus = (jobPlan: JobPlanForStats) => {
-                    const stepStatuses = jobPlan.steps.map((step) => getStepActualStatus(step));
-                    const hasInProgress = stepStatuses.some(
-                      (status) => status === "in_progress"
-                    );
-                    const hasHold = stepStatuses.some((status) => status === "hold");
-                    const allCompleted = stepStatuses.every((status) => status === "completed");
-
-                    if (allCompleted)
-                      return { text: "Completed", color: "bg-green-100 text-green-800" };
-                    if (hasMajorHold(jobPlan))
-                      return { text: "Major Hold", color: "bg-red-100 text-red-800" };
-                    if (hasInProgress || hasHold)
-                      return { text: "In Progress", color: "bg-yellow-100 text-yellow-800" };
-                    return { text: "Planned", color: "bg-gray-100 text-gray-800" };
-                  };
-
-                  const formatDate = (dateString: string | null) => {
-                    if (!dateString) return "-";
-                    const date = new Date(dateString);
-                    const day = String(date.getDate()).padStart(2, "0");
-                    const month = String(date.getMonth() + 1).padStart(2, "0");
-                    const year = date.getFullYear();
-                    return `${day}/${month}/${year}`;
-                  };
-
-                  return sortedJobCards.length > 0 ? (
-                    sortedJobCards.map((jobPlan) => {
-                      const status = getJobStatus(jobPlan);
-                      const progressPercentage = getProgressPercentage(jobPlan);
-                      const jobDemand = (jobPlan as any).jobDemand || "low";
-
-                      return (
-                        <tr key={jobPlan.jobPlanId} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {jobPlan.nrcJobNo}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {(jobPlan as any).jobPlanCode ? `Job Plan Code: ${(jobPlan as any).jobPlanCode}` : `ID: ${jobPlan.jobPlanId}`}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                jobDemand === "high"
-                                  ? "bg-red-100 text-red-800"
-                                  : jobDemand === "medium"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-green-100 text-green-800"
-                              }`}
-                            >
-                              {jobDemand === "high"
-                                ? "Urgent"
-                                : jobDemand === "medium"
-                                ? "Regular"
-                                : jobDemand}
-                            </span>
-                          </td>
-
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
-                                <div
-                                  className="bg-[#00AEEF] h-2 rounded-full transition-all duration-300"
-                                  style={{ width: `${progressPercentage}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-sm text-gray-500">
-                                {Math.round(progressPercentage)}%
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">
-                              {
-                                jobPlan.steps.filter(
-                                  (step) => getStepActualStatus(step) === "completed"
-                                ).length
-                              }
-                              /{jobPlan.steps.length} steps
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${status.color}`}
-                            >
-                              {status.text}
-                            </span>
-                          </td>
-
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatDate((jobPlan as any).createdAt)}
-                          </td>
-
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => handleViewSteps(jobPlan)}
-                              className="text-[#00AEEF] hover:text-[#0099cc] transition-colors duration-200 flex items-center space-x-1"
-                            >
-                              <EyeIcon className="h-4 w-4" />
-                              <span>View Steps</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center">
-                        <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">No job plans found matching your criteria.</p>
-                        <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filters.</p>
-                      </td>
-                    </tr>
-                  );
-                })()}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Printing Details Table */}
-      {activeMainTab === "printing" && (  
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                Printing Details
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 sm:mb-0">
+                Job Cards Overview
               </h3>
-              <p className="text-sm text-gray-600">
-                All printing jobs - Continue completed jobs to production
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <div className="w-full sm:w-48">
-                <label htmlFor="printing-details-status" className="sr-only">
-                  Filter by status
-                </label>
+
+              {/* Search and Filters */}
+              <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                {/* Search */}
+                <div className="relative">
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <input
+                    type="text"
+                    placeholder="Search job plans..."
+                    value={jobCardsSearchTerm}
+                    onChange={(e) => setJobCardsSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] w-full sm:w-64"
+                  />
+                </div>
+
+                {/* Demand Filter */}
                 <select
-                  id="printing-details-status"
-                  value={printingDetailsStatusFilter}
-                  onChange={(e) => setPrintingDetailsStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] bg-white"
+                  value={jobCardsDemandFilter}
+                  onChange={(e) =>
+                    setJobCardsDemandFilter(e.target.value as any)
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
                 >
-                  <option value="">All statuses</option>
-                  <option value="accept">Printed</option>
-                  <option value="in_progress">In Progress</option>
+                  <option value="all">All Demands</option>
+                  <option value="high">Urgent</option>
+                  <option value="medium">Regular</option>
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  value={jobCardsStatusFilter}
+                  onChange={(e) =>
+                    setJobCardsStatusFilter(e.target.value as any)
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+                >
+                  <option value="all">All Status</option>
+                  <option value="completed">Completed</option>
+                  <option value="inProgress">In Progress</option>
+                  <option value="majorHold">Major Hold</option>
                   <option value="planned">Planned</option>
-                  <option value="hold">On Hold</option>
-                  <option value="major_hold">Major Hold</option>
-                  <option value="rejected">Rejected</option>
                 </select>
               </div>
-              <div className="w-full sm:w-72">
-                <label htmlFor="printing-details-search" className="sr-only">
-                  Search by Job Plan Code or NRC Job Number
-                </label>
-                <input
-                  id="printing-details-search"
-                  type="text"
-                  placeholder="Search by Job Plan Code or NRC Job No..."
-                  value={printingDetailsSearchTerm}
-                  onChange={(e) => setPrintingDetailsSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
-                />
-              </div>
             </div>
-          </div>
 
-          {isLoadingPrintingDetails ? (
-            <div className="flex justify-center py-8">
-              <LoadingSpinner size="md" text="Loading printing details..." />
-            </div>
-          ) : printingDetailsError ? (
-            <div className="text-center py-8 text-red-500">
-              {printingDetailsError}
-            </div>
-          ) : (
-            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar">
-
-
+            {/* Table */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
@@ -3512,191 +3384,570 @@ const ProductionHeadDashboard: React.FC = () => {
                       Job No
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
+                      Demand
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quantity
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Progress
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
+
                 <tbody className="bg-white divide-y divide-gray-200">
                   {(() => {
-                    const searchLower = printingDetailsSearchTerm.trim().toLowerCase();
-                    const statusFilter = printingDetailsStatusFilter.trim();
-                    let filteredPrinting =
-                      searchLower === ""
-                        ? filteredPrintingDetails
-                        : filteredPrintingDetails.filter((p) => {
-                            const nrc = (p.jobNrcJobNo ?? "").toLowerCase();
-                            const code = (p.jobPlanCode ?? "").toLowerCase();
-                            return nrc.includes(searchLower) || code.includes(searchLower);
-                          });
-                    // Apply status filter
-                    if (statusFilter !== "") {
-                      filteredPrinting = filteredPrinting.filter((p) => {
-                        const displayStatus =
-                          p.stepStatus === "start" && p.status === "pending" ? "in_progress" : p.status;
-                        if (statusFilter === "planned") {
-                          return displayStatus === "pending" || (displayStatus as string) === "planned";
+                    // Filter job plans based on search and filters
+                    const filteredJobCards = filteredJobPlansData.filter(
+                      (jobPlan) => {
+                        const matchesSearch = jobPlan.nrcJobNo
+                          .toLowerCase()
+                          .includes(jobCardsSearchTerm.toLowerCase());
+
+                        const jobDemand =
+                          (jobPlan as any).jobDemand?.toLowerCase() || "";
+                        const matchesDemand =
+                          jobCardsDemandFilter === "all" ||
+                          (jobCardsDemandFilter === "low" &&
+                            jobDemand === "low") ||
+                          (jobCardsDemandFilter === "medium" &&
+                            jobDemand === "medium") ||
+                          (jobCardsDemandFilter === "high" &&
+                            jobDemand === "high");
+
+                        let matchesStatus = true;
+                        if (jobCardsStatusFilter !== "all") {
+                          const stepStatuses = jobPlan.steps.map((step) =>
+                            getStepActualStatus(step),
+                          );
+                          const hasInProgress = stepStatuses.some(
+                            (status) => status === "in_progress",
+                          );
+                          const hasHold = stepStatuses.some(
+                            (status) => status === "hold",
+                          );
+                          const allCompleted = stepStatuses.every(
+                            (status) => status === "completed",
+                          );
+
+                          if (jobCardsStatusFilter === "completed")
+                            matchesStatus = allCompleted;
+                          else if (jobCardsStatusFilter === "majorHold")
+                            matchesStatus = hasMajorHold(jobPlan);
+                          else if (jobCardsStatusFilter === "inProgress")
+                            matchesStatus =
+                              (hasInProgress || hasHold) &&
+                              !hasMajorHold(jobPlan);
+                          else if (jobCardsStatusFilter === "planned")
+                            matchesStatus =
+                              !hasInProgress && !hasHold && !allCompleted;
                         }
-                        return displayStatus === statusFilter;
-                      });
-                    }
-                    // Sort: Printed (accept) first, then In Progress, then Planned
-                    const getStatusSortOrder = (p: typeof filteredPrinting[0]) => {
-                      const status = p.stepStatus === "start" && p.status === "pending" ? "in_progress" : p.status;
-                      if (status === "accept") return 0;
-                      if (status === "in_progress" || p.stepStatus === "start") return 1;
-                      if (status === "pending" || (status as string) === "planned") return 2;
-                      return 3;
-                    };
-                    const sortedPrinting = [...filteredPrinting].sort(
-                      (a, b) => getStatusSortOrder(a) - getStatusSortOrder(b)
+
+                        return matchesSearch && matchesDemand && matchesStatus;
+                      },
                     );
 
-                    if (filteredPrinting.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center">
-                            <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-500">
-                              {printingDetails.length === 0
-                                ? "No printing details found"
-                                : "No jobs match your search or status filter"}
-                            </p>
-                          </td>
-                        </tr>
+                    const getProgressPercentage = (
+                      jobPlan: JobPlanForStats,
+                    ) => {
+                      const completedSteps = jobPlan.steps.filter(
+                        (step) => getStepActualStatus(step) === "completed",
+                      ).length;
+                      const totalSteps = jobPlan.steps.length;
+                      return totalSteps > 0
+                        ? (completedSteps / totalSteps) * 100
+                        : 0;
+                    };
+
+                    // Sort by progress descending (highest progress first), same as Admin Dashboard
+                    const sortedJobCards = [...filteredJobCards].sort(
+                      (a, b) =>
+                        getProgressPercentage(b) - getProgressPercentage(a),
+                    );
+
+                    const getJobStatus = (jobPlan: JobPlanForStats) => {
+                      const stepStatuses = jobPlan.steps.map((step) =>
+                        getStepActualStatus(step),
                       );
-                    }
-                    return sortedPrinting.map((printing) => {
-                      const formatDate = (dateString: string | null) => {
-                        if (!dateString) return "-";
-                        try {
-                          const date = new Date(dateString);
-                          const day = String(date.getDate()).padStart(2, "0");
-                          const month = String(date.getMonth() + 1).padStart(2, "0");
-                          const year = date.getFullYear();
-                          return `${day}/${month}/${year}`;
-                        } catch {
-                          return "-";
-                        }
+                      const hasInProgress = stepStatuses.some(
+                        (status) => status === "in_progress",
+                      );
+                      const hasHold = stepStatuses.some(
+                        (status) => status === "hold",
+                      );
+                      const allCompleted = stepStatuses.every(
+                        (status) => status === "completed",
+                      );
+
+                      if (allCompleted)
+                        return {
+                          text: "Completed",
+                          color: "bg-green-100 text-green-800",
+                        };
+                      if (hasMajorHold(jobPlan))
+                        return {
+                          text: "Major Hold",
+                          color: "bg-red-100 text-red-800",
+                        };
+                      if (hasInProgress || hasHold)
+                        return {
+                          text: "In Progress",
+                          color: "bg-yellow-100 text-yellow-800",
+                        };
+                      return {
+                        text: "Planned",
+                        color: "bg-gray-100 text-gray-800",
                       };
+                    };
 
-                      const getStatusInfo = (status: string) => {
-                        switch (status) {
-                          case "accept":
-                            return { label: "Printed", color: "bg-green-100 text-green-800" };
-                          case "in_progress":
-                            return { label: "In Progress", color: "bg-yellow-100 text-yellow-800" };
-                          case "pending":
-                            return { label: "Pending", color: "bg-gray-100 text-gray-800" };
-                          case "hold":
-                            return { label: "On Hold", color: "bg-orange-100 text-orange-800" };
-                          case "major_hold":
-                            return { label: "Major Hold", color: "bg-red-100 text-red-800" };
-                          case "rejected":
-                            return { label: "Rejected", color: "bg-red-100 text-red-800" };
-                          case "planned":
-                            return { label: "Planned", color: "bg-gray-100 text-gray-800" };
-                          default:
-                            return { label: status, color: "bg-gray-100 text-gray-800" };
-                        }
-                      };
+                    const formatDate = (dateString: string | null) => {
+                      if (!dateString) return "-";
+                      const date = new Date(dateString);
+                      const day = String(date.getDate()).padStart(2, "0");
+                      const month = String(date.getMonth() + 1).padStart(
+                        2,
+                        "0",
+                      );
+                      const year = date.getFullYear();
+                      return `${day}/${month}/${year}`;
+                    };
 
-                      const displayStatus =
-                        printing.stepStatus === "start" && printing.status === "pending"
-                          ? "in_progress"
-                          : printing.status;
-                      const statusInfo = getStatusInfo(displayStatus);
+                    return sortedJobCards.length > 0 ? (
+                      sortedJobCards.map((jobPlan) => {
+                        const status = getJobStatus(jobPlan);
+                        const progressPercentage =
+                          getProgressPercentage(jobPlan);
+                        const jobDemand = (jobPlan as any).jobDemand || "low";
 
-                      // Show button when:
-                      // - Printing is in progress (step status = start), OR
-                      // - Printing is accepted AND stopped (completed)
-                      const isInProgress = printing.stepStatus === "start";
-                      const isCompletedAndAccepted =
-                        (printing.status === "accept" || displayStatus === "accept") &&
-                        printing.stepStatus === "stop";
+                        return (
+                          <tr
+                            key={jobPlan.jobPlanId}
+                            className="hover:bg-gray-50"
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {jobPlan.nrcJobNo}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {(jobPlan as any).jobPlanCode
+                                    ? `Job Plan Code: ${(jobPlan as any).jobPlanCode}`
+                                    : `ID: ${jobPlan.jobPlanId}`}
+                                </div>
+                              </div>
+                            </td>
 
-                      const alreadyContinued =
-                        printing.productionHeadContinued === true ||
-                        (typeof printing.jobStepId === "number" && continuedSteps[printing.jobStepId] === true);
-
-                      const canShowContinueButton = isInProgress || isCompletedAndAccepted;
-                      const canContinue = canShowContinueButton && !alreadyContinued;
-
-                      // Use a stable, unique key: prefer jobStepId, fall back to combination
-                      const rowKey =
-                        typeof printing.jobStepId === "number" && printing.jobStepId > 0
-                          ? `step-${printing.jobStepId}`
-                          : `job-${printing.jobNrcJobNo}-${printing.id}`;
-
-                      return (
-                        <tr key={rowKey} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900 font-mono">
-                              {printing.jobNrcJobNo}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              ID: {printing.jobPlanCode || "-"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(
-                              ((printing as any).deliveryDate as string | null) ||
-                                printing.date
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm font-medium text-gray-900">
-                              {printing.quantity?.toLocaleString() || "0"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
-                            >
-                              {statusInfo.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                            {canShowContinueButton ? (
-                              <button
-                                onClick={(e) => {
-                                  if (!canContinue) return;
-                                  e.stopPropagation();
-                                  handleContinueToProduction(printing);
-                                }}
-                                disabled={!canContinue}
-                                className={`px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium ${
-                                  canContinue
-                                    ? "bg-[#00AEEF] hover:bg-[#0099cc] text-white"
-                                    : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  jobDemand === "high"
+                                    ? "bg-red-100 text-red-800"
+                                    : jobDemand === "medium"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-green-100 text-green-800"
                                 }`}
                               >
-                                {alreadyContinued ? "Continued" : "Continue to Production"}
+                                {jobDemand === "high"
+                                  ? "Urgent"
+                                  : jobDemand === "medium"
+                                    ? "Regular"
+                                    : jobDemand}
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                                  <div
+                                    className="bg-[#00AEEF] h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${progressPercentage}%` }}
+                                  ></div>
+                                </div>
+                                <span className="text-sm text-gray-500">
+                                  {Math.round(progressPercentage)}%
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                {
+                                  jobPlan.steps.filter(
+                                    (step) =>
+                                      getStepActualStatus(step) === "completed",
+                                  ).length
+                                }
+                                /{jobPlan.steps.length} steps
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${status.color}`}
+                              >
+                                {status.text}
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate((jobPlan as any).createdAt)}
+                            </td>
+
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleViewSteps(jobPlan)}
+                                className="text-[#00AEEF] hover:text-[#0099cc] transition-colors duration-200 flex items-center space-x-1"
+                              >
+                                <EyeIcon className="h-4 w-4" />
+                                <span>View Steps</span>
                               </button>
-                            ) : printing.stepStatus === "stop" && printing.status !== "accept" ? (
-                              <span className="text-green-600 text-sm font-medium">Completed</span>
-                            ) : (
-                              <span className="text-gray-400 text-sm">Not Ready</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    });
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center">
+                          <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-500">
+                            No job plans found matching your criteria.
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Try adjusting your search or filters.
+                          </p>
+                        </td>
+                      </tr>
+                    );
                   })()}
                 </tbody>
               </table>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Printing Details Table */}
+      {activeMainTab === "printing" && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  Printing Details
+                </h3>
+                <p className="text-sm text-gray-600">
+                  All printing jobs - Continue completed jobs to production
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div className="w-full sm:w-48">
+                  <label htmlFor="printing-details-status" className="sr-only">
+                    Filter by status
+                  </label>
+                  <select
+                    id="printing-details-status"
+                    value={printingDetailsStatusFilter}
+                    onChange={(e) =>
+                      setPrintingDetailsStatusFilter(e.target.value)
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF] bg-white"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="accept">Printed</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="planned">Planned</option>
+                    <option value="hold">On Hold</option>
+                    <option value="major_hold">Major Hold</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+                <div className="w-full sm:w-72">
+                  <label htmlFor="printing-details-search" className="sr-only">
+                    Search by Job Plan Code or NRC Job Number
+                  </label>
+                  <input
+                    id="printing-details-search"
+                    type="text"
+                    placeholder="Search by Job Plan Code or NRC Job No..."
+                    value={printingDetailsSearchTerm}
+                    onChange={(e) =>
+                      setPrintingDetailsSearchTerm(e.target.value)
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-[#00AEEF]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {isLoadingPrintingDetails ? (
+              <div className="flex justify-center py-8">
+                <LoadingSpinner size="md" text="Loading printing details..." />
+              </div>
+            ) : printingDetailsError ? (
+              <div className="text-center py-8 text-red-500">
+                {printingDetailsError}
+              </div>
+            ) : (
+              <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Job No
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Quantity
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {(() => {
+                      const searchLower = printingDetailsSearchTerm
+                        .trim()
+                        .toLowerCase();
+                      const statusFilter = printingDetailsStatusFilter.trim();
+                      let filteredPrinting =
+                        searchLower === ""
+                          ? filteredPrintingDetails
+                          : filteredPrintingDetails.filter((p) => {
+                              const nrc = (p.jobNrcJobNo ?? "").toLowerCase();
+                              const code = (p.jobPlanCode ?? "").toLowerCase();
+                              return (
+                                nrc.includes(searchLower) ||
+                                code.includes(searchLower)
+                              );
+                            });
+                      // Apply status filter
+                      if (statusFilter !== "") {
+                        filteredPrinting = filteredPrinting.filter((p) => {
+                          const displayStatus =
+                            p.stepStatus === "start" && p.status === "pending"
+                              ? "in_progress"
+                              : p.status;
+                          if (statusFilter === "planned") {
+                            return (
+                              displayStatus === "pending" ||
+                              (displayStatus as string) === "planned"
+                            );
+                          }
+                          return displayStatus === statusFilter;
+                        });
+                      }
+                      // Sort: Printed (accept) first, then In Progress, then Planned
+                      const getStatusSortOrder = (
+                        p: (typeof filteredPrinting)[0],
+                      ) => {
+                        const status =
+                          p.stepStatus === "start" && p.status === "pending"
+                            ? "in_progress"
+                            : p.status;
+                        if (status === "accept") return 0;
+                        if (
+                          status === "in_progress" ||
+                          p.stepStatus === "start"
+                        )
+                          return 1;
+                        if (
+                          status === "pending" ||
+                          (status as string) === "planned"
+                        )
+                          return 2;
+                        return 3;
+                      };
+                      const sortedPrinting = [...filteredPrinting].sort(
+                        (a, b) => getStatusSortOrder(a) - getStatusSortOrder(b),
+                      );
+
+                      if (filteredPrinting.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-8 text-center">
+                              <FunnelIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                              <p className="text-gray-500">
+                                {printingDetails.length === 0
+                                  ? "No printing details found"
+                                  : "No jobs match your search or status filter"}
+                              </p>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return sortedPrinting.map((printing) => {
+                        const formatDate = (dateString: string | null) => {
+                          if (!dateString) return "-";
+                          try {
+                            const date = new Date(dateString);
+                            const day = String(date.getDate()).padStart(2, "0");
+                            const month = String(date.getMonth() + 1).padStart(
+                              2,
+                              "0",
+                            );
+                            const year = date.getFullYear();
+                            return `${day}/${month}/${year}`;
+                          } catch {
+                            return "-";
+                          }
+                        };
+
+                        const getStatusInfo = (status: string) => {
+                          switch (status) {
+                            case "accept":
+                              return {
+                                label: "Printed",
+                                color: "bg-green-100 text-green-800",
+                              };
+                            case "in_progress":
+                              return {
+                                label: "In Progress",
+                                color: "bg-yellow-100 text-yellow-800",
+                              };
+                            case "pending":
+                              return {
+                                label: "Pending",
+                                color: "bg-gray-100 text-gray-800",
+                              };
+                            case "hold":
+                              return {
+                                label: "On Hold",
+                                color: "bg-orange-100 text-orange-800",
+                              };
+                            case "major_hold":
+                              return {
+                                label: "Major Hold",
+                                color: "bg-red-100 text-red-800",
+                              };
+                            case "rejected":
+                              return {
+                                label: "Rejected",
+                                color: "bg-red-100 text-red-800",
+                              };
+                            case "planned":
+                              return {
+                                label: "Planned",
+                                color: "bg-gray-100 text-gray-800",
+                              };
+                            default:
+                              return {
+                                label: status,
+                                color: "bg-gray-100 text-gray-800",
+                              };
+                          }
+                        };
+
+                        const displayStatus =
+                          printing.stepStatus === "start" &&
+                          printing.status === "pending"
+                            ? "in_progress"
+                            : printing.status;
+                        const statusInfo = getStatusInfo(displayStatus);
+
+                        // Show button when:
+                        // - Printing is in progress (step status = start), OR
+                        // - Printing is accepted AND stopped (completed)
+                        const isInProgress = printing.stepStatus === "start";
+                        const isCompletedAndAccepted =
+                          (printing.status === "accept" ||
+                            displayStatus === "accept") &&
+                          printing.stepStatus === "stop";
+
+                        const alreadyContinued =
+                          printing.productionHeadContinued === true ||
+                          (typeof printing.jobStepId === "number" &&
+                            continuedSteps[printing.jobStepId] === true);
+
+                        const canShowContinueButton =
+                          isInProgress || isCompletedAndAccepted;
+                        const canContinue =
+                          canShowContinueButton && !alreadyContinued;
+
+                        // Use a stable, unique key: prefer jobStepId, fall back to combination
+                        const rowKey =
+                          typeof printing.jobStepId === "number" &&
+                          printing.jobStepId > 0
+                            ? `step-${printing.jobStepId}`
+                            : `job-${printing.jobNrcJobNo}-${printing.id}`;
+
+                        return (
+                          <tr key={rowKey} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 font-mono">
+                                {printing.jobNrcJobNo}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                ID: {printing.jobPlanCode || "-"}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatDate(
+                                ((printing as any).deliveryDate as
+                                  | string
+                                  | null) || printing.date,
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="text-sm font-medium text-gray-900">
+                                {printing.quantity?.toLocaleString() || "0"}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <span
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
+                              >
+                                {statusInfo.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                              {canShowContinueButton ? (
+                                <button
+                                  onClick={(e) => {
+                                    if (!canContinue) return;
+                                    e.stopPropagation();
+                                    handleContinueToProduction(printing);
+                                  }}
+                                  disabled={!canContinue}
+                                  className={`px-4 py-2 rounded-lg transition-colors duration-200 text-sm font-medium ${
+                                    canContinue
+                                      ? "bg-[#00AEEF] hover:bg-[#0099cc] text-white"
+                                      : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                                  }`}
+                                >
+                                  {alreadyContinued
+                                    ? "Continued"
+                                    : "Continue to Production"}
+                                </button>
+                              ) : printing.stepStatus === "stop" &&
+                                printing.status !== "accept" ? (
+                                <span className="text-green-600 text-sm font-medium">
+                                  Completed
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-sm">
+                                  Not Ready
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Job Search */}
@@ -3738,7 +3989,7 @@ const ProductionHeadDashboard: React.FC = () => {
                     }}
                     className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  
+
                   {/* Dropdown Suggestions */}
                   {showSuggestions && searchSuggestions.length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
@@ -3758,7 +4009,8 @@ const ProductionHeadDashboard: React.FC = () => {
                                 {job.nrcJobNo}
                               </p>
                               <p className="text-xs text-gray-500 mt-1">
-                                Demand: {job.jobDemand} • Steps: {job.totalSteps}
+                                Demand: {job.jobDemand} • Steps:{" "}
+                                {job.totalSteps}
                               </p>
                             </div>
                             {!job.hasProductionSteps && (
@@ -3776,12 +4028,16 @@ const ProductionHeadDashboard: React.FC = () => {
                       )}
                     </div>
                   )}
-                  
-                  {showSuggestions && searchTerm.trim() && searchSuggestions.length === 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg px-4 py-3">
-                      <p className="text-sm text-gray-500">No jobs found matching "{searchTerm}"</p>
-                    </div>
-                  )}
+
+                  {showSuggestions &&
+                    searchTerm.trim() &&
+                    searchSuggestions.length === 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg px-4 py-3">
+                        <p className="text-sm text-gray-500">
+                          No jobs found matching "{searchTerm}"
+                        </p>
+                      </div>
+                    )}
                 </div>
                 <button
                   onClick={handleSearch}
@@ -3960,7 +4216,10 @@ const ProductionHeadDashboard: React.FC = () => {
                       Overall Efficiency
                     </p>
                     <p className="text-3xl font-bold text-blue-600">
-                      {filteredAggregatedData?.overallEfficiency || aggregatedData?.overallEfficiency || 0}%
+                      {filteredAggregatedData?.overallEfficiency ||
+                        aggregatedData?.overallEfficiency ||
+                        0}
+                      %
                     </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-xl">
@@ -4004,10 +4263,9 @@ const ProductionHeadDashboard: React.FC = () => {
                     </p>
                     <p className="text-3xl font-bold text-purple-600">
                       {filteredAggregatedData
-                        ? Object.values(filteredAggregatedData.stepSummary).reduce(
-                            (total, step) => total + step.total,
-                            0
-                          )
+                        ? Object.values(
+                            filteredAggregatedData.stepSummary,
+                          ).reduce((total, step) => total + step.total, 0)
                         : 0}
                     </p>
                   </div>
@@ -4026,10 +4284,9 @@ const ProductionHeadDashboard: React.FC = () => {
                     </p>
                     <p className="text-3xl font-bold text-orange-600">
                       {filteredAggregatedData
-                        ? Object.values(filteredAggregatedData.stepSummary).reduce(
-                            (total, step) => total + step.inProgress,
-                            0
-                          )
+                        ? Object.values(
+                            filteredAggregatedData.stepSummary,
+                          ).reduce((total, step) => total + step.inProgress, 0)
                         : 0}
                     </p>
                   </div>
@@ -4089,7 +4346,13 @@ const ProductionHeadDashboard: React.FC = () => {
                   },
                 ].map((step, index) => {
                   const dataSource = filteredAggregatedData;
-                  const stepKey = step.key as "corrugation" | "fluteLamination" | "punching" | "flapPasting" | "printing" | "qualityDept";
+                  const stepKey = step.key as
+                    | "corrugation"
+                    | "fluteLamination"
+                    | "punching"
+                    | "flapPasting"
+                    | "printing"
+                    | "qualityDept";
                   const stepData = dataSource?.stepSummary[stepKey];
 
                   return (
@@ -4122,7 +4385,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 handleStatusCardClick(
                                   step.key,
                                   "completed",
-                                  step.name
+                                  step.name,
                                 )
                               }
                               className="text-center p-2 bg-green-100 rounded hover:bg-green-200 transition-colors cursor-pointer"
@@ -4140,7 +4403,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 handleStatusCardClick(
                                   step.key,
                                   "start",
-                                  step.name
+                                  step.name,
                                 )
                               }
                               className="text-center p-2 bg-blue-100 rounded hover:bg-blue-200 transition-colors cursor-pointer"
@@ -4158,7 +4421,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 handleStatusCardClick(
                                   step.key,
                                   "planned",
-                                  step.name
+                                  step.name,
                                 )
                               }
                               className="text-center p-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors cursor-pointer"
@@ -4176,7 +4439,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 handleStatusCardClick(
                                   step.key,
                                   "stop",
-                                  step.name
+                                  step.name,
                                 )
                               }
                               className="text-center p-2 bg-yellow-100 rounded hover:bg-yellow-200 transition-colors cursor-pointer"
@@ -4315,7 +4578,7 @@ const ProductionHeadDashboard: React.FC = () => {
                                 <div className="flex items-center justify-between mb-2">
                                   <span
                                     className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                                      stepDetail.status
+                                      stepDetail.status,
                                     )}`}
                                   >
                                     {getStatusIcon(stepDetail.status)}
@@ -4452,7 +4715,7 @@ const ProductionHeadDashboard: React.FC = () => {
                           ? (step.data.filter(
                               (s) =>
                                 s.status === "completed" ||
-                                s.status === "accept"
+                                s.status === "accept",
                             ).length /
                               step.data.length) *
                             100
@@ -4585,9 +4848,15 @@ const ProductionHeadDashboard: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-gray-600">{(selectedJobDetails as any).jobPlanCode ? "Job Plan Code" : "NRC Job No"}:</p>
+                      <p className="text-gray-600">
+                        {(selectedJobDetails as any).jobPlanCode
+                          ? "Job Plan Code"
+                          : "NRC Job No"}
+                        :
+                      </p>
                       <p className="font-medium text-gray-900">
-                        {(selectedJobDetails as any).jobPlanCode ?? selectedJobDetails.nrcJobNo}
+                        {(selectedJobDetails as any).jobPlanCode ??
+                          selectedJobDetails.nrcJobNo}
                       </p>
                     </div>
                     <div>
@@ -4633,7 +4902,7 @@ const ProductionHeadDashboard: React.FC = () => {
                           </div>
                           <span
                             className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                              step.status
+                              step.status,
                             )}`}
                           >
                             {getStatusIcon(step.status)}
@@ -4776,7 +5045,10 @@ const ProductionHeadDashboard: React.FC = () => {
                 },
                 {
                   label: "Job Plan Code",
-                  value: (selectedJobPlanForModal as any).jobPlanCode ?? selectedJobPlanForModal.jobPlanId ?? "—",
+                  value:
+                    (selectedJobPlanForModal as any).jobPlanCode ??
+                    selectedJobPlanForModal.jobPlanId ??
+                    "—",
                   color: "green",
                 },
                 {
@@ -4785,14 +5057,15 @@ const ProductionHeadDashboard: React.FC = () => {
                     (selectedJobPlanForModal as any).jobDemand === "high"
                       ? "Urgent"
                       : (selectedJobPlanForModal as any).jobDemand === "medium"
-                      ? "Regular"
-                      : (selectedJobPlanForModal as any).jobDemand || "Low",
+                        ? "Regular"
+                        : (selectedJobPlanForModal as any).jobDemand || "Low",
                   color: "purple",
                 },
                 {
                   label: "Created",
                   value: (() => {
-                    const createdAt = (selectedJobPlanForModal as any).createdAt;
+                    const createdAt = (selectedJobPlanForModal as any)
+                      .createdAt;
                     if (!createdAt) return "-";
                     const date = new Date(createdAt);
                     const day = String(date.getDate()).padStart(2, "0");
@@ -4856,12 +5129,16 @@ const ProductionHeadDashboard: React.FC = () => {
                       if (!dateString) return "-";
                       const date = new Date(dateString);
                       const day = String(date.getDate()).padStart(2, "0");
-                      const month = String(date.getMonth() + 1).padStart(2, "0");
+                      const month = String(date.getMonth() + 1).padStart(
+                        2,
+                        "0",
+                      );
                       const year = date.getFullYear();
                       return `${day}/${month}/${year}`;
                     };
                     const getStatusStyle = (status: string) => {
-                      const baseClasses = "px-3 py-1 rounded-full text-sm font-medium";
+                      const baseClasses =
+                        "px-3 py-1 rounded-full text-sm font-medium";
                       switch (status) {
                         case "completed":
                           return `${baseClasses} bg-green-100 text-green-800`;
@@ -4890,7 +5167,7 @@ const ProductionHeadDashboard: React.FC = () => {
                         <td className="px-6 py-4">
                           <span
                             className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusStyle(
-                              stepStatus
+                              stepStatus,
                             )}`}
                           >
                             {stepStatus.charAt(0).toUpperCase() +
@@ -4898,7 +5175,8 @@ const ProductionHeadDashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700">
-                          {(step as any).machineDetails?.[0]?.machineCode || "-"}
+                          {(step as any).machineDetails?.[0]?.machineCode ||
+                            "-"}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {formatDate(step.startDate)}
