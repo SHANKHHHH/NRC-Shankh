@@ -72,6 +72,7 @@ type BundleCompletedJob = {
 
 type PrintingDashboardCache = {
   cacheKey: string;
+  accessToken: string;
   dateFilter: DateFilterType;
   customDateRange: { start: string; end: string };
   lastRefreshedAt: string | null;
@@ -220,11 +221,22 @@ const PrintingDashboard: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        printingDashboardCache = null;
+        setPrintingData([]);
+        setCompletedJobs([]);
+        setLoading(false);
+        return;
+      }
       const currentCacheKey = getDashboardCacheKey(
         dashboardDateFilter,
         dashboardCustomDateRange
       );
-      if (printingDashboardCache?.cacheKey === currentCacheKey) {
+      if (
+        printingDashboardCache?.cacheKey === currentCacheKey &&
+        printingDashboardCache.accessToken === accessToken
+      ) {
         setPrintingData(printingDashboardCache.printingData);
         setCompletedJobs(printingDashboardCache.completedJobs);
         setLoading(false);
@@ -233,10 +245,6 @@ const PrintingDashboard: React.FC = () => {
       setLoading(true);
       let mainApisLoaded = false;
       try {
-        const accessToken = localStorage.getItem("accessToken");
-        if (!accessToken) {
-          throw new Error("Authentication token not found");
-        }
         const baseUrl = (import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com").replace(/\/$/, "");
         const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
         const queryParams = new URLSearchParams();
@@ -303,6 +311,7 @@ const PrintingDashboard: React.FC = () => {
             setCompletedJobs(printingCompletedJobs);
             printingDashboardCache = {
               cacheKey: currentCacheKey,
+              accessToken,
               dateFilter: dashboardDateFilter,
               customDateRange: dashboardCustomDateRange,
               lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
@@ -318,6 +327,7 @@ const PrintingDashboard: React.FC = () => {
             // Keep cache in sync even when completed-jobs payload is empty/shape-different.
             printingDashboardCache = {
               cacheKey: currentCacheKey,
+              accessToken,
               dateFilter: dashboardDateFilter,
               customDateRange: dashboardCustomDateRange,
               lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
@@ -517,12 +527,24 @@ const PrintingDashboard: React.FC = () => {
 
   useEffect(() => {
     const loadRoleBundle = async () => {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        printingDashboardCache = null;
+        setBundleJobPlans([]);
+        setBundleCompletedJobs([]);
+        setBundleHeldJobs([]);
+        setBundleLoading(false);
+        return;
+      }
       const currentCacheKey = getDashboardCacheKey(
         dashboardDateFilter,
         dashboardCustomDateRange
       );
       let bundleApisLoaded = false;
-      if (printingDashboardCache?.cacheKey === currentCacheKey) {
+      if (
+        printingDashboardCache?.cacheKey === currentCacheKey &&
+        printingDashboardCache.accessToken === accessToken
+      ) {
         setBundleJobPlans(printingDashboardCache.bundleJobPlans);
         setBundleCompletedJobs(printingDashboardCache.bundleCompletedJobs);
         setBundleHeldJobs(printingDashboardCache.bundleHeldJobs);
@@ -531,8 +553,6 @@ const PrintingDashboard: React.FC = () => {
       }
       try {
         setBundleLoading(true);
-        const accessToken = localStorage.getItem("accessToken");
-        if (!accessToken) return;
         const baseUrl = (import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com").replace(/\/$/, "");
         const range = getDateRange(dashboardDateFilter, dashboardCustomDateRange);
         const query = new URLSearchParams();
@@ -580,6 +600,7 @@ const PrintingDashboard: React.FC = () => {
           setBundleJobPlans(jobPlansWithDetails);
           printingDashboardCache = {
             cacheKey: currentCacheKey,
+            accessToken,
             dateFilter: dashboardDateFilter,
             customDateRange: dashboardCustomDateRange,
             lastRefreshedAt: printingDashboardCache?.lastRefreshedAt ?? null,
