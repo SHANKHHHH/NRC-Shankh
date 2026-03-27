@@ -12,7 +12,7 @@ import JobPlansTable from "./DataTable/JobPlansTable";
 import { useNavigate, useLocation } from "react-router-dom";
 import CompletedJobsTable from "./CompletedJobsTable";
 import LoadingSpinner from "../../common/LoadingSpinner";
-// import MachineUtilizationDashboard from "./MachineUtilization"; // Machine utilization section commented out
+import MachineUtilizationDashboard from "./MachineUtilization";
 import ActiveUsersModal from "./Modals/ActiveUsersModal";
 import PDAAnnouncements from "./PDAAnnouncements";
 import { fetchStepDetailsBatch } from "../../../utils/dashboardStepDetailsBatch";
@@ -221,11 +221,23 @@ interface MachineDetails {
   status: string;
   capacity: number;
   unit: string;
+  totalQuantityProduced?: number;
   jobs: Array<{
-    id: number;
+    id?: number;
+    jobPlanId?: number | null;
+    jobPlanCode?: string | null;
     nrcJobNo: string;
-    customerName: string;
-    status: string;
+    customerName: string | null;
+    status: string | null;
+    workedSteps?: Array<{
+      jobStepId: number | null;
+      stepName: string;
+      stepStatus: string | null;
+      quantityProduced: number;
+      workedAt: string | null;
+      startDate: string | null;
+      endDate: string | null;
+    }>;
   }>;
 }
 
@@ -262,6 +274,144 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showActiveUsersModal, setShowActiveUsersModal] = useState(false);
+
+  const [userRecordLoading, setUserRecordLoading] = useState(false);
+  const [userRecordError, setUserRecordError] = useState<string | null>(null);
+  const [userRecordData, setUserRecordData] = useState<any | null>(null);
+  const [userRecordSearch, setUserRecordSearch] = useState("");
+  const [showUserDetailsModal, setShowUserDetailsModal] = useState(false);
+  const [selectedUserRecord, setSelectedUserRecord] = useState<any | null>(
+    null
+  );
+
+  const getWorkedStepPlannedQty = (ws: any): number => {
+    const q = ws?.quantities ?? {};
+    const raw =
+      q?.plannedQty ??
+      q?.dispatchedQty ??
+      q?.finishedGoodsQty ??
+      q?.inProgress ??
+      null;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const computeUserQuantityProduced = (u: any): number => {
+    const steps: any[] = u?.jobs?.flatMap((j: any) => j?.workedSteps ?? []) ?? [];
+    const completed = steps.filter((ws: any) => ws?.stepStatus === "accept");
+    return completed.reduce((sum: number, ws: any) => sum + getWorkedStepPlannedQty(ws), 0);
+  };
+
+  const toTitleWords = (value: string): string =>
+    value
+      .split(/[_\s-]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+
+  const formatUserRoleLabel = (roleValue: unknown): string => {
+    if (!roleValue) return "N/A";
+
+    const parseRoleItem = (item: unknown): string => {
+      if (typeof item !== "string") return "";
+      return toTitleWords(item.trim());
+    };
+
+    if (Array.isArray(roleValue)) {
+      const labels = roleValue.map(parseRoleItem).filter(Boolean);
+      return labels.length ? labels.join(", ") : "N/A";
+    }
+
+    if (typeof roleValue === "string") {
+      const trimmed = roleValue.trim();
+      if (!trimmed) return "N/A";
+
+      // Roles are often sent as stringified arrays: ["punching_operator"]
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            const labels = parsed.map(parseRoleItem).filter(Boolean);
+            return labels.length ? labels.join(", ") : "N/A";
+          }
+        } catch {
+          // Fallback to plain text format below
+        }
+      }
+
+      return toTitleWords(trimmed);
+    }
+
+    return "N/A";
+  };
+
+  const extractRoleKeys = (roleValue: unknown): string[] => {
+    const normalize = (v: string) =>
+      v.trim().toLowerCase().replace(/\s+/g, "_");
+
+    if (!roleValue) return [];
+
+    if (Array.isArray(roleValue)) {
+      return roleValue
+        .filter((r): r is string => typeof r === "string")
+        .map(normalize)
+        .filter(Boolean);
+    }
+
+    if (typeof roleValue === "string") {
+      const trimmed = roleValue.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .filter((r): r is string => typeof r === "string")
+              .map(normalize)
+              .filter(Boolean);
+          }
+        } catch {
+          // fall through
+        }
+      }
+      return [normalize(trimmed)];
+    }
+
+    return [];
+  };
+
+  const userIdSortValue = (userId: unknown): number => {
+    const text = String(userId ?? "");
+    const digits = text.replace(/\D+/g, "");
+    const n = Number(digits);
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+
+  const getRoleBadgeClass = (roleValue: unknown): string => {
+    const roleKey = extractRoleKeys(roleValue)[0] ?? "";
+    if (roleKey.includes("dispatch")) {
+      return "bg-orange-50 text-orange-700 border border-orange-200";
+    }
+    if (roleKey.includes("qc") || roleKey.includes("quality")) {
+      return "bg-violet-50 text-violet-700 border border-violet-200";
+    }
+    if (roleKey.includes("printing") || roleKey.includes("printer")) {
+      return "bg-cyan-50 text-cyan-700 border border-cyan-200";
+    }
+    if (roleKey.includes("corrugat") || roleKey.includes("flute")) {
+      return "bg-teal-50 text-teal-700 border border-teal-200";
+    }
+    if (roleKey.includes("paper")) {
+      return "bg-lime-50 text-lime-700 border border-lime-200";
+    }
+    if (roleKey.includes("punch")) {
+      return "bg-rose-50 text-rose-700 border border-rose-200";
+    }
+    if (roleKey.includes("past")) {
+      return "bg-amber-50 text-amber-700 border border-amber-200";
+    }
+    return "bg-slate-100 text-slate-700 border border-slate-200";
+  };
 
   // Check if returning from a detail page with filter state
   const returnedState = location.state as {
@@ -398,15 +548,33 @@ const AdminDashboard: React.FC = () => {
 
   // Add this new function to fetch machine data
   // Add this function at the top level
-  const fetchMachineUtilization = async (): Promise<MachineUtilizationData> => {
+  const fetchMachineUtilization = async (
+    filterType?: DateFilterType,
+    customRange?: { start: string; end: string }
+  ): Promise<MachineUtilizationData> => {
     try {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
         throw new Error("Authentication token not found.");
       }
 
+      const baseUrl =
+        import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+      const queryParams = new URLSearchParams();
+      const effectiveFilter = filterType ?? dateFilter;
+      const effectiveRange = customRange ?? customDateRange;
+      if (effectiveFilter && effectiveFilter !== "custom") {
+        queryParams.append("filter", effectiveFilter);
+      } else if (effectiveRange?.start && effectiveRange?.end) {
+        queryParams.append("filter", "custom");
+        queryParams.append("startDate", effectiveRange.start);
+        queryParams.append("endDate", effectiveRange.end);
+      }
+
       const response = await fetch(
-        "https://nrprod.nrcontainers.com/api/machines?",
+        `${baseUrl}/api/machines/record${
+          queryParams.toString() ? `?${queryParams.toString()}` : ""
+        }`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -419,7 +587,7 @@ const AdminDashboard: React.FC = () => {
       }
 
       const data = await response.json();
-      if (!data.success || !Array.isArray(data.data)) {
+      if (!data.success || !Array.isArray(data?.data?.machines)) {
         throw new Error("Invalid API response format");
       }
 
@@ -432,21 +600,19 @@ const AdminDashboard: React.FC = () => {
       // Store individual machine details
       const machineDetails: MachineDetails[] = [];
 
-      data.data.forEach((machine: any) => {
-        // Skip inactive machines
-        if (!machine.isActive) return;
-
-        const machineType = machine.machineType;
+      data.data.machines.forEach((machine: any) => {
+        const machineType = machine.machineType ?? "Other";
 
         // Add to individual machine details
         machineDetails.push({
-          id: machine.id,
+          id: machine.machineId ?? machine.id,
           machineCode: machine.machineCode,
           machineType: machine.machineType,
           description: machine.description,
           status: machine.status,
-          capacity: machine.capacity,
+          capacity: machine.capacity ?? 1,
           unit: machine.unit,
+          totalQuantityProduced: Number(machine.totalQuantityProduced ?? 0),
           jobs: machine.jobs || [],
         });
 
@@ -643,7 +809,29 @@ const AdminDashboard: React.FC = () => {
 
       const baseUrl =
         import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
-      const bundleUrl = `${baseUrl}/api/dashboard/role-bundle?${queryParams.toString()}`;
+      const qp = queryParams.toString();
+      const bundleUrl = `${baseUrl}/api/dashboard/role-bundle${
+        qp ? `?${qp}` : ""
+      }`;
+      const userRecordUrl = `${baseUrl}/api/users/user-record${
+        qp ? `?${qp}` : ""
+      }`;
+
+      setUserRecordLoading(true);
+      setUserRecordError(null);
+
+      // Dashboard bundle requires auth; user-record is public.
+      // Start user-record fetch in background so it doesn't block dashboard rendering.
+      const userRecordFetchPromise = (async () => {
+        const resp = await fetch(userRecordUrl);
+        if (!resp.ok) {
+          throw new Error(
+            `Failed to fetch user record: ${resp.status} ${resp.statusText}`
+          );
+        }
+        return resp.json();
+      })();
+
       const bundleResponse = await fetch(bundleUrl, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -660,6 +848,20 @@ const AdminDashboard: React.FC = () => {
       }
 
       const jobPlanningResult = bundle.data.jobPlanning;
+
+      userRecordFetchPromise
+        .then((userRecordJson: any) => {
+          setUserRecordData(userRecordJson?.data ?? null);
+        })
+        .catch((e: any) => {
+          setUserRecordError(
+            e instanceof Error ? e.message : "Failed to fetch user record"
+          );
+          setUserRecordData(null);
+        })
+        .finally(() => {
+          setUserRecordLoading(false);
+        });
 
       let completedJobsData: CompletedJob[] = [];
       const completedJobsResult = bundle.data.completedJobs;
@@ -716,7 +918,9 @@ const AdminDashboard: React.FC = () => {
         const processedData = await processJobPlanData(
           jobPlansWithDetails,
           completedJobsData,
-          heldJobsData
+          heldJobsData,
+          filterType,
+          customRange
         );
 
         setData(processedData);
@@ -743,6 +947,49 @@ const AdminDashboard: React.FC = () => {
       console.error("Dashboard data fetch error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // When we restore dashboard UI from cache (Back navigation), the bundle isn't refetched.
+  // In that case, we still want to load user-record data for the same date filter.
+  const fetchUserRecordOnly = async (
+    filterType: DateFilterType,
+    customRange: { start: string; end: string }
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (filterType && filterType !== "custom") {
+      queryParams.append("filter", filterType);
+    } else {
+      queryParams.append("startDate", customRange.start);
+      queryParams.append("endDate", customRange.end);
+    }
+
+    const baseUrl =
+      import.meta.env.VITE_API_URL || "https://nrprod.nrcontainers.com";
+    const qp = queryParams.toString();
+    const userRecordUrl = `${baseUrl}/api/users/user-record${
+      qp ? `?${qp}` : ""
+    }`;
+
+    setUserRecordLoading(true);
+    setUserRecordError(null);
+
+    try {
+      const resp = await fetch(userRecordUrl);
+      if (!resp.ok) {
+        throw new Error(
+          `Failed to fetch user record: ${resp.status} ${resp.statusText}`
+        );
+      }
+      const json = await resp.json();
+      setUserRecordData(json?.data ?? null);
+    } catch (e) {
+      setUserRecordError(
+        e instanceof Error ? e.message : "Failed to fetch user record"
+      );
+      setUserRecordData(null);
+    } finally {
+      setUserRecordLoading(false);
     }
   };
 
@@ -898,13 +1145,15 @@ const AdminDashboard: React.FC = () => {
   const processJobPlanData = async (
     jobPlans: JobPlan[],
     completedJobsData: CompletedJob[],
-    heldJobsData: HeldJob[]
+    heldJobsData: HeldJob[],
+    filterType?: DateFilterType,
+    customRange?: { start: string; end: string }
   ): Promise<AdminDashboardData> => {
     // Count completed jobs from the completed jobs API
     const completedJobsCount = completedJobsData.length;
 
     // Fetch machine data once at the beginning
-    const machineStats = await fetchMachineUtilization();
+    const machineStats = await fetchMachineUtilization(filterType, customRange);
 
     // Count jobs from job planning API (these are in progress or planned)
     const totalJobs = jobPlans.length;
@@ -1254,6 +1503,11 @@ const AdminDashboard: React.FC = () => {
         }
       );
       setLoading(false);
+      // Ensure user-record panel still loads when bundle is restored from cache.
+      fetchUserRecordOnly(
+        dashboardDataCache.dateFilter ?? "today",
+        dashboardDataCache.customDateRange ?? customDateRange
+      );
       return;
     }
     fetchDashboardData(dateFilter, customDateRange);
@@ -2164,10 +2418,10 @@ const AdminDashboard: React.FC = () => {
   className="mb-8"
   showDateFilter={true}
 /> */}
-      {/* <MachineUtilizationDashboard
+      <MachineUtilizationDashboard
         machineData={filteredData.machineUtilization}
         className="mb-8"
-      /> */}
+      />
 
       {/* Step-wise Progress Chart */}
       {/* <LineChartComponent
@@ -2496,6 +2750,158 @@ const AdminDashboard: React.FC = () => {
         />
       </div>
 
+      {/* User Work Records */}
+      <div className="mb-8">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50 to-green-50">
+            <h3 className="text-lg font-semibold text-gray-800 tracking-tight">
+              User Work Records
+            </h3>
+
+            <div className="flex items-center gap-3 lg:ml-auto">
+              <input
+                type="text"
+                value={userRecordSearch}
+                onChange={(e) => setUserRecordSearch(e.target.value)}
+                placeholder="Search by name, role, or user ID..."
+                className="w-full lg:w-80 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white/90 focus:outline-none focus:ring-2 focus:ring-[#00AEEF] focus:border-transparent"
+              />
+              {userRecordData?.period?.startDate && userRecordData?.period?.endDate ? (
+                <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                  {userRecordData.period.startDate} to {userRecordData.period.endDate}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="px-5 py-4">
+          {userRecordLoading ? (
+            <div className="flex items-center text-sm text-gray-600">
+              <LoadingSpinner size="sm" variant="inline" />
+              <span className="ml-2">Loading...</span>
+            </div>
+          ) : null}
+
+            {userRecordError ? (
+              <p className="text-sm text-red-600 mb-3">{userRecordError}</p>
+            ) : null}
+
+            {(() => {
+              const blockedRoles = new Set([
+                "admin",
+                "planner",
+                "printing_manager",
+                "production_head",
+              ]);
+              const usersForTable = (userRecordData?.users ?? [])
+                .filter((u: any) => {
+                  const roles = extractRoleKeys(u?.role);
+                  return !roles.some((r) => blockedRoles.has(r));
+                })
+                .filter((u: any) => {
+                  const q = userRecordSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  const name = String(u?.userName ?? "").toLowerCase();
+                  const userId = String(u?.userId ?? "").toLowerCase();
+                  const roleLabel = formatUserRoleLabel(u?.role).toLowerCase();
+                  return (
+                    name.includes(q) ||
+                    userId.includes(q) ||
+                    roleLabel.includes(q)
+                  );
+                })
+                .sort((a: any, b: any) => {
+                  const av = userIdSortValue(a?.userId);
+                  const bv = userIdSortValue(b?.userId);
+                  if (av !== bv) return av - bv;
+                  return String(a?.userId ?? "").localeCompare(
+                    String(b?.userId ?? "")
+                  );
+                });
+
+              if (!usersForTable.length) {
+                return (
+                  <p className="text-sm text-gray-600">
+                    No user work records found for this filter.
+                  </p>
+                );
+              }
+
+              return (
+              <div className="overflow-x-auto overflow-y-auto max-h-[500px] rounded-xl border border-slate-200 shadow-sm">
+                <table className="min-w-full text-sm table-fixed">
+                  <thead className="bg-gradient-to-r from-slate-100 to-slate-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="w-[28%] text-left px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        User
+                      </th>
+                      <th className="w-[24%] text-left px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        Role
+                      </th>
+                      <th className="w-[10%] text-right px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        Jobs
+                      </th>
+                      <th className="w-[14%] text-right px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        Produced
+                      </th>
+                      <th className="w-[12%] text-right px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        Steps Done
+                      </th>
+                      <th className="w-[12%] text-right px-4 py-3 font-semibold text-slate-600 tracking-wider uppercase text-[11px]">
+                        In Progress
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usersForTable.map((u: any, idx: number) => (
+                      <tr
+                        key={u.userId}
+                        className={`cursor-pointer transition-colors ${
+                          idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+                        } hover:bg-sky-50`}
+                        onClick={() => {
+                          setSelectedUserRecord(u);
+                          setShowUserDetailsModal(true);
+                        }}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <p className="font-medium text-gray-800">
+                            {u.userName ?? u.userId}
+                          </p>
+                          <p className="text-xs text-gray-500">{u.userId}</p>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getRoleBadgeClass(
+                              u.role
+                            )}`}
+                          >
+                            {formatUserRoleLabel(u.role)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-700">
+                          {u.workSummary?.totalJobsWorkedOn ?? 0}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                          {computeUserQuantityProduced(u).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-700">
+                          {u.workSummary?.totalStepsCompleted ?? 0}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-amber-700">
+                          {u.workSummary?.inProgress?.totalStepsInProgress ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
       <div className="mb-8">
         <PDAAnnouncements
           dateFilter={dateFilter}
@@ -2503,6 +2909,146 @@ const AdminDashboard: React.FC = () => {
           refreshTrigger={pdaRefreshTrigger}
         />
       </div>
+
+      {/* User Details Modal */}
+      {showUserDetailsModal && selectedUserRecord ? (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[88vh] overflow-hidden border border-gray-200">
+            <div className="flex justify-between items-center p-4 border-b bg-gradient-to-r from-slate-50 to-gray-50">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  {selectedUserRecord.userName ?? selectedUserRecord.userId}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Role: {formatUserRoleLabel(selectedUserRecord.role)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-800"
+                onClick={() => {
+                  setShowUserDetailsModal(false);
+                  setSelectedUserRecord(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto max-h-[calc(88vh-72px)] bg-slate-50/40">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                  <p className="text-xs text-gray-500">Jobs Worked On</p>
+                  <p className="text-base font-semibold text-gray-800">
+                    {selectedUserRecord.workSummary?.totalJobsWorkedOn ?? 0}
+                  </p>
+                </div>
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                  <p className="text-xs text-gray-500">Quantity Produced</p>
+                  <p className="text-base font-semibold text-emerald-800">
+                    {computeUserQuantityProduced(selectedUserRecord).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                  <p className="text-xs text-gray-500">Steps Completed</p>
+                  <p className="text-base font-semibold text-gray-800">
+                    {selectedUserRecord.workSummary?.totalStepsCompleted ?? 0}
+                  </p>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg">
+                  <p className="text-xs text-gray-500">In Progress Steps</p>
+                  <p className="text-base font-semibold text-amber-800">
+                    {selectedUserRecord.workSummary?.inProgress?.totalStepsInProgress ?? 0}
+                  </p>
+                </div>
+              </div>
+
+              <h4 className="text-md font-semibold text-gray-700 mb-3">
+                Jobs
+              </h4>
+              {selectedUserRecord.jobs?.length ? (
+                <div className="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
+                  {selectedUserRecord.jobs.slice(0, 30).map((j: any) => (
+                    <div
+                      key={j.jobPlanId ?? j.nrcJobNo}
+                      className="border border-gray-200 rounded-xl p-3 bg-white shadow-sm"
+                    >
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {j.jobPlanCode ?? j.jobPlanId}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            NRC Job No: {j.nrcJobNo}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Status: {j.jobStatus}
+                            {j.customerName ? ` | ${j.customerName}` : ""}
+                            {j.unit ? ` | ${j.unit}` : ""}
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Steps: {j.workedSteps?.length ?? 0}
+                        </p>
+                      </div>
+
+                      {j.workedSteps?.length ? (
+                        <div className="mt-3 space-y-2">
+                          {j.workedSteps.slice(0, 20).map((ws: any) => (
+                            <div
+                              key={`${j.jobPlanId}-${ws.jobStepId}-${ws.stepName}`}
+                              className="flex justify-between items-center text-sm bg-slate-50 border border-slate-200 rounded-md px-2.5 py-2"
+                            >
+                              <span className="text-gray-800">
+                                {ws.stepName}:
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {ws.stepStatus}
+                                </span>
+                              </span>
+                              <span className="text-xs text-gray-500 flex items-center gap-3 flex-wrap justify-end">
+                                <span>
+                                  Machine:{" "}
+                                  {ws?.machine?.machineCode ??
+                                    ws?.machine?.machineId ??
+                                    "N/A"}
+                                </span>
+                                    <span>
+                                      Qty:{" "}
+                                      {getWorkedStepPlannedQty(ws).toLocaleString()}
+                                    </span>
+                                <span>
+                                  Start:{" "}
+                                  {ws?.dates?.startDate
+                                    ? new Date(ws.dates.startDate).toLocaleDateString()
+                                    : "—"}
+                                </span>
+                                <span>
+                                  End:{" "}
+                                  {ws?.dates?.endDate
+                                    ? new Date(ws.dates.endDate).toLocaleDateString()
+                                    : "—"}
+                                </span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600 mt-2">
+                          No worked steps for this job in the selected period.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  No jobs found for this user in the selected period.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Active Users Modal */}
       <ActiveUsersModal

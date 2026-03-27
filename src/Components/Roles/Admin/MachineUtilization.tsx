@@ -1,17 +1,4 @@
 import React, { useState, useMemo } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 
 // interface MachineStats {
 //   total: number;
@@ -27,11 +14,23 @@ interface MachineDetails {
   status: string;
   capacity: number;
   unit: string;
+  totalQuantityProduced?: number;
   jobs: Array<{
-    id: number;
+    id?: number;
+    jobPlanId?: number | null;
+    jobPlanCode?: string | null;
     nrcJobNo: string;
-    customerName: string;
-    status: string;
+    customerName: string | null;
+    status: string | null;
+    workedSteps?: Array<{
+      jobStepId: number | null;
+      stepName: string;
+      stepStatus: string | null;
+      quantityProduced: number;
+      workedAt: string | null;
+      startDate: string | null;
+      endDate: string | null;
+    }>;
   }>;
 }
 
@@ -48,11 +47,8 @@ interface MachineUtilizationDashboardProps {
 const MachineUtilizationDashboard: React.FC<
   MachineUtilizationDashboardProps
 > = ({ machineData, className = "" }) => {
-  const [viewType, setViewType] = useState<"bar" | "grid" | "pie">("grid");
-  const [sortBy, setSortBy] = useState<"name" | "utilization" | "total">(
-    "utilization"
-  );
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
 
   // Process and sort data
   // Process and sort data
@@ -70,19 +66,8 @@ const MachineUtilizationDashboard: React.FC<
             : 0,
         category: getMachineCategory(machineType),
       }))
-      .sort((a, b) => {
-        switch (sortBy) {
-          case "name":
-            return a.machine.localeCompare(b.machine);
-          case "utilization":
-            return b.utilizationRate - a.utilizationRate;
-          case "total":
-            return b.total - a.total;
-          default:
-            return b.utilizationRate - a.utilizationRate;
-        }
-      });
-  }, [machineData.machineStats, sortBy]);
+      .sort((a, b) => b.utilizationRate - a.utilizationRate);
+  }, [machineData.machineStats]);
 
   // Group machines by category
   const categorizedMachines = useMemo(() => {
@@ -120,6 +105,14 @@ const MachineUtilizationDashboard: React.FC<
 
   // Calculate category stats
   const categoryStats = useMemo(() => {
+    const categoryOrder = [
+      "Printing",
+      "Corrugation",
+      "Lamination",
+      "Punching",
+      "Pasting",
+      "Other",
+    ];
     return Object.entries(categorizedMachines)
       .map(([category, machines]) => {
         const totalMachines = machines.length;
@@ -127,6 +120,10 @@ const MachineUtilizationDashboard: React.FC<
         const totalInUse = machines.reduce((sum, m) => sum + m.inUse, 0);
         const totalAvailable = machines.reduce(
           (sum, m) => sum + m.available,
+          0
+        );
+        const totalProducedQty = machines.reduce(
+          (sum, m) => sum + Number(m.totalQuantityProduced ?? 0),
           0
         );
         const avgUtilization =
@@ -137,6 +134,7 @@ const MachineUtilizationDashboard: React.FC<
         return {
           category,
           totalMachines,
+          totalProducedQty,
           totalCapacity,
           totalInUse,
           totalAvailable,
@@ -144,7 +142,14 @@ const MachineUtilizationDashboard: React.FC<
           machines,
         };
       })
-      .sort((a, b) => a.category.localeCompare(b.category));
+      .sort((a, b) => {
+        const ai = categoryOrder.indexOf(a.category);
+        const bi = categoryOrder.indexOf(b.category);
+        const aRank = ai === -1 ? Number.MAX_SAFE_INTEGER : ai;
+        const bRank = bi === -1 ? Number.MAX_SAFE_INTEGER : bi;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.category.localeCompare(b.category);
+      });
   }, [categorizedMachines]);
 
   // Update getMachineCategory to align with new machine type naming
@@ -222,42 +227,18 @@ const MachineUtilizationDashboard: React.FC<
       (sum, item) => sum + item.total,
       0
     );
-    const totalInUse = processedData.reduce((sum, item) => sum + item.inUse, 0);
-    const totalAvailable = processedData.reduce(
-      (sum, item) => sum + item.available,
+    const totalQtyProduced = machineData.machineDetails.reduce(
+      (sum, m) => sum + Number((m as any).totalQuantityProduced ?? 0),
       0
     );
-    const avgUtilization =
-      totalMachines > 0 ? Math.round((totalInUse / totalMachines) * 100) : 0;
 
     return {
       totalMachines,
-      totalInUse,
-      totalAvailable,
-      avgUtilization,
+      totalQtyProduced,
       categories: [...new Set(processedData.map((item) => item.category))]
         .length,
     };
-  }, [processedData]);
-
-  // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-gray-800">{data.machine}</p>
-          <p className="text-sm text-blue-600">Total: {data.total}</p>
-          <p className="text-sm text-green-600">Available: {data.available}</p>
-          <p className="text-sm text-orange-600">In Use: {data.inUse}</p>
-          <p className="text-sm text-gray-600">
-            Utilization: {data.utilizationRate}%
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  }, [processedData, machineData.machineDetails]);
 
   console.log("categorized machine", categorizedMachines);
   return (
@@ -276,65 +257,21 @@ const MachineUtilizationDashboard: React.FC<
             </p>
           </div>
 
-          {/* View Controls */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-0"
-            >
-              <option value="utilization">Sort by Utilization</option>
-              <option value="total">Sort by Total</option>
-              <option value="name">Sort by Name</option>
-            </select>
-
-            <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-              {(["grid", "bar", "pie"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setViewType(type)}
-                  className={`px-3 py-2 text-sm font-medium flex-1 sm:flex-none ${
-                    viewType === type
-                      ? "bg-blue-500 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-blue-600">
               {summaryStats.totalMachines}
             </div>
             <div className="text-sm text-blue-800">Total Machines</div>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">
-              {summaryStats.totalAvailable}
+          <div className="bg-emerald-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-700">
+              {summaryStats.totalQtyProduced.toLocaleString()}
             </div>
-            <div className="text-sm text-green-800">Available</div>
-          </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
-            <div className="text-2xl font-bold text-orange-600">
-              {summaryStats.totalInUse}
-            </div>
-            <div className="text-sm text-orange-800">In Use</div>
-          </div>
-          <div className="bg-red-50 p-4 rounded-lg">
-            <div className="text-2xl font-bold text-red-600">0</div>
-            <div className="text-sm text-red-800">Not in Use</div>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">
-              {summaryStats.avgUtilization}%
-            </div>
-            <div className="text-sm text-purple-800">Avg Utilization</div>
+            <div className="text-sm text-emerald-800">Total Qty Produced</div>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-600">
@@ -347,9 +284,8 @@ const MachineUtilizationDashboard: React.FC<
 
       {/* Content based on view type */}
       <div className="p-6">
-        {viewType === "grid" && (
-          <>
-            {!selectedCategory ? (
+        <>
+          {!selectedCategory ? (
               // Category Cards View - Show categories, not individual machines
               <>
                 <div className="mb-6">
@@ -383,21 +319,15 @@ const MachineUtilizationDashboard: React.FC<
                           <h3 className="font-semibold text-gray-900 text-sm mb-2">
                             {categoryData.category}
                           </h3>
-                          <div className="space-y-1 text-xs text-gray-600">
-                            <div>Total: {categoryData.totalCapacity}</div>
-                            <div className="text-green-600">
-                              Available: {categoryData.totalAvailable}
+                          <div className="space-y-1 text-xs">
+                            <div className="text-gray-600">
+                              Total Machines: {categoryData.totalMachines}
                             </div>
-                            <div className="text-orange-600">
-                              In Use: {categoryData.totalInUse}
-                            </div>
-                            <div
-                              className="font-medium"
-                              style={{
-                                color: getCategoryColor(categoryData.category),
-                              }}
-                            >
-                              {categoryData.avgUtilization}% Avg
+                            <div className="text-emerald-700 font-semibold">
+                              Produced Qty:{" "}
+                              {Number(
+                                categoryData.totalProducedQty ?? 0
+                              ).toLocaleString()}
                             </div>
                           </div>
                         </div>
@@ -406,7 +336,7 @@ const MachineUtilizationDashboard: React.FC<
                   </div>
                 </div>
               </>
-            ) : (
+          ) : (
               // Individual Machines in Selected Category - Show machines when category is selected
               <>
                 <div className="mb-6 flex items-center justify-between">
@@ -430,7 +360,8 @@ const MachineUtilizationDashboard: React.FC<
                     (machine, index) => (
                       <div
                         key={`${machine.originalMachine}-${index}`}
-                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => setSelectedMachine(machine)}
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div>
@@ -458,51 +389,14 @@ const MachineUtilizationDashboard: React.FC<
                 </div> */}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="mt-4 p-2.5 bg-emerald-50 border border-emerald-100 rounded-md">
                           <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-600">Total</span>
-                            <span className="font-medium">{machine.total}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-green-600">
-                              Available
+                            <span className="text-xs font-medium text-emerald-700">
+                              Produced Qty
                             </span>
-                            <span className="font-medium text-green-600">
-                              {machine.available}
+                            <span className="text-sm font-semibold text-emerald-800">
+                              {Number(machine.totalQuantityProduced ?? 0).toLocaleString()}
                             </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-orange-600">
-                              In Use
-                            </span>
-                            <span className="font-medium text-orange-600">
-                              {machine.inUse}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-red-600">
-                              Not in Use
-                            </span>
-                            <span className="font-medium text-red-600">
-                              {machine.total -
-                                machine.available -
-                                machine.inUse}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="mt-3">
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="h-2 rounded-full transition-all duration-300"
-                              style={{
-                                width: `${machine.utilizationRate}%`,
-                                backgroundColor: getStatusColor(
-                                  machine.utilizationRate
-                                ),
-                              }}
-                            />
                           </div>
                         </div>
                       </div>
@@ -510,128 +404,87 @@ const MachineUtilizationDashboard: React.FC<
                   )}
                 </div>
               </>
-            )}
-          </>
-        )}
-
-        {viewType === "bar" && (
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={processedData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="machine"
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                  fontSize={12}
-                />
-                <YAxis />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar dataKey="available" fill="#10b981" name="Available" />
-                <Bar dataKey="inUse" fill="#f59e0b" name="In Use" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {viewType === "pie" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Overall Utilization */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-center">
-                Overall Machine Status
-              </h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        {
-                          name: "Available",
-                          value: summaryStats.totalAvailable,
-                          fill: "#10b981",
-                        },
-                        {
-                          name: "In Use",
-                          value: summaryStats.totalInUse,
-                          fill: "#f59e0b",
-                        },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({
-                        name,
-                        percent,
-                      }: {
-                        name?: string;
-                        percent?: number;
-                      }) =>
-                        `${name || "Unknown"} ${
-                          percent ? (percent * 100).toFixed(0) : "0"
-                        }%`
-                      }
-                    >
-                      <Cell fill="#10b981" />
-                      <Cell fill="#f59e0b" />
-                    </Pie>
-
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Category Distribution */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-center">
-                Machines by Category
-              </h3>
-              <div className="space-y-3">
-                {Object.entries(
-                  processedData.reduce((acc, machine) => {
-                    if (!acc[machine.category]) {
-                      acc[machine.category] = {
-                        total: 0,
-                        inUse: 0,
-                        available: 0,
-                      };
-                    }
-                    acc[machine.category].total += machine.total;
-                    acc[machine.category].inUse += machine.inUse;
-                    acc[machine.category].available += machine.available;
-                    return acc;
-                  }, {} as Record<string, { total: number; inUse: number; available: number }>)
-                ).map(([category, stats]) => (
-                  <div
-                    key={category}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <span className="font-medium">{category}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-green-600">
-                        {stats.available} available
-                      </span>
-                      <span className="text-sm text-orange-600">
-                        {stats.inUse} in use
-                      </span>
-                      <span className="text-sm text-gray-600">
-                        {stats.total} total
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </>
       </div>
+
+      {selectedMachine && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[85vh] overflow-hidden border border-gray-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  {selectedMachine.machineCode} - Jobs Worked
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {selectedMachine.machineType} | {selectedMachine.unit}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMachine(null)}
+                className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto max-h-[calc(85vh-72px)]">
+              <div className="mb-4 text-sm text-gray-700">
+                Total Produced:{" "}
+                <span className="font-semibold text-emerald-700">
+                  {Number(selectedMachine.totalQuantityProduced ?? 0).toLocaleString()}
+                </span>
+              </div>
+
+              {selectedMachine.jobs?.length ? (
+                <div className="space-y-3">
+                  {selectedMachine.jobs.map((job: any) => (
+                    <div key={`${job.jobPlanId ?? "na"}-${job.nrcJobNo}`} className="border rounded-lg p-3 bg-white">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {job.jobPlanCode ?? job.jobPlanId ?? "Plan"} | {job.nrcJobNo}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {job.customerName ?? "N/A"} | {job.status ?? "N/A"}
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          Steps: {job.workedSteps?.length ?? 0}
+                        </span>
+                      </div>
+
+                      {job.workedSteps?.length ? (
+                        <div className="mt-3 space-y-2">
+                          {job.workedSteps.slice(0, 25).map((s: any) => (
+                            <div
+                              key={`${job.nrcJobNo}-${s.jobStepId}-${s.stepName}-${s.workedAt ?? ""}`}
+                              className="text-xs text-gray-700 bg-gray-50 border rounded px-2 py-1.5 flex flex-wrap items-center gap-3"
+                            >
+                              <span className="font-medium">{s.stepName}</span>
+                              <span>Status: {s.stepStatus ?? "N/A"}</span>
+                              <span>Qty: {Number(s.quantityProduced ?? 0).toLocaleString()}</span>
+                              <span>
+                                Date:{" "}
+                                {s.workedAt
+                                  ? new Date(s.workedAt).toLocaleDateString()
+                                  : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">No jobs found for this machine in selected period.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
