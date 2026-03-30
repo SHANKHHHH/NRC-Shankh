@@ -964,7 +964,9 @@ const PlannerJobs: React.FC = () => {
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 409) {
           throw new Error(
-            errorData.error || errorData.message || "Job plan code conflict. Please try creating again."
+            errorData.error ||
+              errorData.message ||
+              "Job plan code conflict. Please try creating again.",
           );
         }
         throw new Error(
@@ -1832,12 +1834,13 @@ const PlannerJobs: React.FC = () => {
             },
           );
           if (!syncResponse.ok) {
-            console.warn(
-              "Warning: Failed to sync sequence before bulk upload",
-            );
+            console.warn("Warning: Failed to sync sequence before bulk upload");
           }
         } catch (syncError) {
-          console.warn("Warning: Sequence sync failed before bulk upload:", syncError);
+          console.warn(
+            "Warning: Sequence sync failed before bulk upload:",
+            syncError,
+          );
         }
 
         const { data: maxIdData, error: maxIdError } = await supabase

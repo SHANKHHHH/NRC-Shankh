@@ -1527,6 +1527,115 @@ const ProductionHeadDashboard: React.FC = () => {
       });
     });
 
+    // Include completed jobs that are not present in current job-planning payload.
+    // This keeps Production Steps "Completed" counts aligned with Completed Jobs cards after API clubbing.
+    const jobPlanJobNos = new Set(filteredJobPlansData.map((jp) => jp.nrcJobNo));
+    const alreadyCountedCompleted = new Set<string>();
+    filteredCompletedJobsData.forEach((completedJob: any, jobIndex: number) => {
+      const nrcJobNo = String(completedJob?.nrcJobNo || "").trim();
+      if (!nrcJobNo || jobPlanJobNos.has(nrcJobNo)) return;
+
+      const allSteps = Array.isArray(completedJob?.allSteps)
+        ? completedJob.allSteps
+        : [];
+      allSteps.forEach((rawStep: any, stepIndex: number) => {
+        const stepName = String(rawStep?.stepName || "");
+        let stepKey: keyof typeof stepSummary | null = null;
+        if (stepName === "Corrugation") stepKey = "corrugation";
+        else if (stepName === "FluteLaminateBoardConversion")
+          stepKey = "fluteLamination";
+        else if (stepName === "Punching") stepKey = "punching";
+        else if (isFlapPastingStepName(stepName)) stepKey = "flapPasting";
+        else if (stepName === "PrintingDetails") stepKey = "printing";
+        else if (stepName === "QualityDept") stepKey = "qualityDept";
+        if (!stepKey) return;
+
+        const token = `${nrcJobNo}|${stepKey}`;
+        if (alreadyCountedCompleted.has(token)) return;
+        alreadyCountedCompleted.add(token);
+
+        stepSummary[stepKey].total++;
+        stepSummary[stepKey].completed++;
+        completedSteps++;
+
+        const syntheticStep: ProductionStep = {
+          id: -1 * (jobIndex * 100 + stepIndex + 1),
+          stepNo: Number(rawStep?.stepNo || stepIndex + 1),
+          stepName:
+            stepKey === "flapPasting"
+              ? "SideFlapPasting"
+              : stepKey === "fluteLamination"
+                ? "FluteLaminateBoardConversion"
+                : stepName,
+          status: "accept",
+          startDate: rawStep?.startDate || null,
+          endDate:
+            rawStep?.endDate ||
+            completedJob?.completedAt ||
+            rawStep?.updatedAt ||
+            null,
+          user: rawStep?.user || null,
+          machineDetails: Array.isArray(rawStep?.machineDetails)
+            ? rawStep.machineDetails
+            : [],
+          createdAt:
+            rawStep?.createdAt ||
+            completedJob?.createdAt ||
+            completedJob?.completedAt ||
+            new Date().toISOString(),
+          updatedAt:
+            rawStep?.updatedAt ||
+            completedJob?.completedAt ||
+            new Date().toISOString(),
+        };
+
+        const syntheticJobPlan: JobPlan = {
+          jobPlanId: Number(completedJob?.jobPlanId || 0),
+          nrcJobNo,
+          jobDemand: String(completedJob?.jobDemand ?? ""),
+          createdAt:
+            completedJob?.createdAt ||
+            completedJob?.completedAt ||
+            new Date().toISOString(),
+          updatedAt:
+            completedJob?.updatedAt ||
+            completedJob?.completedAt ||
+            new Date().toISOString(),
+          steps: [syntheticStep],
+          allStepDetails: completedJob?.allStepDetails,
+        };
+
+        completedJobsByStep[stepKey].push({
+          jobPlan: syntheticJobPlan,
+          step: syntheticStep,
+        });
+      });
+
+      // Fallback for payloads where allSteps is missing but allStepDetails is present
+      if (!allSteps.length && completedJob?.allStepDetails) {
+        const detailsToStep: Record<string, keyof typeof stepSummary> = {
+          corrugation: "corrugation",
+          flutelam: "fluteLamination",
+          punching: "punching",
+          sideFlapPasting: "flapPasting",
+          printingDetails: "printing",
+          qualityDept: "qualityDept",
+        };
+        Object.entries(detailsToStep).forEach(([detailsKey, stepKey]) => {
+          const token = `${nrcJobNo}|${stepKey}`;
+          if (alreadyCountedCompleted.has(token)) return;
+          const details = completedJob.allStepDetails[detailsKey];
+          if (!Array.isArray(details)) return;
+          if (!details.some((d: any) => d?.status === "accept")) return;
+
+          alreadyCountedCompleted.add(token);
+          stepSummary[stepKey].total++;
+          stepSummary[stepKey].completed++;
+          completedSteps++;
+        });
+      }
+    });
+
     // Calculate overall efficiency
     const overallEfficiency =
       totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
